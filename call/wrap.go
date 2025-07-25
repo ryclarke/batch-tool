@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/ryclarke/cisco-batch-tool/utils"
+	"github.com/ryclarke/batch-tool/utils"
 )
 
 // Wrapper defines all work to be performed on a repository. A Wrapper
@@ -21,7 +21,7 @@ func Wrap(calls ...CallFunc) Wrapper {
 		}()
 
 		ch <- fmt.Sprintf("------ %s ------", repo)
-	
+
 		// if the repository is missing, attempt to clone it first
 		if _, err := os.Stat(utils.RepoPath(repo)); os.IsNotExist(err) {
 			ch <- "Repository not found, cloning...\n"
@@ -37,7 +37,7 @@ func Wrap(calls ...CallFunc) Wrapper {
 		for _, call := range calls {
 			if err := call(repo, ch); err != nil {
 				ch <- fmt.Sprintln("ERROR:", err)
-		
+
 				return
 			}
 		}

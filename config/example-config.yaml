@@ -1,17 +1,18 @@
 git:
-  host: github.com
+  provider: github # also supports bitbucket (SaaS or private cloud)
+  host: github.com # only SaaS Github is currently supported for this provider
   project: ryclarke
-  default-branch: develop
+  default-branch: develop # fallback if no default branch is configured for a repository
 repos:
   sort: true
-  reviewers:
-    cisco-batch-tool:
+  unwanted-labels: deprecated,poc
+  skip-unwanted: true
+  aliases: # mapping of repository names to custom aliases
+    example:
+      - batch-tool
+      - another-repo
+  reviewers: # default reviewers for each repository
+    batch-tool:
       - ryclarke
     another-repo:
       - ryclarke
-  skip-unwanted: true
-  unwanted-labels: deprecated,poc
-  aliases:
-    example:
-      - cisco-batch-tool
-      - another-repo

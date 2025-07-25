@@ -8,7 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/ryclarke/cisco-batch-tool/call"
+	"github.com/ryclarke/batch-tool/call"
 )
 
 func addShellCmd() *cobra.Command {

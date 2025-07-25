@@ -20,6 +20,7 @@ const (
 	GitUser      = "git.user"
 	GitHost      = "git.host"
 	GitProject   = "git.project"
+	GitProvider  = "git.provider"
 	SourceBranch = "git.default-branch"
 
 	// User, Host, Project, Repo
@@ -72,6 +73,8 @@ func Init() {
 	// Default user for SSH clone.
 	viper.SetDefault(GitUser, "git")
 
+	viper.SetDefault(GitHost, "github.com")
+	viper.SetDefault(GitProvider, "github")
 	viper.SetDefault(SourceBranch, "develop")
 	viper.SetDefault(SortRepos, true)
 	viper.SetDefault(SkipUnwanted, true)

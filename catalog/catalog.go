@@ -3,8 +3,6 @@ package catalog
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
-	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,7 +11,8 @@ import (
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/spf13/viper"
 
-	"github.com/ryclarke/cisco-batch-tool/config"
+	"github.com/ryclarke/batch-tool/config"
+	"github.com/ryclarke/batch-tool/scm"
 )
 
 const (
@@ -23,7 +22,7 @@ const (
 )
 
 // Catalog contains a cached set of repositories and their metadata from Bitbucket
-var Catalog = make(map[string]Repository)
+var Catalog = make(map[string]scm.Repository)
 
 // Labels contains a mapping of label names with the set of repositories matching each label
 var Labels = make(map[string]mapset.Set[string])
@@ -36,7 +35,7 @@ func Init() {
 	// Add locally-configured aliases to the defined labels
 	for name, repos := range viper.GetStringMapStringSlice(config.RepoAliases) {
 		if _, ok := Labels[name]; !ok {
-			Labels[name] = mapset.NewSet[string](repos...)
+			Labels[name] = mapset.NewSet(repos...)
 		} else {
 			Labels[name].Append(repos...)
 		}
@@ -48,14 +47,6 @@ func Init() {
 	for name := range Catalog {
 		Labels[supersetLabel].Add(name)
 	}
-}
-
-type Repository struct {
-	Name        string   `json:"name"`
-	Description string   `json:"description"`
-	Public      bool     `json:"public"`
-	Project     string   `json:"project_name"`
-	Labels      []string `json:"labels,omitempty"`
 }
 
 func RepositoryList(filters ...string) mapset.Set[string] {
@@ -109,18 +100,8 @@ func initRepositoryCatalog() error {
 }
 
 type repositoryCache struct {
-	UpdatedAt    time.Time             `json:"updated_at"`
-	Repositories map[string]Repository `json:"repositories"`
-}
-
-type repositoryListResp struct {
-	Values []Repository `json:"values"`
-}
-
-type labelListResp struct {
-	Values []struct {
-		Name string `json:"name"`
-	} `json:"values"`
+	UpdatedAt    time.Time                 `json:"updated_at"`
+	Repositories map[string]scm.Repository `json:"repositories"`
 }
 
 func loadCatalogCache() error {
@@ -145,7 +126,7 @@ func loadCatalogCache() error {
 	for _, repo := range Catalog {
 		for _, label := range repo.Labels {
 			if _, ok := Labels[label]; !ok {
-				Labels[label] = mapset.NewSet[string](repo.Name)
+				Labels[label] = mapset.NewSet(repo.Name)
 			} else {
 				Labels[label].Add(repo.Name)
 			}
@@ -170,33 +151,19 @@ func saveCatalogCache() error {
 }
 
 func fetchRepositoryData() error {
-	project := viper.GetString(config.GitProject)
+	provider := scm.Get(viper.GetString(config.GitProvider), viper.GetString(config.GitProject))
 
-	output, err := apiGET(fmt.Sprintf("https://%s/rest/api/1.0/projects/%s/repos?limit=1000", viper.GetString(config.GitHost), project))
+	repos, err := provider.ListRepositories()
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to fetch repositories from provider: %w", err)
 	}
 
-	var resp repositoryListResp
-	if err := json.Unmarshal(output, &resp); err != nil {
-		return err
-	}
-
-	for _, repo := range resp.Values {
-		repo.Project = project
-
-		labels, err := getLabels(project, repo.Name)
-		if err != nil {
-			return err
-		}
-
-		repo.Labels = labels
-
-		Catalog[repo.Name] = repo
+	for _, repo := range repos {
+		Catalog[repo.Name] = *repo
 
 		for _, label := range repo.Labels {
 			if _, ok := Labels[label]; !ok {
-				Labels[label] = mapset.NewSet[string](repo.Name)
+				Labels[label] = mapset.NewSet(repo.Name)
 			} else {
 				Labels[label].Add(repo.Name)
 			}
@@ -212,51 +179,4 @@ func catalogCachePath() string {
 		viper.GetString(config.GitProject),
 		viper.GetString(config.CatalogCacheFile),
 	)
-}
-
-func getLabels(project, repo string) ([]string, error) {
-	output, err := apiGET(fmt.Sprintf("https://%s/rest/api/1.0/projects/%s/repos/%s/labels?limit=100", viper.GetString(config.GitHost), project, repo))
-	if err != nil {
-		return nil, err
-	}
-
-	var resp labelListResp
-	if err := json.Unmarshal(output, &resp); err != nil {
-		return nil, err
-	}
-
-	// Flatten the API response to extract the list of labels
-	var labels = make([]string, len(resp.Values))
-	for i, val := range resp.Values {
-		labels[i] = val.Name
-	}
-
-	return labels, nil
-}
-
-func apiGET(path string) ([]byte, error) {
-	request, err := http.NewRequest(http.MethodGet, path, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	request.Header.Set("Authorization", fmt.Sprintf("Bearer %s", viper.GetString(config.AuthToken)))
-
-	resp, err := http.DefaultClient.Do(request)
-	if err != nil {
-		return nil, err
-	}
-
-	defer resp.Body.Close()
-
-	output, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-
-	if resp.StatusCode > 399 {
-		return nil, fmt.Errorf("error %d: %s", resp.StatusCode, output)
-	}
-
-	return output, nil
 }

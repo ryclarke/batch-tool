@@ -7,10 +7,14 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
-	"github.com/ryclarke/cisco-batch-tool/catalog"
-	"github.com/ryclarke/cisco-batch-tool/cmd/git"
-	"github.com/ryclarke/cisco-batch-tool/cmd/pr"
-	"github.com/ryclarke/cisco-batch-tool/config"
+	"github.com/ryclarke/batch-tool/catalog"
+	"github.com/ryclarke/batch-tool/cmd/git"
+	"github.com/ryclarke/batch-tool/cmd/pr"
+	"github.com/ryclarke/batch-tool/config"
+
+	// Register the SCM providers
+	_ "github.com/ryclarke/batch-tool/scm/bitbucket"
+	_ "github.com/ryclarke/batch-tool/scm/github"
 )
 
 // RootCmd configures the top-level root command along with all subcommands and flags

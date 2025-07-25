@@ -6,8 +6,8 @@ import (
 
 	"github.com/spf13/viper"
 
-	"github.com/ryclarke/cisco-batch-tool/catalog"
-	"github.com/ryclarke/cisco-batch-tool/config"
+	"github.com/ryclarke/batch-tool/catalog"
+	"github.com/ryclarke/batch-tool/config"
 )
 
 // Do executes the provided Wrapper on each repository, operating

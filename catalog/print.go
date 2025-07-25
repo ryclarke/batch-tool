@@ -8,7 +8,7 @@ import (
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/spf13/viper"
 
-	"github.com/ryclarke/cisco-batch-tool/config"
+	"github.com/ryclarke/batch-tool/config"
 )
 
 // PrintLabels prints the given labels and their matched repositories. If no labels

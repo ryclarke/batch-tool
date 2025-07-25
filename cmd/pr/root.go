@@ -1,16 +1,15 @@
 package pr
 
 import (
-	"encoding/json"
 	"fmt"
-	"net/http"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
-	"github.com/ryclarke/cisco-batch-tool/call"
-	"github.com/ryclarke/cisco-batch-tool/config"
-	"github.com/ryclarke/cisco-batch-tool/utils"
+	"github.com/ryclarke/batch-tool/call"
+	"github.com/ryclarke/batch-tool/config"
+	"github.com/ryclarke/batch-tool/scm"
+	"github.com/ryclarke/batch-tool/utils"
 )
 
 var (
@@ -48,51 +47,22 @@ func Cmd() *cobra.Command {
 }
 
 func getPRCmd(name string, ch chan<- string) error {
-	pr, err := getPR(name)
+	branch, err := utils.LookupBranch(name)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to lookup branch for %s: %w", name, err)
 	}
 
-	ch <- fmt.Sprintf("(PR #%d) %s %v\n", pr.ID(), pr["title"].(string), pr.GetReviewers())
+	provider := scm.Get(viper.GetString(config.GitProvider), viper.GetString(config.GitProject))
+
+	pr, err := provider.GetPullRequest(name, branch)
+	if err != nil {
+		return fmt.Errorf("failed to get pull request for %s: %w", name, err)
+	}
+
+	ch <- fmt.Sprintf("(PR #%d) %s %v\n", pr["id"].(int), pr["title"].(string), pr["reviewers"].([]string))
 	if pr["description"].(string) != "" {
 		ch <- fmt.Sprintln(pr["description"].(string))
 	}
 
 	return nil
-}
-
-func getPR(name string) (utils.PR, error) {
-	branch, err := utils.LookupBranch(name)
-	if err != nil {
-		return nil, err
-	}
-
-	request, err := http.NewRequest(http.MethodGet, fmt.Sprintf("%s?direction=outgoing&at=refs/heads/%s", utils.ApiPath(name), branch), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	request.Header.Set("Authorization", fmt.Sprintf("Bearer %s", viper.GetString(config.AuthToken)))
-	request.Header.Set("Content-Type", "application/json")
-
-	resp, err := http.DefaultClient.Do(request)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	// results will be returned in an array property called "values"
-	raw := struct {
-		Values []utils.PR `json:"values"`
-	}{}
-	if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil {
-		return nil, err
-	}
-
-	if len(raw.Values) == 0 {
-		return nil, fmt.Errorf("No pull requests found for %s", branch)
-	}
-
-	// return the first PR in the results (this will be the most recent)
-	return raw.Values[0], nil
 }

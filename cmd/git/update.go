@@ -6,9 +6,9 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
-	"github.com/ryclarke/cisco-batch-tool/call"
-	"github.com/ryclarke/cisco-batch-tool/config"
-	"github.com/ryclarke/cisco-batch-tool/utils"
+	"github.com/ryclarke/batch-tool/call"
+	"github.com/ryclarke/batch-tool/config"
+	"github.com/ryclarke/batch-tool/utils"
 )
 
 func addUpdateCmd() *cobra.Command {
