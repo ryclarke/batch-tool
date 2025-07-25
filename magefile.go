@@ -4,12 +4,12 @@ package main
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
+
 	"github.com/magefile/mage/mg" // mg contains helpful utility functions, like Deps
 	"github.com/magefile/mage/sh"
 	"github.com/magefile/mage/target"
-	"os"
-	"path/filepath"
-	"runtime"
 )
 
 // Default target to run when none is specified
@@ -110,12 +110,6 @@ func Install() error {
 	if err := sh.RunV("go", "install"); err != nil {
 		return err
 	}
-
-	if runtime.GOOS == "windows" {
-		return os.Rename(filepath.Join(findGoBinDir(), "cisco-batch-tool.exe"), filepath.Join(findGoBinDir(), "batch-tool.exe"))
-	}
-
-	return os.Rename(filepath.Join(findGoBinDir(), "cisco-batch-tool"), filepath.Join(findGoBinDir(), "batch-tool"))
 }
 
 // Clean up after yourself

@@ -6,9 +6,9 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
-	"github.com/ryclarke/cisco-batch-tool/call"
-	"github.com/ryclarke/cisco-batch-tool/config"
-	"github.com/ryclarke/cisco-batch-tool/utils"
+	"github.com/ryclarke/batch-tool/call"
+	"github.com/ryclarke/batch-tool/config"
+	"github.com/ryclarke/batch-tool/utils"
 )
 
 func addCommitCmd() *cobra.Command {
@@ -39,11 +39,15 @@ func addCommitCmd() *cobra.Command {
 }
 
 func gitCommit(name string, ch chan<- string) error {
+	branch, err := utils.LookupBranch(name)
+	if err != nil {
+		return err
+	}
+
 	cmd := exec.Command("git", "add", ".")
 	cmd.Dir = utils.RepoPath(name)
 
-	_, err := cmd.Output()
-	if err != nil {
+	if _, err = cmd.Output(); err != nil {
 		return err
 	}
 
@@ -71,7 +75,7 @@ func gitCommit(name string, ch chan<- string) error {
 
 	ch <- string(output)
 
-	args = []string{"push"}
+	args = []string{"push", "-u", "origin", branch}
 	if viper.GetBool(config.CommitAmend) {
 		args = append(args, "-f")
 	}

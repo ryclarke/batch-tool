@@ -5,7 +5,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/ryclarke/cisco-batch-tool/catalog"
+	"github.com/ryclarke/batch-tool/catalog"
 )
 
 func addLabelsCmd() *cobra.Command {

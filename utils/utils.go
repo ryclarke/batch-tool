@@ -8,7 +8,7 @@ import (
 
 	"github.com/spf13/viper"
 
-	"github.com/ryclarke/cisco-batch-tool/config"
+	"github.com/ryclarke/batch-tool/config"
 )
 
 // ValidateRequiredConfig checks viper and returns an error if a key isn't set
@@ -71,20 +71,6 @@ func RepoURL(repo string) string {
 		viper.GetString(config.GitUser),
 		host, project, name,
 	)
-}
-
-// ApiPath returns the API path for BitBucket PR operations
-func ApiPath(repo string) string {
-	host, project, name := ParseRepo(repo)
-
-	return fmt.Sprintf(config.ApiPathTmpl,
-		host, project, name,
-	)
-}
-
-// ApiPathID returns the API path for BitBucket PR operations with a PR ID
-func ApiPathID(name string, id int) string {
-	return fmt.Sprintf("%s/%d", ApiPath(name), id)
 }
 
 // LookupBranch returns the target branch for the given repository

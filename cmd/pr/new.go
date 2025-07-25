@@ -1,18 +1,15 @@
 package pr
 
 import (
-	"encoding/json"
 	"fmt"
-	"io/ioutil"
-	"net/http"
-	"strings"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
-	"github.com/ryclarke/cisco-batch-tool/call"
-	"github.com/ryclarke/cisco-batch-tool/config"
-	"github.com/ryclarke/cisco-batch-tool/utils"
+	"github.com/ryclarke/batch-tool/call"
+	"github.com/ryclarke/batch-tool/config"
+	"github.com/ryclarke/batch-tool/scm"
+	"github.com/ryclarke/batch-tool/utils"
 )
 
 var allReviewers bool
@@ -39,11 +36,6 @@ func newPR(name string, ch chan<- string) error {
 		return err
 	}
 
-	// default PR title is branch name
-	if prTitle == "" {
-		prTitle = branch
-	}
-
 	reviewers := utils.LookupReviewers(name)
 	if len(reviewers) == 0 {
 		// append placeholder to prevent NPE below
@@ -55,40 +47,13 @@ func newPR(name string, ch chan<- string) error {
 		reviewers = reviewers[:1]
 	}
 
-	payload := utils.GenPR(name, prTitle, prDescription, reviewers)
-
-	request, err := http.NewRequest(http.MethodPost, utils.ApiPath(name), strings.NewReader(payload))
+	provider := scm.Get(viper.GetString(config.GitProvider), viper.GetString(config.GitProject))
+	pr, err := provider.OpenPullRequest(name, branch, prTitle, prDescription, reviewers)
 	if err != nil {
 		return err
 	}
 
-	request.Header.Set("Authorization", fmt.Sprintf("Bearer %s", viper.GetString(config.AuthToken)))
-	request.Header.Set("Content-Type", "application/json")
-
-	resp, err := http.DefaultClient.Do(request)
-	if err != nil {
-		return err
-	}
-
-	defer resp.Body.Close()
-
-	output, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return err
-	}
-
-	if resp.StatusCode > 399 {
-		return fmt.Errorf("error %d: %s", resp.StatusCode, output)
-	}
-
-	pr := struct {
-		ID int `json:"id"`
-	}{}
-	if err := json.NewDecoder(strings.NewReader(string(output))).Decode(&pr); err != nil {
-		return err
-	}
-
-	ch <- fmt.Sprintf("New pull request (#%d) %s %v\n", pr.ID, branch, reviewers)
+	ch <- fmt.Sprintf("New pull request (#%d) %s %v\n", pr["id"], pr["branch"], pr["reviewers"])
 
 	return nil
 }
