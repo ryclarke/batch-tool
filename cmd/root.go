@@ -62,7 +62,7 @@ multiple git repositories, including branch management and pull request creation
 		addLabelsCmd(),
 	)
 
-	rootCmd.PersistentFlags().StringVar(&config.CfgFile, "config", "", "config file (default is .config.yaml)")
+	rootCmd.PersistentFlags().StringVar(&config.CfgFile, "config", "", "config file (default is batch-tool.yaml)")
 
 	rootCmd.PersistentFlags().Bool("sync", false, "execute commands synchronously")
 	viper.BindPFlag(config.UseSync, rootCmd.PersistentFlags().Lookup("sync"))

@@ -75,7 +75,7 @@ func Init() {
 
 	viper.SetDefault(GitHost, "github.com")
 	viper.SetDefault(GitProvider, "github")
-	viper.SetDefault(SourceBranch, "develop")
+	viper.SetDefault(SourceBranch, "main")
 	viper.SetDefault(SortRepos, true)
 	viper.SetDefault(SkipUnwanted, true)
 	viper.SetDefault(UnwantedLabels, []string{"deprecated", "poc"})
@@ -107,18 +107,10 @@ func Init() {
 		// Search in the working directory
 		viper.AddConfigPath(".")
 
-		// Search in system configuration (Linux/Darwin only)
-		viper.AddConfigPath("/usr/local/etc/")
-
-		if val, ok := os.LookupEnv("XDG_CONFIG_HOME"); ok {
-			viper.AddConfigPath(val)
-		} else {
-			home, _ := os.UserHomeDir()
-			viper.AddConfigPath(filepath.Join(home, ".config"))
+		// Search in the user's config directory
+		if usrConfig, err := os.UserConfigDir(); err == nil {
+			viper.AddConfigPath(usrConfig)
 		}
-
-		usrConfig, _ := os.UserConfigDir()
-		viper.AddConfigPath(usrConfig)
 
 		// Search in the executable's directory
 		if ex, err := os.Executable(); err == nil {
