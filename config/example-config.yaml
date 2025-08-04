@@ -1,14 +1,14 @@
 git:
-  provider: github # also supports bitbucket (SaaS or private cloud)
-  host: github.com # only SaaS Github is currently supported for this provider
-  project: ryclarke
-  default-branch: develop # fallback if no default branch is configured for a repository
+  provider: github      # also supports bitbucket (SaaS or private cloud)
+  host: github.com      # only SaaS Github is currently supported for this provider
+  project: ryclarke     # username or organization name
+  default-branch: main  # fallback if no default branch is configured for a repository
 repos:
   sort: true
   unwanted-labels: deprecated,poc
   skip-unwanted: true
   aliases: # mapping of repository names to custom aliases
-    example:
+    utils:
       - batch-tool
       - another-repo
   reviewers: # default reviewers for each repository

@@ -30,28 +30,15 @@ Download and unpack the binary for your platform from [the latest release](https
 For the fastest setup, use Make to install directly to your Go bin directory:
 
 ```bash
+git clone git@github.com:ryclarke/batch-tool.git
+cd batch-tool
+
 make install
 ```
 
-This will automatically detect changes, build the tool, and install it to `$GOPATH/bin` (or `$HOME/go/bin` if `GOPATH` is not set).
+You'll need a Go environment set up with GOPATH set. See [the Go getting started docs](https://golang.org/doc/install) for more info.
 
-### Building from Source
-
-Make provides several build targets:
-
-```bash
-# Install to your Go bin directory (recommended for new users)
-make install
-
-# Build for current platform only
-make build
-
-# Create release packages for all platforms
-make release
-
-# View all available targets
-make help
-```
+This will automatically build the tool and install it to `$GOPATH/bin` (or `~/go/bin` if `GOPATH` is not set).
 
 ## Quick Start
 
@@ -102,8 +89,8 @@ The only required field is `git.project`, the rest of the configuration has safe
 
 For repository discovery and pull request operations, you'll need to configure authentication:
 
-- **GitHub**: Set up a personal access token
-- **Bitbucket**: Configure API credentials
+- **GitHub**: Set up a [personal access token](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens)
+- **Bitbucket**: Configure an [API token](https://support.atlassian.com/bitbucket-cloud/docs/using-api-tokens/)
 
 The authentication token should be provided via the `AUTH_TOKEN` environment variable (recommended) or the `auth-token` field in the batch-tool config file.
 
@@ -114,14 +101,18 @@ Check the status of multiple repositories:
 batch-tool git status repo1 repo2 repo3
 ```
 
-Or use a Topic (or an alias defined in your config) by in:
+Repositories can also be referenced by Github [Topics](https://github.com/topics) or Bitbucket [Labels](https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-labels#api-group-labels):
 ```bash
 batch-tool git status '~libraries'
 ```
 
-To refer to an alias or topic, include `~` in the argument as seen above. To invert a match to *exclude* a repository or alias/topic, include a `!`. The `~all` alias
+You may also use the same syntax to refer to aliases defined locally in the config file.
 
-Examples:
+- To refer to an alias or topic, include `~` in the argument as seen above.
+- To invert a match to *exclude* a repository or alias/topic, include a `!`.
+- The `~all` alias is defined implicitly and refers to all discovered repositories for the configured namespace (user profile or organization).
+
+Example:
 ```bash
 # aliases:
 #   repos: [repo1 repo2 repo3]
@@ -178,6 +169,10 @@ batch-tool completion <bash|fish|powershell|zsh>
 
 # Execute make targets
 batch-tool make -t <make target> <repos...>
+
+# Execute arbitrary shell commands across repositories
+## (DANGEROUS - use with caution) ##
+batch-tool sh -c "command to execute" <repos...>
 
 # Test repository filter rules against topics and local aliases
 batch-tool labels <repos...>
@@ -239,41 +234,50 @@ repos:
 ### Daily Workflow
 
 1. **Morning sync**: Update all repositories to latest
-   ```bash
-   batch-tool git update '~all'
-   ```
+```bash
+batch-tool git update '~all'
+```
 
 2. **Create feature branch**: Start new work across multiple repos
-   ```bash
-   batch-tool git branch -b feature/new-feature '~frontend' '~backend'
-   ```
+```bash
+batch-tool git branch -b feature/new-feature '~frontend' '~backend'
+```
 
 3. **Check status**: See what's changed
-   ```bash
-   batch-tool git status '~frontend' '~backend'
-   ```
+```bash
+batch-tool git status '~frontend' '~backend'
+```
 
 4. **Create pull requests**: Submit your changes
-   ```bash
-   batch-tool pr new -t "Add new feature" -d "Detailed description" '~frontend' '~backend'
-   ```
+```bash
+batch-tool pr new -t "Add new feature" -d "Detailed description" '~frontend' '~backend'
+```
 
 ### Maintenance Tasks
 
 1. **Run tests across projects**:
-   ```bash
-   batch-tool make -t test '~myproject'
-   ```
+```bash
+batch-tool make -t test '~myproject'
+```
 
 2. **Format code**:
-   ```bash
-   batch-tool make -t format '~myproject'
-   ```
+```bash
+batch-tool make -t format '~myproject'
+```
 
 3. **Synchronous operations** (when needed):
-   ```bash
-   batch-tool --sync make -t build '~myproject'
-   ```
+```bash
+batch-tool --sync make -t build '~myproject'
+```
+
+4. **Execute custom commands** (use with caution):
+```bash
+# Example: Check Go version across repositories
+batch-tool sh -c "go version" '~myproject'
+
+# Example: Clean up temporary files
+batch-tool sh -c "rm -f *.tmp" '~myproject'
+```
 
 ## Tips
 
@@ -282,6 +286,7 @@ repos:
 - Repository labels help organize and filter your catalog
 - Default reviewers in config save time when creating pull requests
 - The tool works from any directory - it will find repositories based on your configuration
+- **⚠️ Shell Command Safety**: The `sh` command is powerful but dangerous. It will prompt for confirmation before executing any command across multiple repositories. Use with extreme caution, especially with destructive commands.
 
 ## Troubleshooting
 
