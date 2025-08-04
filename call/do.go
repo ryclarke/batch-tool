@@ -2,6 +2,7 @@ package call
 
 import (
 	"fmt"
+	"io"
 	"sort"
 
 	"github.com/spf13/viper"
@@ -13,7 +14,7 @@ import (
 // Do executes the provided Wrapper on each repository, operating
 // asynchronously by default. Repository aliases are also expanded
 // here to allow for configurable repository grouping.
-func Do(repos []string, fwrap Wrapper) {
+func Do(repos []string, w io.Writer, fwrap Wrapper) {
 	repos = processArguments(repos)
 
 	// initialize channel set
@@ -28,7 +29,7 @@ func Do(repos []string, fwrap Wrapper) {
 			go fwrap(repo, ch[i])
 
 			for msg := range ch[i] {
-				fmt.Println(msg)
+				fmt.Fprintln(w, msg)
 			}
 		}
 
@@ -43,21 +44,21 @@ func Do(repos []string, fwrap Wrapper) {
 	// batch and print ordered output
 	for i := range repos {
 		for msg := range ch[i] {
-			fmt.Println(msg)
+			fmt.Fprintln(w, msg)
 		}
 	}
 }
 
 // DoAsync always operates asynchronously regardless of configuration
-func DoAsync(repos []string, fwrap Wrapper) {
+func DoAsync(repos []string, w io.Writer, fwrap Wrapper) {
 	viper.Set(config.UseSync, false)
-	Do(repos, fwrap)
+	Do(repos, w, fwrap)
 }
 
 // DoSync always operates synchronously regardless of configuration
-func DoSync(repos []string, fwrap Wrapper) {
+func DoSync(repos []string, w io.Writer, fwrap Wrapper) {
 	viper.Set(config.UseSync, true)
-	Do(repos, fwrap)
+	Do(repos, w, fwrap)
 }
 
 func processArguments(args []string) []string {

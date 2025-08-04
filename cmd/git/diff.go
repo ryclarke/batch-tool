@@ -12,8 +12,8 @@ func addDiffCmd() *cobra.Command {
 		Use:   "diff <repository> ...",
 		Short: "Git diff of each repository",
 		Args:  cobra.MinimumNArgs(1),
-		Run: func(_ *cobra.Command, args []string) {
-			call.Do(args, call.Wrap(call.Exec("git", "diff")))
+		Run: func(cmd *cobra.Command, args []string) {
+			call.Do(args, cmd.OutOrStdout(), call.Wrap(call.Exec("git", "diff")))
 		},
 	}
 

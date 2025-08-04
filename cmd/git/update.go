@@ -17,8 +17,8 @@ func addUpdateCmd() *cobra.Command {
 		Use:   "update <repository> ...",
 		Short: "Update primary branch across repositories",
 		Args:  cobra.MinimumNArgs(1),
-		Run: func(_ *cobra.Command, args []string) {
-			call.Do(args, call.Wrap(gitUpdate))
+		Run: func(cmd *cobra.Command, args []string) {
+			call.Do(args, cmd.OutOrStdout(), call.Wrap(gitUpdate))
 		},
 	}
 

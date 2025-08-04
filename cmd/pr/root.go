@@ -21,13 +21,13 @@ var (
 func Cmd() *cobra.Command {
 	rootCmd := &cobra.Command{
 		Use:   "pr [cmd] <repository> ...",
-		Short: "Manage pull requests using the BitBucket v1 API",
+		Short: "Manage pull requests using supported SCM provider APIs",
 		Args:  cobra.MinimumNArgs(1),
 		PersistentPreRunE: func(_ *cobra.Command, _ []string) error {
 			return utils.ValidateRequiredConfig(config.AuthToken)
 		},
-		Run: func(_ *cobra.Command, args []string) {
-			call.Do(args, call.Wrap(utils.ValidateBranch, getPRCmd))
+		Run: func(cmd *cobra.Command, args []string) {
+			call.Do(args, cmd.OutOrStdout(), call.Wrap(utils.ValidateBranch, getPRCmd))
 		},
 	}
 

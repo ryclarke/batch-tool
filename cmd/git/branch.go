@@ -22,7 +22,7 @@ func addBranchCmd() *cobra.Command {
 			return utils.ValidateRequiredConfig(config.Branch)
 		},
 		Run: func(cmd *cobra.Command, args []string) {
-			call.Do(args, call.Wrap(gitUpdate, gitCheckout))
+			call.Do(args, cmd.OutOrStdout(), call.Wrap(gitUpdate, gitCheckout))
 		},
 	}
 
