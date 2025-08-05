@@ -20,8 +20,8 @@ func addNewCmd() *cobra.Command {
 		Use:   "new <repository> ...",
 		Short: "Submit new pull requests",
 		Args:  cobra.MinimumNArgs(1),
-		Run: func(_ *cobra.Command, args []string) {
-			call.Do(args, call.Wrap(utils.ValidateBranch, newPR))
+		Run: func(cmd *cobra.Command, args []string) {
+			call.Do(args, cmd.OutOrStdout(), call.Wrap(utils.ValidateBranch, newPR))
 		},
 	}
 

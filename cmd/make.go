@@ -14,14 +14,14 @@ func addMakeCmd() *cobra.Command {
 	// makeCmd represents the make command
 	makeCmd := &cobra.Command{
 		Use:   "make <repository> ...",
-		Short: "Execute make across repositories",
-		Long: `Execute make across repositories
+		Short: "Execute make targets across repositories",
+		Long: `Execute make targets across repositories
 
 The provided make targets will be called for each provided repository. Note that some
 make targets currently MUST be run synchronously using the '--sync' command line flag.`,
 		Args: cobra.MinimumNArgs(1),
-		Run: func(_ *cobra.Command, repos []string) {
-			call.Do(repos, call.Wrap(call.Exec("make", makeTargets...)))
+		Run: func(cmd *cobra.Command, repos []string) {
+			call.Do(repos, cmd.OutOrStdout(), call.Wrap(call.Exec("make", makeTargets...)))
 		},
 	}
 

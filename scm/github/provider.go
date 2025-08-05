@@ -10,6 +10,8 @@ import (
 	"github.com/ryclarke/batch-tool/scm"
 )
 
+var _ scm.Provider = new(Github)
+
 func init() {
 	// Register the GitHub provider factory
 	scm.Register("github", New)

@@ -10,6 +10,8 @@ import (
 	"github.com/spf13/viper"
 )
 
+var _ scm.Provider = new(Bitbucket)
+
 func init() {
 	// Register the Bitbucket provider factory
 	scm.Register("bitbucket", New)

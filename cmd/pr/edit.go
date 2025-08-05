@@ -20,8 +20,8 @@ func addEditCmd() *cobra.Command {
 		Use:   "edit <repository> ...",
 		Short: "Update existing pull requests",
 		Args:  cobra.MinimumNArgs(1),
-		Run: func(_ *cobra.Command, args []string) {
-			call.Do(args, call.Wrap(utils.ValidateBranch, editPR))
+		Run: func(cmd *cobra.Command, args []string) {
+			call.Do(args, cmd.OutOrStdout(), call.Wrap(utils.ValidateBranch, editPR))
 		},
 	}
 

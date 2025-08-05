@@ -24,8 +24,8 @@ func addCommitCmd() *cobra.Command {
 
 			return utils.ValidateRequiredConfig(config.CommitMessage)
 		},
-		Run: func(_ *cobra.Command, args []string) {
-			call.Do(args, call.Wrap(utils.ValidateBranch, gitCommit))
+		Run: func(cmd *cobra.Command, args []string) {
+			call.Do(args, cmd.OutOrStdout(), call.Wrap(utils.ValidateBranch, gitCommit))
 		},
 	}
 

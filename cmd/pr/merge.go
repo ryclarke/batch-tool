@@ -18,8 +18,8 @@ func addMergeCmd() *cobra.Command {
 		Use:   "merge <repository> ...",
 		Short: "Merge accepted pull requests",
 		Args:  cobra.MinimumNArgs(1),
-		Run: func(_ *cobra.Command, args []string) {
-			call.Do(args, call.Wrap(utils.ValidateBranch, mergePR))
+		Run: func(cmd *cobra.Command, args []string) {
+			call.Do(args, cmd.OutOrStdout(), call.Wrap(utils.ValidateBranch, mergePR))
 		},
 	}
 

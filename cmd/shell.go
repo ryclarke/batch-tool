@@ -53,7 +53,7 @@ func addShellCmd() *cobra.Command {
 				}
 			}
 
-			call.Do(args, call.Wrap(call.Exec("sh", "-c", exec)))
+			call.Do(args, cmd.OutOrStdout(), call.Wrap(call.Exec("sh", "-c", exec)))
 
 			return nil
 		},
