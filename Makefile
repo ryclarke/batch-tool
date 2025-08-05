@@ -10,7 +10,7 @@ RELEASES = $(RELEASE_LINUX) $(RELEASE_MACOS) $(RELEASE_WINDOWS)
 TARGET_OS = $(shell echo '$@' | sed 's|.*[bin|release]/batch-tool-\([^-./]\+\).*|\1|')
 TARGET_ARCH = $(shell echo '$@' | sed 's|.*[bin|release]/batch-tool-[^-./]\+-\([^-./]\+\).*|\1|')
 
-.PHONY: help install build release clean veryclean
+.PHONY: help install build .pretest test cover release clean veryclean
 
 help:
 	@echo "Makefile targets:"
@@ -34,6 +34,15 @@ bin/batch-tool: $(SOURCES)
 bin/%: $(SOURCES)
 	@echo "Building batch-tool for $(TARGET_OS)-$(TARGET_ARCH)"
 	@GOOS=$(TARGET_OS) GOARCH=$(TARGET_ARCH) go build -o $@
+
+.pretest:
+	go mod tidy && go mod vendor
+
+test: .pretest
+	go test ./... -v
+
+cover: .pretest
+	go test ./... -cover -v
 
 release: $(RELEASES)
 
