@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"runtime"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -60,6 +61,9 @@ multiple git repositories, including branch management and pull request creation
 
 	rootCmd.PersistentFlags().Bool("sync", false, "execute commands synchronously")
 	viper.BindPFlag(config.UseSync, rootCmd.PersistentFlags().Lookup("sync"))
+
+	rootCmd.PersistentFlags().Int("max-concurrency", runtime.NumCPU(), "maximum number of concurrent operations")
+	viper.BindPFlag(config.MaxConcurrency, rootCmd.PersistentFlags().Lookup("max-concurrency"))
 
 	rootCmd.PersistentFlags().Bool("sort", true, "sort the provided repositories")
 	viper.BindPFlag(config.SortRepos, rootCmd.PersistentFlags().Lookup("sort"))

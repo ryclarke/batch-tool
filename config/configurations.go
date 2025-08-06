@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -49,7 +50,8 @@ const (
 	AuthToken = "auth-token"
 	UseSync   = "sync"
 
-	ChannelBuffer = "channels.buffer-size"
+	ChannelBuffer  = "channels.buffer-size"
+	MaxConcurrency = "channels.max-concurrency"
 
 	// Bitbucket v1 API PR template - Host, Project, Repo
 	ApiPathTmpl = "https://%s/rest/api/1.0/projects/%s/repos/%s/pull-requests"
@@ -131,6 +133,7 @@ func initialize() {
 	viper.SetDefault(CatalogCacheTTL, "24h")
 
 	viper.SetDefault(ChannelBuffer, 100)
+	viper.SetDefault(MaxConcurrency, runtime.NumCPU()) // Default to number of logical CPUs
 
 	// default reviewers in the form `repo: [reviewers...]`
 	viper.SetDefault(DefaultReviewers, map[string][]string{})
