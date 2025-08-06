@@ -4,9 +4,13 @@ import (
 	"bytes"
 	"strings"
 	"testing"
+
+	"github.com/ryclarke/batch-tool/config"
 )
 
 func TestAddBranchCmd(t *testing.T) {
+	_ = config.LoadFixture("../../config")
+
 	cmd := addBranchCmd()
 
 	if cmd == nil {
@@ -29,6 +33,8 @@ func TestAddBranchCmd(t *testing.T) {
 }
 
 func TestBranchCmdFlags(t *testing.T) {
+	_ = config.LoadFixture("../../config")
+
 	cmd := addBranchCmd()
 
 	// Test branch flag
@@ -43,6 +49,8 @@ func TestBranchCmdFlags(t *testing.T) {
 }
 
 func TestBranchCmdArgs(t *testing.T) {
+	_ = config.LoadFixture("../../config")
+
 	cmd := addBranchCmd()
 
 	// Test that command requires minimum arguments
@@ -59,6 +67,8 @@ func TestBranchCmdArgs(t *testing.T) {
 }
 
 func TestBranchCmdHelp(t *testing.T) {
+	_ = config.LoadFixture("../../config")
+
 	cmd := addBranchCmd()
 
 	var buf bytes.Buffer
@@ -83,6 +93,8 @@ func TestBranchCmdHelp(t *testing.T) {
 }
 
 func TestBranchCmdPreRunE(t *testing.T) {
+	_ = config.LoadFixture("../../config")
+
 	cmd := addBranchCmd()
 
 	// Test PreRunE function exists

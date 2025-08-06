@@ -114,7 +114,7 @@ func TestParseRepo(t *testing.T) {
 	}
 
 	// Test full host/project/repo format - this has complex parsing logic
-	host, project, name = ParseRepo("example.com/custom-project/my-repo")
+	_, project, name = ParseRepo("example.com/custom-project/my-repo")
 	// The actual parsing may be different than expected - let's verify what we get
 	if name != "my-repo" {
 		t.Errorf("Expected name 'my-repo', got %s", name)
@@ -125,7 +125,7 @@ func TestParseRepo(t *testing.T) {
 	// Host parsing may work differently - let's just verify name and project
 
 	// Test with leading/trailing slashes
-	host, project, name = ParseRepo("/custom-project/my-repo/")
+	_, project, name = ParseRepo("/custom-project/my-repo/")
 	if project != "custom-project" {
 		t.Errorf("Expected project 'custom-project' with trimmed slashes, got %s", project)
 	}
@@ -136,19 +136,19 @@ func TestParseRepo(t *testing.T) {
 
 func TestRepoPath(t *testing.T) {
 	// Set up config
-	viper.Set(config.EnvGopath, "/test/gopath")
+	viper.Set(config.GitDirectory, "/test/gitdir/src")
 	viper.Set(config.GitHost, "github.com")
 	viper.Set(config.GitProject, "test-project")
 
 	path := RepoPath("my-repo")
-	expected := "/test/gopath/src/github.com/test-project/my-repo"
+	expected := "/test/gitdir/src/github.com/test-project/my-repo"
 	if path != expected {
 		t.Errorf("Expected path '%s', got '%s'", expected, path)
 	}
 
 	// Test with custom project
 	path = RepoPath("custom-project/my-repo")
-	expected = "/test/gopath/src/github.com/custom-project/my-repo"
+	expected = "/test/gitdir/src/github.com/custom-project/my-repo"
 	if path != expected {
 		t.Errorf("Expected path '%s', got '%s'", expected, path)
 	}

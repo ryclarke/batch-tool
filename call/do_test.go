@@ -11,6 +11,8 @@ import (
 )
 
 func TestDo(t *testing.T) {
+	_ = config.LoadFixture("../config")
+
 	// Set up test configuration
 	viper.Set(config.ChannelBuffer, 10)
 	viper.Set(config.UseSync, false)
@@ -37,6 +39,8 @@ func TestDo(t *testing.T) {
 }
 
 func TestDoSync(t *testing.T) {
+	_ = config.LoadFixture("../config")
+
 	// Set up test configuration
 	viper.Set(config.ChannelBuffer, 10)
 	viper.Set(config.UseSync, false) // DoSync should override this
@@ -59,6 +63,8 @@ func TestDoSync(t *testing.T) {
 }
 
 func TestDoAsync(t *testing.T) {
+	_ = config.LoadFixture("../config")
+
 	// Set up test configuration
 	viper.Set(config.ChannelBuffer, 10)
 	viper.Set(config.UseSync, true) // DoAsync should override this
@@ -81,6 +87,8 @@ func TestDoAsync(t *testing.T) {
 }
 
 func TestProcessArguments(t *testing.T) {
+	_ = config.LoadFixture("../config")
+
 	// Set up test configuration
 	viper.Set(config.SortRepos, true)
 
@@ -96,6 +104,8 @@ func TestProcessArguments(t *testing.T) {
 }
 
 func TestProcessArgumentsSorting(t *testing.T) {
+	_ = config.LoadFixture("../config")
+
 	// Test with sorting enabled
 	viper.Set(config.SortRepos, true)
 
@@ -111,6 +121,8 @@ func TestProcessArgumentsSorting(t *testing.T) {
 }
 
 func TestProcessArgumentsNoSorting(t *testing.T) {
+	_ = config.LoadFixture("../config")
+
 	// Test with sorting disabled
 	viper.Set(config.SortRepos, false)
 
@@ -125,6 +137,8 @@ func TestProcessArgumentsNoSorting(t *testing.T) {
 }
 
 func TestDoWithChannelBuffer(t *testing.T) {
+	_ = config.LoadFixture("../config")
+
 	// Test with different channel buffer sizes
 	viper.Set(config.ChannelBuffer, 1)
 	viper.Set(config.UseSync, false)
@@ -153,6 +167,8 @@ func TestDoWithChannelBuffer(t *testing.T) {
 }
 
 func TestDoWithNilWriter(t *testing.T) {
+	_ = config.LoadFixture("../config")
+
 	// Test that Do handles different scenarios gracefully
 	viper.Set(config.ChannelBuffer, 10)
 	viper.Set(config.UseSync, false)
@@ -175,6 +191,8 @@ func TestDoWithNilWriter(t *testing.T) {
 }
 
 func TestDoWithSlowWrapper(t *testing.T) {
+	_ = config.LoadFixture("../config")
+
 	// Test async behavior with slow wrapper
 	viper.Set(config.ChannelBuffer, 10)
 	viper.Set(config.UseSync, false)

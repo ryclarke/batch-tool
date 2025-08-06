@@ -13,6 +13,8 @@ import (
 )
 
 func TestPRIntegrationWithFakeProvider(t *testing.T) {
+	_ = config.LoadFixture("../../config")
+
 	// Save original configuration
 	originalProvider := viper.GetString(config.GitProvider)
 	originalProject := viper.GetString(config.GitProject)
@@ -86,6 +88,8 @@ func TestPRIntegrationWithFakeProvider(t *testing.T) {
 }
 
 func TestPRCommandFlags(t *testing.T) {
+	_ = config.LoadFixture("../../config")
+
 	tests := []struct {
 		name        string
 		cmdFunc     func() *cobra.Command
@@ -124,16 +128,7 @@ func TestPRCommandFlags(t *testing.T) {
 }
 
 func TestValidatePRConfig(t *testing.T) {
-	// Save original configuration
-	originalProvider := viper.GetString(config.GitProvider)
-	originalProject := viper.GetString(config.GitProject)
-	originalToken := viper.GetString(config.AuthToken)
-
-	defer func() {
-		viper.Set(config.GitProvider, originalProvider)
-		viper.Set(config.GitProject, originalProject)
-		viper.Set(config.AuthToken, originalToken)
-	}()
+	_ = config.LoadFixture("../../config")
 
 	// Test with missing configuration
 	viper.Set(config.GitProvider, "")
@@ -148,6 +143,8 @@ func TestValidatePRConfig(t *testing.T) {
 }
 
 func TestPRCommandValidation(t *testing.T) {
+	_ = config.LoadFixture("../../config")
+
 	tests := []struct {
 		name     string
 		cmdFunc  func() *cobra.Command
@@ -210,6 +207,8 @@ func TestPRCommandValidation(t *testing.T) {
 }
 
 func TestPRRootCommand(t *testing.T) {
+	_ = config.LoadFixture("../../config")
+
 	cmd := Cmd()
 
 	if cmd.Use != "pr [cmd] <repository> ..." {

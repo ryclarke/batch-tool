@@ -2,6 +2,7 @@ git:
   provider: github      # also supports bitbucket (SaaS or private cloud)
   host: github.com      # only SaaS Github is currently supported for this provider
   project: ryclarke     # username or organization name
+  directory: ./tmp      # directory where repositories are cloned, defaults to $GOPATH/src if set, else the current working directory
   default-branch: main  # fallback if no default branch is configured for a repository
 repos:
   sort: true

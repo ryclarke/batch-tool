@@ -6,9 +6,13 @@ import (
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/ryclarke/batch-tool/config"
 )
 
 func TestWrap(t *testing.T) {
+	_ = config.LoadFixture("../config")
+
 	// Create test CallFuncs
 	callFunc1 := func(repo string, ch chan<- string) error {
 		ch <- "output1 from " + repo
@@ -81,6 +85,8 @@ func TestWrap(t *testing.T) {
 }
 
 func TestWrapWithError(t *testing.T) {
+	_ = config.LoadFixture("../config")
+
 	// Create CallFuncs where the first one returns an error
 	callFunc1 := func(repo string, ch chan<- string) error {
 		ch <- "output1 from " + repo
@@ -120,6 +126,8 @@ func TestWrapWithError(t *testing.T) {
 }
 
 func TestWrapEmptyCallFuncs(t *testing.T) {
+	_ = config.LoadFixture("../config")
+
 	// Test with no CallFuncs
 	wrapper := Wrap()
 	if wrapper == nil {
@@ -150,6 +158,8 @@ func TestWrapEmptyCallFuncs(t *testing.T) {
 }
 
 func TestWrapChannelClosure(t *testing.T) {
+	_ = config.LoadFixture("../config")
+
 	// Test that wrapper properly closes the channel
 	callFunc := func(repo string, ch chan<- string) error {
 		ch <- "test output"
@@ -174,6 +184,8 @@ func TestWrapChannelClosure(t *testing.T) {
 }
 
 func TestWrapRepositoryCloning(t *testing.T) {
+	_ = config.LoadFixture("../config")
+
 	// Test the repository cloning behavior when repo doesn't exist
 	// This is harder to test without mocking the file system and git
 

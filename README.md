@@ -201,7 +201,28 @@ git:
   host: github.com  # or your Bitbucket server
   project: your-org-or-username
   default-branch: main | develop
+  directory: /path/to/git/repos  # Base directory for repository clones
 ```
+
+#### Repository Directory Structure
+
+The `git.directory` option configures the base directory where repositories will be cloned. When specified, repositories are automatically organized in subdirectories that mirror the git provider's structure:
+
+```
+$GIT_DIRECTORY/
+├── github.com/
+│   ├── myorg/
+│   │   ├── repo1/
+│   │   ├── repo2/
+│   │   └── repo3/
+│   └── anothorg/
+│       └── shared-repo/
+└── bitbucket.example.com/
+    └── myproject/
+        └── api-service/
+```
+
+**Default behavior**: If not specified, defaults to `$GOPATH/src` if `GOPATH` is set, otherwise uses the current working directory.
 
 ### Repository Settings
 

@@ -4,9 +4,13 @@ import (
 	"bytes"
 	"strings"
 	"testing"
+
+	"github.com/ryclarke/batch-tool/config"
 )
 
 func TestGitCmd(t *testing.T) {
+	_ = config.LoadFixture("../../config")
+
 	cmd := Cmd()
 
 	if cmd == nil {
@@ -23,6 +27,8 @@ func TestGitCmd(t *testing.T) {
 }
 
 func TestGitCmdSubcommands(t *testing.T) {
+	_ = config.LoadFixture("../../config")
+
 	cmd := Cmd()
 
 	subcommands := cmd.Commands()
@@ -46,6 +52,8 @@ func TestGitCmdSubcommands(t *testing.T) {
 }
 
 func TestGitCmdHelp(t *testing.T) {
+	_ = config.LoadFixture("../../config")
+
 	cmd := Cmd()
 
 	var buf bytes.Buffer

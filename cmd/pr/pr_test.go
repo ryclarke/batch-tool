@@ -4,9 +4,13 @@ import (
 	"bytes"
 	"strings"
 	"testing"
+
+	"github.com/ryclarke/batch-tool/config"
 )
 
 func TestAddNewCmd(t *testing.T) {
+	_ = config.LoadFixture("../../config")
+
 	cmd := addNewCmd()
 
 	if cmd == nil {
@@ -23,12 +27,16 @@ func TestAddNewCmd(t *testing.T) {
 }
 
 func TestNewCmdFlags(t *testing.T) {
+	_ = config.LoadFixture("../../config")
+
 	cmd := addNewCmd()
 
 	// Test all-reviewers flag
 	allReviewersFlag := cmd.Flags().Lookup("all-reviewers")
 	if allReviewersFlag == nil {
 		t.Error("all-reviewers flag not found")
+
+		return
 	}
 
 	if allReviewersFlag.Shorthand != "a" {
@@ -37,6 +45,8 @@ func TestNewCmdFlags(t *testing.T) {
 }
 
 func TestNewCmdArgs(t *testing.T) {
+	_ = config.LoadFixture("../../config")
+
 	cmd := addNewCmd()
 
 	// Test that command requires minimum arguments
@@ -53,6 +63,8 @@ func TestNewCmdArgs(t *testing.T) {
 }
 
 func TestNewCmdHelp(t *testing.T) {
+	_ = config.LoadFixture("../../config")
+
 	cmd := addNewCmd()
 
 	var buf bytes.Buffer
@@ -77,6 +89,8 @@ func TestNewCmdHelp(t *testing.T) {
 }
 
 func TestAddEditCmd(t *testing.T) {
+	_ = config.LoadFixture("../../config")
+
 	cmd := addEditCmd()
 
 	if cmd == nil {
@@ -93,6 +107,8 @@ func TestAddEditCmd(t *testing.T) {
 }
 
 func TestEditCmdFlags(t *testing.T) {
+	_ = config.LoadFixture("../../config")
+
 	cmd := addEditCmd()
 
 	// Test no-append flag
@@ -103,6 +119,8 @@ func TestEditCmdFlags(t *testing.T) {
 }
 
 func TestEditCmdArgs(t *testing.T) {
+	_ = config.LoadFixture("../../config")
+
 	cmd := addEditCmd()
 
 	// Test that command requires minimum arguments
@@ -119,6 +137,8 @@ func TestEditCmdArgs(t *testing.T) {
 }
 
 func TestEditCmdHelp(t *testing.T) {
+	_ = config.LoadFixture("../../config")
+
 	cmd := addEditCmd()
 
 	var buf bytes.Buffer
@@ -143,6 +163,8 @@ func TestEditCmdHelp(t *testing.T) {
 }
 
 func TestAddMergeCmd(t *testing.T) {
+	_ = config.LoadFixture("../../config")
+
 	cmd := addMergeCmd()
 
 	if cmd == nil {
@@ -159,6 +181,8 @@ func TestAddMergeCmd(t *testing.T) {
 }
 
 func TestMergeCmdArgs(t *testing.T) {
+	_ = config.LoadFixture("../../config")
+
 	cmd := addMergeCmd()
 
 	// Test that command requires minimum arguments
@@ -175,6 +199,8 @@ func TestMergeCmdArgs(t *testing.T) {
 }
 
 func TestMergeCmdHelp(t *testing.T) {
+	_ = config.LoadFixture("../../config")
+
 	cmd := addMergeCmd()
 
 	var buf bytes.Buffer

@@ -1,11 +1,13 @@
 package config
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/spf13/viper"
 )
@@ -25,6 +27,7 @@ const (
 	GitHost      = "git.host"
 	GitProject   = "git.project"
 	GitProvider  = "git.provider"
+	GitDirectory = "git.directory"
 	SourceBranch = "git.default-branch"
 
 	// User, Host, Project, Repo
@@ -74,30 +77,7 @@ const (
 
 // Init reads in config file and ENV variables if set.
 func Init() {
-	// Default user for SSH clone.
-	viper.SetDefault(GitUser, "git")
-
-	viper.SetDefault(GitHost, "github.com")
-	viper.SetDefault(GitProvider, "github")
-	viper.SetDefault(SourceBranch, "main")
-	viper.SetDefault(SortRepos, true)
-	viper.SetDefault(SkipUnwanted, true)
-	viper.SetDefault(UnwantedLabels, []string{"deprecated", "poc"})
-	viper.SetDefault(UseSync, false)
-	viper.SetDefault(CatalogCacheFile, ".catalog")
-	viper.SetDefault(CatalogCacheTTL, "24h")
-
-	viper.SetDefault(ChannelBuffer, 100)
-
-	// default reviewers in the form `repo: [reviewers...]`
-	viper.SetDefault(DefaultReviewers, map[string][]string{})
-
-	// aliases in the form `alias: [repos...]`
-	viper.SetDefault(RepoAliases, map[string][]string{})
-
-	if gopath, err := exec.Command("go", "env", "GOPATH").Output(); err == nil {
-		viper.SetDefault(EnvGopath, strings.TrimSpace(string(gopath)))
-	}
+	initialize()
 
 	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_", "-", "_"))
 	viper.AutomaticEnv() // read in environment variables that match
@@ -134,4 +114,66 @@ func Init() {
 	if err := viper.ReadInConfig(); err == nil {
 		fmt.Printf("Using config file: %v\n\n", viper.ConfigFileUsed())
 	}
+}
+
+func initialize() {
+	// Default user for SSH clone.
+	viper.SetDefault(GitUser, "git")
+
+	viper.SetDefault(GitHost, "github.com")
+	viper.SetDefault(GitProvider, "github")
+	viper.SetDefault(SourceBranch, "main")
+	viper.SetDefault(SortRepos, true)
+	viper.SetDefault(SkipUnwanted, true)
+	viper.SetDefault(UnwantedLabels, []string{"deprecated", "poc"})
+	viper.SetDefault(UseSync, false)
+	viper.SetDefault(CatalogCacheFile, ".catalog")
+	viper.SetDefault(CatalogCacheTTL, "24h")
+
+	viper.SetDefault(ChannelBuffer, 100)
+
+	// default reviewers in the form `repo: [reviewers...]`
+	viper.SetDefault(DefaultReviewers, map[string][]string{})
+
+	// aliases in the form `alias: [repos...]`
+	viper.SetDefault(RepoAliases, map[string][]string{})
+
+	// default git directory is $GOPATH/src if GOPATH is set, or current working directory otherwise
+	viper.SetDefault(GitDirectory, defaultGitdir())
+}
+
+// LoadFixture will load example configuration; for testing only!
+func LoadFixture(dir string) error {
+	viper.Reset()
+	initialize()
+
+	viper.SetConfigName("example-config")
+	viper.AddConfigPath(dir)
+
+	return viper.ReadInConfig()
+}
+
+func defaultGitdir() string {
+	dir := os.Getenv("GOPATH")
+	if dir == "" {
+		ctx, done := context.WithTimeout(context.Background(), 5*time.Second)
+		defer done()
+
+		cmd := exec.CommandContext(ctx, "go", "env", "GOPATH")
+
+		// If GOPATH is not set, try to get it from the golang CLI.
+		if path, err := cmd.Output(); err == nil {
+			dir = strings.TrimSpace(string(path))
+		} else {
+			// If that fails, use the current working directory.
+			dir, err = os.Getwd()
+			if err != nil {
+				panic(fmt.Sprintf("Failed to determine current working directory: %v", err))
+			}
+
+			return dir
+		}
+	}
+
+	return filepath.Join(dir, "src")
 }

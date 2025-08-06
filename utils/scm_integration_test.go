@@ -13,19 +13,21 @@ import (
 )
 
 func TestSCMIntegrationWithUtils(t *testing.T) {
+	_ = config.LoadFixture("../config")
+
 	// Save original configuration
 	originalProvider := viper.GetString(config.GitProvider)
 	originalProject := viper.GetString(config.GitProject)
 	originalHost := viper.GetString(config.GitHost)
 	originalUser := viper.GetString(config.GitUser)
-	originalGopath := viper.GetString(config.EnvGopath)
+	originalGitdir := viper.GetString(config.GitDirectory)
 
 	defer func() {
 		viper.Set(config.GitProvider, originalProvider)
 		viper.Set(config.GitProject, originalProject)
 		viper.Set(config.GitHost, originalHost)
 		viper.Set(config.GitUser, originalUser)
-		viper.Set(config.EnvGopath, originalGopath)
+		viper.Set(config.GitDirectory, originalGitdir)
 	}()
 
 	// Configure for testing
@@ -33,7 +35,7 @@ func TestSCMIntegrationWithUtils(t *testing.T) {
 	viper.Set(config.GitProject, "test-project")
 	viper.Set(config.GitHost, "github.com")
 	viper.Set(config.GitUser, "testuser")
-	viper.Set(config.EnvGopath, "/tmp/test-gopath")
+	viper.Set(config.GitDirectory, "/tmp/test-gitdir")
 
 	// Register fake provider with test repositories
 	scm.Register("fake-utils-test", func(project string) scm.Provider {
@@ -108,7 +110,7 @@ func TestSCMIntegrationWithUtils(t *testing.T) {
 
 	t.Run("RepoPathWithSCMContext", func(t *testing.T) {
 		path := RepoPath("repo-1")
-		expectedPath := filepath.Join("/tmp/test-gopath", "src", "github.com", "test-project", "repo-1")
+		expectedPath := filepath.Join("/tmp/test-gitdir", "github.com", "test-project", "repo-1")
 
 		if path != expectedPath {
 			t.Errorf("Expected path %s, got %s", expectedPath, path)
@@ -126,6 +128,8 @@ func TestSCMIntegrationWithUtils(t *testing.T) {
 }
 
 func TestLookupReviewersWithSCMRepositories(t *testing.T) {
+	_ = config.LoadFixture("../config")
+
 	// Save original configuration
 	originalReviewers := viper.Get(config.Reviewers)
 	originalDefaultReviewers := viper.Get(config.DefaultReviewers)
@@ -187,6 +191,8 @@ func TestLookupReviewersWithSCMRepositories(t *testing.T) {
 }
 
 func TestValidateBranchIntegration(t *testing.T) {
+	_ = config.LoadFixture("../config")
+
 	// This test requires git repository setup, so we'll test the basic structure
 	originalSourceBranch := viper.GetString(config.SourceBranch)
 	defer func() {
@@ -195,7 +201,7 @@ func TestValidateBranchIntegration(t *testing.T) {
 
 	// Set up test environment
 	viper.Set(config.SourceBranch, "main")
-	viper.Set(config.EnvGopath, "/tmp/test-gopath")
+	viper.Set(config.GitDirectory, "/tmp/test-gitdir")
 
 	// Create a test channel
 	ch := make(chan string, 1)
@@ -211,17 +217,19 @@ func TestValidateBranchIntegration(t *testing.T) {
 }
 
 func TestLookupBranchIntegration(t *testing.T) {
+	_ = config.LoadFixture("../config")
+
 	originalBranch := viper.GetString(config.Branch)
-	originalGopath := viper.GetString(config.EnvGopath)
+	originalGitdir := viper.GetString(config.GitDirectory)
 
 	defer func() {
 		viper.Set(config.Branch, originalBranch)
-		viper.Set(config.EnvGopath, originalGopath)
+		viper.Set(config.GitDirectory, originalGitdir)
 	}()
 
 	// Test with branch already set in config
 	viper.Set(config.Branch, "feature-branch")
-	viper.Set(config.EnvGopath, "/tmp/test-gopath")
+	viper.Set(config.GitDirectory, "/tmp/test-gitdir")
 
 	branch, err := LookupBranch("test-repo")
 	if err != nil {
@@ -245,6 +253,8 @@ func TestLookupBranchIntegration(t *testing.T) {
 }
 
 func TestUtilsWithFakeRepositories(t *testing.T) {
+	_ = config.LoadFixture("../config")
+
 	// Register fake provider
 	scm.Register("utils-fake-provider", func(project string) scm.Provider {
 		return fake.NewFake(project, fake.CreateTestRepositories(project))

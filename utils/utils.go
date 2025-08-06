@@ -57,10 +57,12 @@ func ParseRepo(repo string) (host, project, name string) {
 func RepoPath(repo string) string {
 	host, project, name := ParseRepo(repo)
 
-	return filepath.Join(
-		viper.GetString(config.EnvGopath),
-		"src", host, project, name,
-	)
+	path, err := filepath.Abs(filepath.Join(viper.GetString(config.GitDirectory), host, project, name))
+	if err != nil {
+		panic(fmt.Sprintf("error determining absolute repo path: %v", err))
+	}
+
+	return path
 }
 
 // RepoURL returns the repository remote url for the given name
