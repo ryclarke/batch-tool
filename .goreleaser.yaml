@@ -1,0 +1,41 @@
+# Make sure to check the documentation at https://goreleaser.com
+# yaml-language-server: $schema=https://goreleaser.com/static/schema.json
+# vim: set ts=2 sw=2 tw=0 fo=cnqoj
+
+version: 2
+
+before:
+  hooks:
+    - go mod tidy
+    - go mod vendor
+
+builds:
+  - env:
+      - CGO_ENABLED=0
+    # Using the default goos setting: ['darwin', 'linux', 'windows']
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+        - goos: windows
+          goarch: arm64
+    ldflags:
+      - -s -w -X github.com/ryclarke/batch-tool/config.Version={{.Version}}
+
+archives:
+  - formats: [txz]
+    # use zip for windows archives
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
+
+changelog:
+  use: github-native
+
+release:
+  footer: >-
+
+    ---
+
+    Released by [GoReleaser](https://github.com/goreleaser/goreleaser).

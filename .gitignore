@@ -124,3 +124,5 @@ secrets-local.tmpl
 # IDE
 .vscode/
 .idea/
+# Added by goreleaser init:
+dist/
