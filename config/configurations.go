@@ -13,7 +13,7 @@ import (
 var CfgFile string
 
 const (
-	Version = "v0.5.0"
+	Version = "v0.7.1"
 
 	EnvGopath = "gopath"
 
@@ -110,6 +110,14 @@ func Init() {
 		// Search in the user's config directory
 		if usrConfig, err := os.UserConfigDir(); err == nil {
 			viper.AddConfigPath(usrConfig)
+		}
+
+		// On Darwin, os.UserConfigDir() returns ~/Library/Application Support.  As this is to be used from
+		// the command line, it's more likely that the user will want to use XDG_CONFIG_HOME instead.
+		if xdgConfigHome := os.Getenv("XDG_CONFIG_HOME"); xdgConfigHome != "" {
+			viper.AddConfigPath(xdgConfigHome)
+		} else if homeDir, err := os.UserHomeDir(); err == nil {
+			viper.AddConfigPath(filepath.Join(homeDir, ".config"))
 		}
 
 		// Search in the executable's directory
