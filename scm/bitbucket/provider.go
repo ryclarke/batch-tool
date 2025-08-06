@@ -5,9 +5,10 @@ import (
 	"net/http"
 	"net/url"
 
+	"github.com/spf13/viper"
+
 	"github.com/ryclarke/batch-tool/config"
 	"github.com/ryclarke/batch-tool/scm"
-	"github.com/spf13/viper"
 )
 
 var _ scm.Provider = new(Bitbucket)
@@ -34,20 +35,28 @@ type Bitbucket struct {
 }
 
 // constructs the base URL for the Bitbucket API endpoint.
-func (b *Bitbucket) url(repo string, path ...string) string {
-	uri := url.PathEscape(fmt.Sprintf("https://%s/rest/api/1.0/projects/%s", b.host, b.project))
+func (b *Bitbucket) url(repo string, queryParams url.Values, path ...string) string {
+	// Create base URL using url.URL struct
+	baseURL := &url.URL{
+		Scheme: "https",
+		Host:   b.host,
+		Path:   "/rest/api/1.0/projects",
+	}
+	baseURL = baseURL.JoinPath(b.project)
 
-	// If a repository is specified, append it to the URL.
+	// Build dynamic path segments if needed
 	if repo != "" {
-		uri = fmt.Sprintf("%s/repos/%s", uri, url.PathEscape(repo))
+		baseURL = baseURL.JoinPath("repos", repo)
 	}
 
-	// If additional path segments are provided, append them to the URL.
-	if len(path) > 0 {
-		uri = fmt.Sprintf("%s/%s", uri, url.PathEscape(path[0]))
+	baseURL = baseURL.JoinPath(path...)
+
+	// Add query parameters if provided
+	if queryParams != nil {
+		baseURL.RawQuery = queryParams.Encode()
 	}
 
-	return uri
+	return baseURL.String()
 }
 
 // convenience function to perform a GET request and unmarshal the response into the specified type.
