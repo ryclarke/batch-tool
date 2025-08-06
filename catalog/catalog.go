@@ -147,6 +147,10 @@ func saveCatalogCache() error {
 		return err
 	}
 
+	if err := os.MkdirAll(filepath.Dir(catalogCachePath()), 0755); err != nil {
+		return err
+	}
+
 	return os.WriteFile(catalogCachePath(), data, 0644)
 }
 
