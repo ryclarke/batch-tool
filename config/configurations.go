@@ -10,11 +10,15 @@ import (
 	"github.com/spf13/viper"
 )
 
-var CfgFile string
+var (
+	CfgFile string
+
+	// Version is dynamically set at build time using the -X linker flag.
+	// Default value is used for testing and development builds.
+	Version = "dev"
+)
 
 const (
-	Version = "v0.5.0"
-
 	EnvGopath = "gopath"
 
 	GitUser      = "git.user"

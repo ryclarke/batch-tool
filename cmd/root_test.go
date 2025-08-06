@@ -26,31 +26,36 @@ func TestRootCmd(t *testing.T) {
 
 	// Test that subcommands are added
 	subcommands := cmd.Commands()
-	expectedCommands := []string{"version", "catalog", "git", "pr", "make", "shell", "labels"}
+	expectedCommands := []string{"catalog", "git", "pr", "make", "shell", "labels"}
 
 	if len(subcommands) < len(expectedCommands) {
 		t.Errorf("Expected at least %d subcommands, got %d", len(expectedCommands), len(subcommands))
 	}
 }
 
-func TestVersionCommand(t *testing.T) {
+func TestVersionFlag(t *testing.T) {
 	cmd := RootCmd()
 
-	// Find the version command
-	var versionCmd *cobra.Command
-	for _, subcmd := range cmd.Commands() {
-		if subcmd.Use == "version" {
-			versionCmd = subcmd
-			break
-		}
+	// Test that version is set on the command (Cobra automatically creates --version flag)
+	if cmd.Version == "" {
+		t.Error("command version is not set")
 	}
 
-	if versionCmd == nil {
-		t.Fatal("version command not found")
+	// Test that we can call --version without error by capturing output
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+	cmd.SetArgs([]string{"--version"})
+
+	err := cmd.Execute()
+	if err != nil {
+		t.Errorf("--version flag execution failed: %v", err)
 	}
 
-	if versionCmd.Short != "Print the current batch-tool version" {
-		t.Errorf("Expected correct version command description, got %s", versionCmd.Short)
+	// Verify version output contains our version string
+	output := buf.String()
+	if !strings.Contains(output, cmd.Version) {
+		t.Errorf("Expected version output to contain %s, got: %s", cmd.Version, output)
 	}
 }
 
@@ -110,7 +115,10 @@ func TestPersistentPreRun(t *testing.T) {
 	cmd.SetErr(&buf)
 
 	// Test no-sort flag behavior - should be available even if no PersistentPreRun
-	cmd.PersistentFlags().Set("no-sort", "true")
+	err := cmd.PersistentFlags().Set("no-sort", "true")
+	if err != nil {
+		t.Errorf("Failed to set no-sort flag: %v", err)
+	}
 
 	// Since there's no PersistentPreRun function, just verify the flags exist
 	if cmd.PersistentPreRun == nil {
@@ -118,7 +126,10 @@ func TestPersistentPreRun(t *testing.T) {
 	}
 
 	// Test no-skip-unwanted flag behavior
-	cmd.PersistentFlags().Set("no-skip-unwanted", "true")
+	err = cmd.PersistentFlags().Set("no-skip-unwanted", "true")
+	if err != nil {
+		t.Errorf("Failed to set no-skip-unwanted flag: %v", err)
+	}
 
 	// Verify the flags were set
 	if flag := cmd.PersistentFlags().Lookup("no-sort"); flag == nil {
