@@ -22,5 +22,3 @@ repos:
 channels:
   buffer-size: 100      # channel buffer size for streaming output
   max-concurrency: 8    # maximum number of concurrent operations (defaults to number of logical CPUs)
-
-sync: false             # execute operations synchronously (overrides concurrency)

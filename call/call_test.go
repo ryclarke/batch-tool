@@ -203,7 +203,6 @@ func TestDoBatching(t *testing.T) {
 	// Set up test configuration with low concurrency
 	viper.Set(config.MaxConcurrency, 2)
 	viper.Set(config.ChannelBuffer, 10)
-	viper.Set(config.UseSync, false)
 	viper.Set(config.SortRepos, false)
 
 	var activeWorkers int64
@@ -261,7 +260,6 @@ func TestDoBatchingHighConcurrency(t *testing.T) {
 	// Test with higher concurrency limit
 	viper.Set(config.MaxConcurrency, 10)
 	viper.Set(config.ChannelBuffer, 10)
-	viper.Set(config.UseSync, false)
 	viper.Set(config.SortRepos, false)
 
 	var processedCount int64
@@ -289,7 +287,6 @@ func TestDoBatchingZeroConcurrency(t *testing.T) {
 	// Test with zero concurrency (should fallback to default)
 	viper.Set(config.MaxConcurrency, 0)
 	viper.Set(config.ChannelBuffer, 10)
-	viper.Set(config.UseSync, false)
 	viper.Set(config.SortRepos, false)
 
 	testWrapper := func(repo string, ch chan<- string) {
@@ -312,10 +309,9 @@ func TestDoBatchingZeroConcurrency(t *testing.T) {
 func TestDoBatchingSyncMode(t *testing.T) {
 	_ = config.LoadFixture("../config")
 
-	// Test that sync mode bypasses batching
+	// Test that setting concurrency to 1 provides sync-like behavior
 	viper.Set(config.MaxConcurrency, 1)
 	viper.Set(config.ChannelBuffer, 10)
-	viper.Set(config.UseSync, true) // Enable sync mode
 	viper.Set(config.SortRepos, false)
 
 	testWrapper := func(repo string, ch chan<- string) {

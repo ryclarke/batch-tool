@@ -48,7 +48,6 @@ const (
 	Branch    = "branch"
 	Reviewers = "reviewers"
 	AuthToken = "auth-token"
-	UseSync   = "sync"
 
 	ChannelBuffer  = "channels.buffer-size"
 	MaxConcurrency = "channels.max-concurrency"
@@ -128,7 +127,6 @@ func initialize() {
 	viper.SetDefault(SortRepos, true)
 	viper.SetDefault(SkipUnwanted, true)
 	viper.SetDefault(UnwantedLabels, []string{"deprecated", "poc"})
-	viper.SetDefault(UseSync, false)
 	viper.SetDefault(CatalogCacheFile, ".catalog")
 	viper.SetDefault(CatalogCacheTTL, "24h")
 

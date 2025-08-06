@@ -187,7 +187,7 @@ batch-tool --sync <command> <repos...>
 ## Global Flags
 
 - `--config string`: Specify config file (default: `batch-tool.yaml`)
-- `--sync`: Execute commands synchronously instead of in parallel
+- `--sync`: Execute commands synchronously (alias for `--max-concurrency=1`)
 - `--max-concurrency int`: Maximum number of concurrent operations (default: number of logical CPUs)
 - `--sort`: Sort repositories (default: true)
 - `--skip-unwanted`: Skip repositories with unwanted labels (default: true)
@@ -255,10 +255,8 @@ repos:
 
 ```yaml
 channels:
-  buffer-size: 100           # Channel buffer size for output (default: 100)
+  buffer-size: 100           # Channel buffer size for console output (default: 100)
   max-concurrency: 8         # Maximum concurrent operations (default: number of logical CPUs)
-
-sync: false                  # Execute operations synchronously (default: false)
 ```
 
 #### Concurrency Control

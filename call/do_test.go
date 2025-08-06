@@ -3,6 +3,7 @@ package call
 import (
 	"bytes"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -15,7 +16,6 @@ func TestDo(t *testing.T) {
 
 	// Set up test configuration
 	viper.Set(config.ChannelBuffer, 10)
-	viper.Set(config.UseSync, false)
 	viper.Set(config.SortRepos, false)
 
 	// Create a test wrapper that sends test data
@@ -35,54 +35,6 @@ func TestDo(t *testing.T) {
 	}
 	if !strings.Contains(output, "test output for repo2") {
 		t.Error("Expected output for repo2")
-	}
-}
-
-func TestDoSync(t *testing.T) {
-	_ = config.LoadFixture("../config")
-
-	// Set up test configuration
-	viper.Set(config.ChannelBuffer, 10)
-	viper.Set(config.UseSync, false) // DoSync should override this
-	viper.Set(config.SortRepos, false)
-
-	testWrapper := func(repo string, ch chan<- string) {
-		defer close(ch)
-		ch <- "sync test for " + repo
-	}
-
-	var buf bytes.Buffer
-	repos := []string{"repo1"}
-
-	DoSync(repos, &buf, testWrapper)
-
-	output := buf.String()
-	if !strings.Contains(output, "sync test for repo1") {
-		t.Error("Expected sync output for repo1")
-	}
-}
-
-func TestDoAsync(t *testing.T) {
-	_ = config.LoadFixture("../config")
-
-	// Set up test configuration
-	viper.Set(config.ChannelBuffer, 10)
-	viper.Set(config.UseSync, true) // DoAsync should override this
-	viper.Set(config.SortRepos, false)
-
-	testWrapper := func(repo string, ch chan<- string) {
-		defer close(ch)
-		ch <- "async test for " + repo
-	}
-
-	var buf bytes.Buffer
-	repos := []string{"repo1"}
-
-	DoAsync(repos, &buf, testWrapper)
-
-	output := buf.String()
-	if !strings.Contains(output, "async test for repo1") {
-		t.Error("Expected async output for repo1")
 	}
 }
 
@@ -141,7 +93,6 @@ func TestDoWithChannelBuffer(t *testing.T) {
 
 	// Test with different channel buffer sizes
 	viper.Set(config.ChannelBuffer, 1)
-	viper.Set(config.UseSync, false)
 	viper.Set(config.SortRepos, false)
 
 	testWrapper := func(repo string, ch chan<- string) {
@@ -171,7 +122,6 @@ func TestDoWithNilWriter(t *testing.T) {
 
 	// Test that Do handles different scenarios gracefully
 	viper.Set(config.ChannelBuffer, 10)
-	viper.Set(config.UseSync, false)
 	viper.Set(config.SortRepos, false)
 
 	testWrapper := func(repo string, ch chan<- string) {
@@ -195,7 +145,6 @@ func TestDoWithSlowWrapper(t *testing.T) {
 
 	// Test async behavior with slow wrapper
 	viper.Set(config.ChannelBuffer, 10)
-	viper.Set(config.UseSync, false)
 	viper.Set(config.SortRepos, false)
 
 	slowWrapper := func(repo string, ch chan<- string) {
@@ -222,5 +171,55 @@ func TestDoWithSlowWrapper(t *testing.T) {
 	}
 	if !strings.Contains(output, "slow output for repo2") {
 		t.Error("Expected output for repo2")
+	}
+}
+
+func TestSyncFlagBehavior(t *testing.T) {
+	_ = config.LoadFixture("../config")
+
+	// Test that setting MaxConcurrency to 1 enforces sequential execution
+	viper.Set(config.MaxConcurrency, 1) // Simulate --sync flag behavior
+	viper.Set(config.ChannelBuffer, 10)
+	viper.Set(config.SortRepos, false)
+
+	var activeWorkers int64
+	var maxConcurrentWorkers int64
+
+	testWrapper := func(repo string, ch chan<- string) {
+		defer close(ch)
+
+		// Track concurrent workers
+		current := atomic.AddInt64(&activeWorkers, 1)
+		defer atomic.AddInt64(&activeWorkers, -1)
+
+		// Update maximum concurrent workers seen
+		if current > maxConcurrentWorkers {
+			maxConcurrentWorkers = current
+		}
+
+		// Simulate some work
+		time.Sleep(50 * time.Millisecond)
+
+		ch <- "processed " + repo
+	}
+
+	var buf bytes.Buffer
+	repos := []string{"repo1", "repo2", "repo3"}
+
+	Do(repos, &buf, testWrapper)
+
+	output := buf.String()
+
+	// Verify all repos were processed
+	for _, repo := range repos {
+		expected := "processed " + repo
+		if !strings.Contains(output, expected) {
+			t.Errorf("Expected output to contain '%s'", expected)
+		}
+	}
+
+	// Verify only 1 worker was active at a time (sequential execution)
+	if maxConcurrentWorkers != 1 {
+		t.Errorf("Expected max concurrent workers to be 1 (sync mode), got %d", maxConcurrentWorkers)
 	}
 }
