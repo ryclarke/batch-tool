@@ -4,9 +4,13 @@ import (
 	"bytes"
 	"strings"
 	"testing"
+
+	"github.com/ryclarke/batch-tool/config"
 )
 
 func TestPrCmd(t *testing.T) {
+	_ = config.LoadFixture("../../config")
+
 	cmd := Cmd()
 
 	if cmd == nil {
@@ -23,6 +27,8 @@ func TestPrCmd(t *testing.T) {
 }
 
 func TestPrCmdSubcommands(t *testing.T) {
+	_ = config.LoadFixture("../../config")
+
 	cmd := Cmd()
 
 	subcommands := cmd.Commands()
@@ -46,12 +52,16 @@ func TestPrCmdSubcommands(t *testing.T) {
 }
 
 func TestPrCmdFlags(t *testing.T) {
+	_ = config.LoadFixture("../../config")
+
 	cmd := Cmd()
 
 	// Test persistent flags
 	titleFlag := cmd.PersistentFlags().Lookup("title")
 	if titleFlag == nil {
 		t.Error("title flag not found")
+
+		return
 	}
 
 	if titleFlag.Shorthand != "t" {
@@ -61,6 +71,8 @@ func TestPrCmdFlags(t *testing.T) {
 	descFlag := cmd.PersistentFlags().Lookup("description")
 	if descFlag == nil {
 		t.Error("description flag not found")
+
+		return
 	}
 
 	if descFlag.Shorthand != "d" {
@@ -70,6 +82,8 @@ func TestPrCmdFlags(t *testing.T) {
 	reviewerFlag := cmd.PersistentFlags().Lookup("reviewer")
 	if reviewerFlag == nil {
 		t.Error("reviewer flag not found")
+
+		return
 	}
 
 	if reviewerFlag.Shorthand != "r" {
@@ -78,6 +92,8 @@ func TestPrCmdFlags(t *testing.T) {
 }
 
 func TestPrCmdArgs(t *testing.T) {
+	_ = config.LoadFixture("../../config")
+
 	cmd := Cmd()
 
 	// Test that command requires minimum arguments
@@ -94,6 +110,8 @@ func TestPrCmdArgs(t *testing.T) {
 }
 
 func TestPrCmdHelp(t *testing.T) {
+	_ = config.LoadFixture("../../config")
+
 	cmd := Cmd()
 
 	var buf bytes.Buffer
@@ -122,11 +140,14 @@ func TestPrCmdHelp(t *testing.T) {
 }
 
 func TestPrCmdPersistentPreRunE(t *testing.T) {
+	_ = config.LoadFixture("../../config")
+
 	cmd := Cmd()
 
 	// Test PersistentPreRunE function exists
 	if cmd.PersistentPreRunE == nil {
 		t.Error("Expected PersistentPreRunE function to be set")
+
 		return
 	}
 

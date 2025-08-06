@@ -4,9 +4,13 @@ import (
 	"bytes"
 	"strings"
 	"testing"
+
+	"github.com/ryclarke/batch-tool/config"
 )
 
 func TestAddShellCmd(t *testing.T) {
+	_ = config.LoadFixture("../config")
+
 	cmd := addShellCmd()
 
 	if cmd == nil {
@@ -29,6 +33,8 @@ func TestAddShellCmd(t *testing.T) {
 }
 
 func TestShellCmdFlags(t *testing.T) {
+	_ = config.LoadFixture("../config")
+
 	cmd := addShellCmd()
 
 	// Test exec flag
@@ -47,6 +53,8 @@ func TestShellCmdFlags(t *testing.T) {
 }
 
 func TestShellCmdArgs(t *testing.T) {
+	_ = config.LoadFixture("../config")
+
 	cmd := addShellCmd()
 
 	// Test that command requires minimum arguments
@@ -63,6 +71,8 @@ func TestShellCmdArgs(t *testing.T) {
 }
 
 func TestShellCmdHelp(t *testing.T) {
+	_ = config.LoadFixture("../config")
+
 	cmd := addShellCmd()
 
 	var buf bytes.Buffer
@@ -87,6 +97,8 @@ func TestShellCmdHelp(t *testing.T) {
 }
 
 func TestShellCmdRunEErrorHandling(t *testing.T) {
+	_ = config.LoadFixture("../config")
+
 	cmd := addShellCmd()
 
 	var buf bytes.Buffer
@@ -104,6 +116,8 @@ func TestShellCmdRunEErrorHandling(t *testing.T) {
 }
 
 func TestShellCmdWithExecFlag(t *testing.T) {
+	_ = config.LoadFixture("../config")
+
 	cmd := addShellCmd()
 
 	var buf bytes.Buffer

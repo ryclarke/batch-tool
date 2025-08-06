@@ -5,10 +5,13 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ryclarke/batch-tool/config"
 	"github.com/spf13/viper"
 )
 
 func TestAddMakeCmd(t *testing.T) {
+	_ = config.LoadFixture("../config")
+
 	cmd := addMakeCmd()
 
 	if cmd == nil {
@@ -29,6 +32,8 @@ func TestAddMakeCmd(t *testing.T) {
 }
 
 func TestMakeCmdFlags(t *testing.T) {
+	_ = config.LoadFixture("../config")
+
 	cmd := addMakeCmd()
 
 	// Test target flag
@@ -47,6 +52,8 @@ func TestMakeCmdFlags(t *testing.T) {
 }
 
 func TestMakeCmdArgs(t *testing.T) {
+	_ = config.LoadFixture("../config")
+
 	cmd := addMakeCmd()
 
 	// Test that command requires minimum arguments
@@ -68,6 +75,8 @@ func TestMakeCmdArgs(t *testing.T) {
 }
 
 func TestMakeCmdHelp(t *testing.T) {
+	_ = config.LoadFixture("../config")
+
 	cmd := addMakeCmd()
 
 	var buf bytes.Buffer
@@ -92,6 +101,8 @@ func TestMakeCmdHelp(t *testing.T) {
 }
 
 func TestMakeCmdConfiguration(t *testing.T) {
+	_ = config.LoadFixture("../config")
+
 	// Test that the make command properly integrates with viper configuration
 	originalTargets := viper.GetStringSlice("make.targets")
 	defer viper.Set("make.targets", originalTargets)

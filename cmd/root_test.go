@@ -6,10 +6,13 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ryclarke/batch-tool/config"
 	"github.com/spf13/cobra"
 )
 
 func TestRootCmd(t *testing.T) {
+	_ = config.LoadFixture("../config")
+
 	cmd := RootCmd()
 
 	if cmd == nil {
@@ -60,6 +63,8 @@ func TestVersionFlag(t *testing.T) {
 }
 
 func TestCatalogCommand(t *testing.T) {
+	_ = config.LoadFixture("../config")
+
 	cmd := RootCmd()
 
 	// Find the catalog command
@@ -81,6 +86,8 @@ func TestCatalogCommand(t *testing.T) {
 }
 
 func TestPersistentFlags(t *testing.T) {
+	_ = config.LoadFixture("../config")
+
 	cmd := RootCmd()
 
 	// Test that persistent flags are set up
@@ -106,6 +113,8 @@ func TestPersistentFlags(t *testing.T) {
 }
 
 func TestPersistentPreRun(t *testing.T) {
+	_ = config.LoadFixture("../config")
+
 	// Test the persistent pre-run logic
 	cmd := RootCmd()
 
@@ -141,6 +150,8 @@ func TestPersistentPreRun(t *testing.T) {
 }
 
 func TestExecuteWithHelp(t *testing.T) {
+	_ = config.LoadFixture("../config")
+
 	// Test that Execute function can handle help flag without error
 	oldArgs := os.Args
 	defer func() { os.Args = oldArgs }()
@@ -166,6 +177,8 @@ func TestExecuteWithHelp(t *testing.T) {
 }
 
 func TestHiddenFlags(t *testing.T) {
+	_ = config.LoadFixture("../config")
+
 	cmd := RootCmd()
 
 	// Test that hidden flags are properly configured

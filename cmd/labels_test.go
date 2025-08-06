@@ -4,9 +4,13 @@ import (
 	"bytes"
 	"strings"
 	"testing"
+
+	"github.com/ryclarke/batch-tool/config"
 )
 
 func TestAddLabelsCmd(t *testing.T) {
+	_ = config.LoadFixture("../config")
+
 	cmd := addLabelsCmd()
 
 	if cmd == nil {
@@ -24,6 +28,8 @@ func TestAddLabelsCmd(t *testing.T) {
 }
 
 func TestLabelsCmdArgs(t *testing.T) {
+	_ = config.LoadFixture("../config")
+
 	cmd := addLabelsCmd()
 
 	// The labels command should be runnable even without args in some cases
@@ -34,6 +40,8 @@ func TestLabelsCmdArgs(t *testing.T) {
 }
 
 func TestLabelsCmdHelp(t *testing.T) {
+	_ = config.LoadFixture("../config")
+
 	cmd := addLabelsCmd()
 
 	var buf bytes.Buffer

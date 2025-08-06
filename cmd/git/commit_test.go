@@ -4,9 +4,13 @@ import (
 	"bytes"
 	"strings"
 	"testing"
+
+	"github.com/ryclarke/batch-tool/config"
 )
 
 func TestAddCommitCmd(t *testing.T) {
+	_ = config.LoadFixture("../../config")
+
 	cmd := addCommitCmd()
 
 	if cmd == nil {
@@ -23,6 +27,8 @@ func TestAddCommitCmd(t *testing.T) {
 }
 
 func TestCommitCmdFlags(t *testing.T) {
+	_ = config.LoadFixture("../../config")
+
 	cmd := addCommitCmd()
 
 	// Test amend flag
@@ -47,6 +53,8 @@ func TestCommitCmdFlags(t *testing.T) {
 }
 
 func TestCommitCmdArgs(t *testing.T) {
+	_ = config.LoadFixture("../../config")
+
 	cmd := addCommitCmd()
 
 	// Test that command requires minimum arguments
@@ -63,6 +71,8 @@ func TestCommitCmdArgs(t *testing.T) {
 }
 
 func TestCommitCmdHelp(t *testing.T) {
+	_ = config.LoadFixture("../../config")
+
 	cmd := addCommitCmd()
 
 	var buf bytes.Buffer
@@ -91,6 +101,8 @@ func TestCommitCmdHelp(t *testing.T) {
 }
 
 func TestCommitCmdPreRunE(t *testing.T) {
+	_ = config.LoadFixture("../../config")
+
 	cmd := addCommitCmd()
 
 	// Test PreRunE function exists

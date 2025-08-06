@@ -4,9 +4,13 @@ import (
 	"bytes"
 	"strings"
 	"testing"
+
+	"github.com/ryclarke/batch-tool/config"
 )
 
 func TestAddStatusCmd(t *testing.T) {
+	_ = config.LoadFixture("../../config")
+
 	cmd := addStatusCmd()
 
 	if cmd == nil {
@@ -23,6 +27,8 @@ func TestAddStatusCmd(t *testing.T) {
 }
 
 func TestStatusCmdArgs(t *testing.T) {
+	_ = config.LoadFixture("../../config")
+
 	cmd := addStatusCmd()
 
 	// Test that command requires minimum arguments
@@ -39,6 +45,8 @@ func TestStatusCmdArgs(t *testing.T) {
 }
 
 func TestStatusCmdHelp(t *testing.T) {
+	_ = config.LoadFixture("../../config")
+
 	cmd := addStatusCmd()
 
 	var buf bytes.Buffer
@@ -59,6 +67,8 @@ func TestStatusCmdHelp(t *testing.T) {
 }
 
 func TestAddDiffCmd(t *testing.T) {
+	_ = config.LoadFixture("../../config")
+
 	cmd := addDiffCmd()
 
 	if cmd == nil {
@@ -75,6 +85,8 @@ func TestAddDiffCmd(t *testing.T) {
 }
 
 func TestDiffCmdArgs(t *testing.T) {
+	_ = config.LoadFixture("../../config")
+
 	cmd := addDiffCmd()
 
 	// Test that command requires minimum arguments
@@ -91,6 +103,8 @@ func TestDiffCmdArgs(t *testing.T) {
 }
 
 func TestDiffCmdHelp(t *testing.T) {
+	_ = config.LoadFixture("../../config")
+
 	cmd := addDiffCmd()
 
 	var buf bytes.Buffer
@@ -111,6 +125,8 @@ func TestDiffCmdHelp(t *testing.T) {
 }
 
 func TestAddUpdateCmd(t *testing.T) {
+	_ = config.LoadFixture("../../config")
+
 	cmd := addUpdateCmd()
 
 	if cmd == nil {
@@ -127,6 +143,8 @@ func TestAddUpdateCmd(t *testing.T) {
 }
 
 func TestUpdateCmdArgs(t *testing.T) {
+	_ = config.LoadFixture("../../config")
+
 	cmd := addUpdateCmd()
 
 	// Test that command requires minimum arguments
@@ -143,6 +161,8 @@ func TestUpdateCmdArgs(t *testing.T) {
 }
 
 func TestUpdateCmdHelp(t *testing.T) {
+	_ = config.LoadFixture("../../config")
+
 	cmd := addUpdateCmd()
 
 	var buf bytes.Buffer

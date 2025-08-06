@@ -174,7 +174,7 @@ func fetchRepositoryData() error {
 }
 
 func catalogCachePath() string {
-	return filepath.Join(viper.GetString(config.EnvGopath), "src",
+	return filepath.Join(viper.GetString(config.GitDirectory),
 		viper.GetString(config.GitHost),
 		viper.GetString(config.GitProject),
 		viper.GetString(config.CatalogCacheFile),

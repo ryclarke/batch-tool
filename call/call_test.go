@@ -3,9 +3,13 @@ package call
 import (
 	"strings"
 	"testing"
+
+	"github.com/ryclarke/batch-tool/config"
 )
 
 func TestExec(t *testing.T) {
+	_ = config.LoadFixture("../config")
+
 	// Create a test function using Exec
 	execFunc := Exec("echo", "test message")
 
@@ -45,6 +49,8 @@ func TestExec(t *testing.T) {
 }
 
 func TestExecWithArguments(t *testing.T) {
+	_ = config.LoadFixture("../config")
+
 	// Test Exec with multiple arguments
 	execFunc := Exec("echo", "hello", "world", "test")
 
@@ -77,6 +83,8 @@ func TestExecWithArguments(t *testing.T) {
 }
 
 func TestExecInvalidCommand(t *testing.T) {
+	_ = config.LoadFixture("../config")
+
 	// Test Exec with a command that doesn't exist
 	execFunc := Exec("nonexistent-command-xyz", "arg1")
 
@@ -96,6 +104,8 @@ func TestExecInvalidCommand(t *testing.T) {
 }
 
 func TestExecWithEmptyCommand(t *testing.T) {
+	_ = config.LoadFixture("../config")
+
 	// Test Exec with empty command
 	execFunc := Exec("", "arg1")
 
@@ -115,6 +125,8 @@ func TestExecWithEmptyCommand(t *testing.T) {
 }
 
 func TestExecChannelOutput(t *testing.T) {
+	_ = config.LoadFixture("../config")
+
 	// Test that Exec properly streams output to channel
 	execFunc := Exec("echo", "line1\nline2\nline3")
 

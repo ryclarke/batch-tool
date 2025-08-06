@@ -14,6 +14,8 @@ import (
 )
 
 func TestRepositoryList(t *testing.T) {
+	_ = config.LoadFixture("../config")
+
 	// Initialize test data
 	Labels = map[string]mapset.Set[string]{
 		"frontend": mapset.NewSet("web-app", "mobile-app"),
@@ -40,6 +42,8 @@ func TestRepositoryList(t *testing.T) {
 }
 
 func TestRepositoryListWithLabels(t *testing.T) {
+	_ = config.LoadFixture("../config")
+
 	// Initialize test data
 	Labels = map[string]mapset.Set[string]{
 		"frontend": mapset.NewSet("web-app", "mobile-app"),
@@ -64,6 +68,8 @@ func TestRepositoryListWithLabels(t *testing.T) {
 }
 
 func TestRepositoryListWithExclusions(t *testing.T) {
+	_ = config.LoadFixture("../config")
+
 	// Initialize test data
 	Labels = map[string]mapset.Set[string]{
 		"all":        mapset.NewSet("web-app", "mobile-app", "api-server", "deprecated-app"),
@@ -86,6 +92,8 @@ func TestRepositoryListWithExclusions(t *testing.T) {
 }
 
 func TestRepositoryListWithSkipUnwanted(t *testing.T) {
+	_ = config.LoadFixture("../config")
+
 	// Set up configuration
 	viper.Set(config.SkipUnwanted, true)
 	viper.Set(config.UnwantedLabels, []string{"deprecated", "poc"})
@@ -126,6 +134,8 @@ func TestRepositoryListWithSkipUnwanted(t *testing.T) {
 }
 
 func TestRepositoryListEmptyInput(t *testing.T) {
+	_ = config.LoadFixture("../config")
+
 	// Test with no arguments
 	repoList := RepositoryList()
 	repos := repoList.ToSlice()
@@ -136,6 +146,8 @@ func TestRepositoryListEmptyInput(t *testing.T) {
 }
 
 func TestRepositoryListNonexistentLabel(t *testing.T) {
+	_ = config.LoadFixture("../config")
+
 	// Test with nonexistent label
 	Labels = map[string]mapset.Set[string]{
 		"frontend": mapset.NewSet("web-app"),
@@ -150,6 +162,8 @@ func TestRepositoryListNonexistentLabel(t *testing.T) {
 }
 
 func TestRepositoryListMixedInput(t *testing.T) {
+	_ = config.LoadFixture("../config")
+
 	// Test with mix of labels and repository names
 	Labels = map[string]mapset.Set[string]{
 		"frontend": mapset.NewSet("web-app", "mobile-app"),
@@ -176,6 +190,8 @@ func TestRepositoryListMixedInput(t *testing.T) {
 
 // TestInitWithFakeProvider tests catalog initialization with a fake SCM provider
 func TestInitWithFakeProvider(t *testing.T) {
+	_ = config.LoadFixture("../config")
+
 	// Save original state
 	originalCatalog := Catalog
 	originalLabels := Labels
@@ -242,6 +258,8 @@ func TestInitWithFakeProvider(t *testing.T) {
 
 // TestPrintFunctions tests the print functions with test data
 func TestPrintFunctions(t *testing.T) {
+	_ = config.LoadFixture("../config")
+
 	// Save original state
 	originalCatalog := Catalog
 	originalLabels := Labels
