@@ -4,11 +4,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
+	"strconv"
 	"strings"
+
+	"github.com/spf13/viper"
 
 	"github.com/ryclarke/batch-tool/config"
 	"github.com/ryclarke/batch-tool/scm"
-	"github.com/spf13/viper"
 )
 
 type prListResp struct {
@@ -43,7 +46,7 @@ func (b *Bitbucket) OpenPullRequest(repo, branch, title, description string, rev
 
 	payload := genPR(repo, title, description, reviewers)
 
-	request, err := http.NewRequest(http.MethodPost, b.url(repo, "pull-requests"), strings.NewReader(payload))
+	request, err := http.NewRequest(http.MethodPost, b.url(repo, nil, "pull-requests"), strings.NewReader(payload))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
@@ -98,7 +101,7 @@ func (b *Bitbucket) UpdatePullRequest(repo, branch, title, description string, r
 		return nil, fmt.Errorf("failed to marshal pull request payload: %w", err)
 	}
 
-	request, err := http.NewRequest(http.MethodPut, b.url(repo, fmt.Sprintf("pull-requests/%d", pr.ID())), strings.NewReader(string(payload)))
+	request, err := http.NewRequest(http.MethodPut, b.url(repo, nil, "pull-requests", strconv.Itoa(pr.ID())), strings.NewReader(string(payload)))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
@@ -118,7 +121,9 @@ func (b *Bitbucket) MergePullRequest(repo, branch string) (scm.PullRequest, erro
 		return nil, err
 	}
 
-	req, err := http.NewRequest(http.MethodPost, b.url(repo, fmt.Sprintf("pull-requests/%d/merge?version=%d", pr.ID(), pr.Version())), nil)
+	queryParams := url.Values{}
+	queryParams.Set("version", strconv.Itoa(pr.Version()))
+	req, err := http.NewRequest(http.MethodPost, b.url(repo, queryParams, "pull-requests", strconv.Itoa(pr.ID()), "merge"), nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
@@ -131,7 +136,10 @@ func (b *Bitbucket) MergePullRequest(repo, branch string) (scm.PullRequest, erro
 }
 
 func (b *Bitbucket) getPullRequests(repo, branch string) ([]scm.PullRequest, error) {
-	resp, err := get[prListResp](b, b.url(repo, fmt.Sprintf("pull-requests?direction=outgoing&at=refs/heads/%s", branch)))
+	queryParams := url.Values{}
+	queryParams.Set("direction", "outgoing")
+	queryParams.Set("at", "refs/heads/"+branch)
+	resp, err := get[prListResp](b, b.url(repo, queryParams, "pull-requests"))
 	if err != nil {
 		return nil, err
 	}
