@@ -17,13 +17,13 @@ type Provider interface {
 	ListRepositories() ([]*Repository, error)
 
 	// GetPullRequest retrieves a pull request by repository name and source branch.
-	GetPullRequest(repo, branch string) (PullRequest, error)
+	GetPullRequest(repo, branch string) (*PullRequest, error)
 	// OpenPullRequest opens a new pull request in the specified repository.
-	OpenPullRequest(repo, branch, title, description string, reviewers []string) (PullRequest, error)
+	OpenPullRequest(repo, branch, title, description string, reviewers []string) (*PullRequest, error)
 	// UpdatePullRequest updates an existing pull request.
-	UpdatePullRequest(repo, branch, title, description string, reviewers []string, appendReviewers bool) (PullRequest, error)
+	UpdatePullRequest(repo, branch, title, description string, reviewers []string, appendReviewers bool) (*PullRequest, error)
 	// MergePullRequest merges an existing pull request.
-	MergePullRequest(repo, branch string) (PullRequest, error)
+	MergePullRequest(repo, branch string) (*PullRequest, error)
 }
 
 // Get retrieves a registered SCM provider by name.

@@ -33,7 +33,7 @@ func ExampleFake_basicUsage() {
 
 	// Create a pull request
 	pr, _ := fake.OpenPullRequest("repo-1", "feature-branch", "My Feature", "Description", []string{"reviewer1"})
-	println("Created PR with ID:", pr.ID())
+	println("Created PR with ID:", pr.ID)
 }
 
 // ExampleCreateTestRepositories demonstrates using the CreateTestRepositories helper
@@ -102,8 +102,8 @@ func TestExampleIntegration(t *testing.T) {
 		t.Fatalf("Failed to retrieve pull request: %v", err)
 	}
 
-	if retrievedPR.ID() != originalPR.ID() {
-		t.Errorf("PR ID mismatch: expected %d, got %d", originalPR.ID(), retrievedPR.ID())
+	if retrievedPR.ID != originalPR.ID {
+		t.Errorf("PR ID mismatch: expected %d, got %d", originalPR.ID, retrievedPR.ID)
 	}
 
 	// Test scenario: Update pull request
@@ -112,10 +112,9 @@ func TestExampleIntegration(t *testing.T) {
 		t.Fatalf("Failed to update pull request: %v", err)
 	}
 
-	reviewers := updatedPR.GetReviewers()
 	expectedReviewers := 3 // alice, bob, charlie
-	if len(reviewers) != expectedReviewers {
-		t.Errorf("Expected %d reviewers after update, got %d", expectedReviewers, len(reviewers))
+	if len(updatedPR.Reviewers) != expectedReviewers {
+		t.Errorf("Expected %d reviewers after update, got %d", expectedReviewers, len(updatedPR.Reviewers))
 	}
 
 	// Test scenario: Merge pull request
@@ -124,8 +123,8 @@ func TestExampleIntegration(t *testing.T) {
 		t.Fatalf("Failed to merge pull request: %v", err)
 	}
 
-	if mergedPR["state"] != "MERGED" {
-		t.Errorf("Expected PR state to be MERGED, got %v", mergedPR["state"])
+	if _, ok := fake.PullRequests[mergedPR.Repo]; ok {
+		t.Error("Expected PR state to be MERGED, but it's still open")
 	}
 }
 

@@ -39,7 +39,7 @@ func mergePR(name string, ch chan<- string) error {
 		return err
 	}
 
-	ch <- fmt.Sprintf("Merged pull request (#%d) %s\n", pr["id"].(int), pr["title"].(string))
+	ch <- fmt.Sprintf("Merged pull request (#%d) %s\n", pr.Number, pr.Title)
 
 	return nil
 }

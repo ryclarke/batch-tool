@@ -107,25 +107,20 @@ func TestOpenPullRequest(t *testing.T) {
 		t.Fatalf("Failed to open pull request: %v", err)
 	}
 
-	if pr.ID() != 1 {
-		t.Errorf("Expected PR ID to be 1, got %d", pr.ID())
+	if pr.ID != 1 {
+		t.Errorf("Expected PR ID to be 1, got %d", pr.ID)
 	}
 
-	if pr.Version() != 1 {
-		t.Errorf("Expected PR version to be 1, got %d", pr.Version())
+	if pr.Version != 1 {
+		t.Errorf("Expected PR version to be 1, got %d", pr.Version)
 	}
 
-	if pr["title"] != "Test PR" {
-		t.Errorf("Expected PR title to be 'Test PR', got %v", pr["title"])
+	if pr.Title != "Test PR" {
+		t.Errorf("Expected PR title to be 'Test PR', got %v", pr.Title)
 	}
 
-	if pr["state"] != "OPEN" {
-		t.Errorf("Expected PR state to be 'OPEN', got %v", pr["state"])
-	}
-
-	prReviewers := pr.GetReviewers()
-	if len(prReviewers) != 2 {
-		t.Errorf("Expected 2 reviewers, got %d", len(prReviewers))
+	if len(pr.Reviewers) != 2 {
+		t.Errorf("Expected 2 reviewers, got %d", len(pr.Reviewers))
 	}
 
 	if !f.HasPullRequest("repo-1", "feature-branch") {
@@ -166,12 +161,12 @@ func TestGetPullRequest(t *testing.T) {
 		t.Fatalf("Failed to get pull request: %v", err)
 	}
 
-	if retrievedPR.ID() != originalPR.ID() {
-		t.Errorf("Expected PR ID %d, got %d", originalPR.ID(), retrievedPR.ID())
+	if retrievedPR.ID != originalPR.ID {
+		t.Errorf("Expected PR ID %d, got %d", originalPR.ID, retrievedPR.ID)
 	}
 
-	if retrievedPR["title"] != originalPR["title"] {
-		t.Errorf("Expected PR title %v, got %v", originalPR["title"], retrievedPR["title"])
+	if retrievedPR.Title != originalPR.Title {
+		t.Errorf("Expected PR title %v, got %v", originalPR.Title, retrievedPR.Title)
 	}
 }
 
@@ -201,15 +196,15 @@ func TestUpdatePullRequest(t *testing.T) {
 		t.Fatalf("Failed to update pull request: %v", err)
 	}
 
-	if updatedPR["title"] != "Updated PR" {
-		t.Errorf("Expected updated title 'Updated PR', got %v", updatedPR["title"])
+	if updatedPR.Title != "Updated PR" {
+		t.Errorf("Expected updated title 'Updated PR', got %v", updatedPR.Title)
 	}
 
-	if updatedPR.Version() != 2 {
-		t.Errorf("Expected PR version to be 2 after update, got %d", updatedPR.Version())
+	if updatedPR.Version != 2 {
+		t.Errorf("Expected PR version to be 2 after update, got %d", updatedPR.Version)
 	}
 
-	reviewers := updatedPR.GetReviewers()
+	reviewers := updatedPR.Reviewers
 	if len(reviewers) != 1 || reviewers[0] != "reviewer2" {
 		t.Errorf("Expected reviewers to be [reviewer2], got %v", reviewers)
 	}
@@ -231,14 +226,13 @@ func TestUpdatePullRequestAppendReviewers(t *testing.T) {
 		t.Fatalf("Failed to update pull request: %v", err)
 	}
 
-	reviewers := updatedPR.GetReviewers()
-	if len(reviewers) != 2 {
-		t.Errorf("Expected 2 reviewers after append, got %d", len(reviewers))
+	if len(updatedPR.Reviewers) != 2 {
+		t.Errorf("Expected 2 reviewers after append, got %d", len(updatedPR.Reviewers))
 	}
 
 	// Should have both reviewers but no duplicates
 	expectedReviewers := map[string]bool{"reviewer1": true, "reviewer2": true}
-	for _, reviewer := range reviewers {
+	for _, reviewer := range updatedPR.Reviewers {
 		if !expectedReviewers[reviewer] {
 			t.Errorf("Unexpected reviewer %s", reviewer)
 		}
@@ -261,12 +255,8 @@ func TestMergePullRequest(t *testing.T) {
 		t.Fatalf("Failed to merge pull request: %v", err)
 	}
 
-	if mergedPR["state"] != "MERGED" {
-		t.Errorf("Expected PR state to be 'MERGED', got %v", mergedPR["state"])
-	}
-
-	if mergedPR.Version() != 2 {
-		t.Errorf("Expected PR version to be 2 after merge, got %d", mergedPR.Version())
+	if _, ok := f.PullRequests[mergedPR.Repo]; ok {
+		t.Error("Expected PR to be merged, but it is still open")
 	}
 }
 

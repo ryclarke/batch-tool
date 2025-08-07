@@ -5,37 +5,40 @@ import (
 	"fmt"
 
 	"github.com/google/go-github/v74/github"
+	"github.com/ryclarke/batch-tool/catalog"
+	"github.com/ryclarke/batch-tool/config"
 	"github.com/ryclarke/batch-tool/scm"
+	"github.com/spf13/viper"
 )
 
 // GetPullRequest retrieves a pull request by repository name and source branch.
-func (g *Github) GetPullRequest(repo, branch string) (scm.PullRequest, error) {
+func (g *Github) GetPullRequest(repo, branch string) (*scm.PullRequest, error) {
 	resp, err := g.getPullRequest(repo, branch)
 	if err != nil {
 		return nil, err
 	}
 
-	pr := scm.PullRequest{
-		"id":          resp.GetID(),
-		"number":      resp.GetNumber(),
-		"title":       resp.GetTitle(),
-		"description": resp.GetBody(),
-		"reviewers":   make([]string, 0),
-	}
-
-	for _, reviewer := range resp.RequestedReviewers {
-		pr["reviewers"] = append(pr["reviewers"].([]string), reviewer.GetLogin())
-	}
-
-	return pr, nil
+	return parsePR(resp), nil
 }
 
 // OpenPullRequest opens a new pull request in the specified repository.
-func (g *Github) OpenPullRequest(repo, branch, title, description string, reviewers []string) (scm.PullRequest, error) {
+func (g *Github) OpenPullRequest(repo, branch, title, description string, reviewers []string) (*scm.PullRequest, error) {
+	// check default branch for the current repo, or use the fallback config
+	defaultBranch := catalog.Catalog[repo].DefaultBranch
+	if defaultBranch == "" {
+		defaultBranch = viper.GetString(config.SourceBranch)
+	}
+
+	// if title is not specified, use the branch name
+	if title == "" {
+		title = branch
+	}
+
 	resp, _, err := g.client.PullRequests.Create(context.TODO(), g.project, repo, &github.NewPullRequest{
-		Title: &title,
-		Body:  &description,
-		Head:  &branch,
+		Title: github.Ptr(title),
+		Body:  github.Ptr(description),
+		Head:  github.Ptr(branch),
+		Base:  github.Ptr(defaultBranch),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to open pull request: %w", err)
@@ -52,7 +55,7 @@ func (g *Github) OpenPullRequest(repo, branch, title, description string, review
 }
 
 // UpdatePullRequest updates an existing pull request.
-func (g *Github) UpdatePullRequest(repo, branch, title, description string, reviewers []string, appendReviewers bool) (scm.PullRequest, error) {
+func (g *Github) UpdatePullRequest(repo, branch, title, description string, reviewers []string, appendReviewers bool) (*scm.PullRequest, error) {
 	pr, err := g.getPullRequest(repo, branch)
 	if err != nil {
 		return nil, err
@@ -80,7 +83,7 @@ func (g *Github) UpdatePullRequest(repo, branch, title, description string, revi
 	return parsePR(pr), nil
 }
 
-func (g *Github) MergePullRequest(repo, branch string) (scm.PullRequest, error) {
+func (g *Github) MergePullRequest(repo, branch string) (*scm.PullRequest, error) {
 	pr, err := g.getPullRequest(repo, branch)
 	if err != nil {
 		return nil, err
@@ -115,17 +118,17 @@ func (g *Github) getPullRequest(repo, branch string) (*github.PullRequest, error
 	return resp[0], nil
 }
 
-func parsePR(resp *github.PullRequest) scm.PullRequest {
-	pr := scm.PullRequest{
-		"id":          resp.GetID(),
-		"number":      resp.GetNumber(),
-		"title":       resp.GetTitle(),
-		"description": resp.GetBody(),
-		"reviewers":   make([]string, 0),
+func parsePR(resp *github.PullRequest) *scm.PullRequest {
+	pr := &scm.PullRequest{
+		ID:          int(resp.GetID()),
+		Number:      resp.GetNumber(),
+		Title:       resp.GetTitle(),
+		Description: resp.GetBody(),
+		Reviewers:   make([]string, 0, len(resp.RequestedReviewers)),
 	}
 
 	for _, reviewer := range resp.RequestedReviewers {
-		pr["reviewers"] = append(pr["reviewers"].([]string), reviewer.GetLogin())
+		pr.Reviewers = append(pr.Reviewers, reviewer.GetLogin())
 	}
 
 	return pr

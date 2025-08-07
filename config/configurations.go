@@ -51,29 +51,6 @@ const (
 
 	ChannelBuffer  = "channels.buffer-size"
 	MaxConcurrency = "channels.max-concurrency"
-
-	// Bitbucket v1 API PR template - Host, Project, Repo
-	ApiPathTmpl = "https://%s/rest/api/1.0/projects/%s/repos/%s/pull-requests"
-	PrTmpl      = `{
-	"title": "%s",
-	"description": "%s",
-	"fromRef": {
-		"id": "refs/heads/%s",
-		"repository": %s
-	},
-	"toRef": {
-		"id": "refs/heads/%s",
-		"repository": %s
-	},
-	"reviewers": [%s]
-}`
-	PrRepoTmpl = `{
-			"slug": "%s",
-			"project": {"key": "%s"}
-		}`
-	PrReviewerTmpl = `{
-		"user": {"name": "%s"}
-	}`
 )
 
 // Init reads in config file and ENV variables if set.

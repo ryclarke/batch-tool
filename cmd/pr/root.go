@@ -59,9 +59,9 @@ func getPRCmd(name string, ch chan<- string) error {
 		return fmt.Errorf("failed to get pull request for %s: %w", name, err)
 	}
 
-	ch <- fmt.Sprintf("(PR #%d) %s %v\n", pr["id"].(int), pr["title"].(string), pr["reviewers"].([]string))
-	if pr["description"].(string) != "" {
-		ch <- fmt.Sprintln(pr["description"].(string))
+	ch <- fmt.Sprintf("(PR #%d) %s %v\n", pr.Number, pr.Title, pr.Reviewers)
+	if pr.Description != "" {
+		ch <- fmt.Sprintln(pr.Description)
 	}
 
 	return nil
