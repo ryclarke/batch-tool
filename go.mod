@@ -9,6 +9,7 @@ require (
 	github.com/google/go-github/v74 v74.0.0
 	github.com/spf13/cobra v1.9.1
 	github.com/spf13/viper v1.20.1
+	golang.org/x/sync v0.16.0
 )
 
 require (

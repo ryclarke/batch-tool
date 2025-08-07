@@ -187,7 +187,8 @@ batch-tool --sync <command> <repos...>
 ## Global Flags
 
 - `--config string`: Specify config file (default: `batch-tool.yaml`)
-- `--sync`: Execute commands synchronously instead of in parallel
+- `--sync`: Execute commands synchronously (alias for `--max-concurrency=1`)
+- `--max-concurrency int`: Maximum number of concurrent operations (default: number of logical CPUs)
 - `--sort`: Sort repositories (default: true)
 - `--skip-unwanted`: Skip repositories with unwanted labels (default: true)
 
@@ -249,6 +250,29 @@ repos:
     api-server:
       - backend-team
 ```
+
+### Performance and Concurrency Settings
+
+```yaml
+channels:
+  buffer-size: 100           # Channel buffer size for console output (default: 100)
+  max-concurrency: 8         # Maximum concurrent operations (default: number of logical CPUs)
+```
+
+#### Concurrency Control
+
+The `max-concurrency` setting controls how many repositories are processed simultaneously. This is useful for:
+
+- **Resource-intensive operations**: Reduce concurrency to avoid overwhelming the system
+- **Rate-limited APIs**: Prevent hitting API rate limits when working with pull requests
+- **Network-bound operations**: Balance between speed and stability
+
+**Examples:**
+- `max-concurrency: 1` - Process repositories one at a time (equivalent to `--sync`)
+- `max-concurrency: 5` - Conservative setting for API operations
+- `max-concurrency: 20` - Aggressive setting for local git operations
+
+**Tip**: The default concurrency is set to the number of logical CPUs on your system. Start with this default and adjust based on your specific use case and system capabilities.
 
 ## Examples
 
