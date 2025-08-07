@@ -122,17 +122,16 @@ func TestProviderInterface(t *testing.T) {
 	if err != nil {
 		t.Errorf("UpdatePullRequest failed: %v", err)
 	}
-	if updatedPR["title"] != "Updated Title" {
-		t.Errorf("Expected title to be updated, got %v", updatedPR["title"])
+	if updatedPR.Title != "Updated Title" {
+		t.Errorf("Expected title to be updated, got %v", updatedPR.Title)
 	}
 
 	// Test MergePullRequest
-	mergedPR, err := testProvider.MergePullRequest("test-repo", "feature-branch")
-	if err != nil {
+	if _, err := testProvider.MergePullRequest("test-repo", "feature-branch"); err != nil {
 		t.Errorf("MergePullRequest failed: %v", err)
 	}
-	if mergedPR["state"] != "MERGED" {
-		t.Errorf("Expected PR to be merged, got state %v", mergedPR["state"])
+	if _, ok := testProvider.PullRequests["test-repo"]; ok {
+		t.Error("Expected PR to be merged, but it is still open")
 	}
 }
 

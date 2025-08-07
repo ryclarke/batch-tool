@@ -19,8 +19,8 @@ func init() {
 type Fake struct {
 	Project      string
 	Repositories []*scm.Repository
-	PullRequests map[string]scm.PullRequest // key: "repo:branch"
-	Errors       map[string]error           // configurable errors for testing
+	PullRequests map[string]*scm.PullRequest // key: "repo:branch"
+	Errors       map[string]error            // configurable errors for testing
 }
 
 // New creates a new fake SCM provider with the specified project
@@ -28,7 +28,7 @@ func New(project string) scm.Provider {
 	return &Fake{
 		Project:      project,
 		Repositories: make([]*scm.Repository, 0),
-		PullRequests: make(map[string]scm.PullRequest),
+		PullRequests: make(map[string]*scm.PullRequest),
 		Errors:       make(map[string]error),
 	}
 }
@@ -81,7 +81,7 @@ func (f *Fake) ListRepositories() ([]*scm.Repository, error) {
 }
 
 // GetPullRequest retrieves a pull request by repository name and source branch
-func (f *Fake) GetPullRequest(repo, branch string) (scm.PullRequest, error) {
+func (f *Fake) GetPullRequest(repo, branch string) (*scm.PullRequest, error) {
 	if err := f.Errors["GetPullRequest"]; err != nil {
 		return nil, err
 	}
@@ -89,10 +89,21 @@ func (f *Fake) GetPullRequest(repo, branch string) (scm.PullRequest, error) {
 	key := fmt.Sprintf("%s:%s", repo, branch)
 	if pr, exists := f.PullRequests[key]; exists {
 		// Return a copy to prevent mutations
-		result := make(scm.PullRequest)
-		for k, v := range pr {
-			result[k] = v
+		result := &scm.PullRequest{
+			Title:       pr.Title,
+			Description: pr.Description,
+			Branch:      pr.Branch,
+			Repo:        pr.Repo,
+			Reviewers:   make([]string, 0, len(pr.Reviewers)),
+			ID:          pr.ID,
+			Number:      pr.Number,
+			Version:     pr.Version,
 		}
+
+		for _, rev := range pr.Reviewers {
+			result.Reviewers = append(result.Reviewers, rev)
+		}
+
 		return result, nil
 	}
 
@@ -100,7 +111,7 @@ func (f *Fake) GetPullRequest(repo, branch string) (scm.PullRequest, error) {
 }
 
 // OpenPullRequest creates a new pull request
-func (f *Fake) OpenPullRequest(repo, branch, title, description string, reviewers []string) (scm.PullRequest, error) {
+func (f *Fake) OpenPullRequest(repo, branch, title, description string, reviewers []string) (*scm.PullRequest, error) {
 	if err := f.Errors["OpenPullRequest"]; err != nil {
 		return nil, err
 	}
@@ -114,36 +125,24 @@ func (f *Fake) OpenPullRequest(repo, branch, title, description string, reviewer
 
 	// Create new PR
 	prID := len(f.PullRequests) + 1
-	pr := scm.PullRequest{
-		"id":          float64(prID),
-		"version":     float64(1),
-		"title":       title,
-		"description": description,
-		"state":       "OPEN",
-		"fromRef": map[string]any{
-			"id": fmt.Sprintf("refs/heads/%s", branch),
-		},
-		"toRef": map[string]any{
-			"id": "refs/heads/main",
-		},
+	pr := &scm.PullRequest{
+		ID:          prID,
+		Version:     1,
+		Title:       title,
+		Description: description,
+		Branch:      branch,
+		Repo:        repo,
+		Reviewers:   reviewers,
 	}
-
-	// Set reviewers
-	pr.SetReviewers(reviewers)
 
 	f.PullRequests[key] = pr
 
 	// Return a copy
-	result := make(scm.PullRequest)
-	for k, v := range pr {
-		result[k] = v
-	}
-
-	return result, nil
+	return copyPR(pr), nil
 }
 
 // UpdatePullRequest updates an existing pull request
-func (f *Fake) UpdatePullRequest(repo, branch, title, description string, reviewers []string, appendReviewers bool) (scm.PullRequest, error) {
+func (f *Fake) UpdatePullRequest(repo, branch, title, description string, reviewers []string, appendReviewers bool) (*scm.PullRequest, error) {
 	if err := f.Errors["UpdatePullRequest"]; err != nil {
 		return nil, err
 	}
@@ -156,18 +155,15 @@ func (f *Fake) UpdatePullRequest(repo, branch, title, description string, review
 	}
 
 	// Update fields
-	pr["title"] = title
-	pr["description"] = description
+	pr.Title = title
+	pr.Description = description
 
 	// Increment version
-	if version, ok := pr["version"]; ok {
-		pr["version"] = version.(float64) + 1
-	}
+	pr.Version++
 
 	// Update reviewers
 	if appendReviewers {
-		existingReviewers := pr.GetReviewers()
-		allReviewers := append(existingReviewers, reviewers...)
+		allReviewers := append(pr.Reviewers, reviewers...)
 
 		// Remove duplicates
 		reviewerSet := make(map[string]bool)
@@ -178,22 +174,17 @@ func (f *Fake) UpdatePullRequest(repo, branch, title, description string, review
 				uniqueReviewers = append(uniqueReviewers, reviewer)
 			}
 		}
-		pr.SetReviewers(uniqueReviewers)
+		pr.Reviewers = uniqueReviewers
 	} else {
-		pr.SetReviewers(reviewers)
+		pr.Reviewers = reviewers
 	}
 
 	// Return a copy
-	result := make(scm.PullRequest)
-	for k, v := range pr {
-		result[k] = v
-	}
-
-	return result, nil
+	return copyPR(pr), nil
 }
 
 // MergePullRequest merges an existing pull request
-func (f *Fake) MergePullRequest(repo, branch string) (scm.PullRequest, error) {
+func (f *Fake) MergePullRequest(repo, branch string) (*scm.PullRequest, error) {
 	if err := f.Errors["MergePullRequest"]; err != nil {
 		return nil, err
 	}
@@ -205,26 +196,10 @@ func (f *Fake) MergePullRequest(repo, branch string) (scm.PullRequest, error) {
 		return nil, fmt.Errorf("pull request not found for %s:%s", repo, branch)
 	}
 
-	// Check if already merged
-	if state, ok := pr["state"]; ok && state == "MERGED" {
-		return nil, fmt.Errorf("pull request %s:%s is already merged", repo, branch)
-	}
-
-	// Update state to merged
-	pr["state"] = "MERGED"
-
-	// Increment version
-	if version, ok := pr["version"]; ok {
-		pr["version"] = version.(float64) + 1
-	}
+	delete(f.PullRequests, key)
 
 	// Return a copy
-	result := make(scm.PullRequest)
-	for k, v := range pr {
-		result[k] = v
-	}
-
-	return result, nil
+	return copyPR(pr), nil
 }
 
 // Test helper methods for configuring the fake provider
@@ -283,7 +258,7 @@ func (f *Fake) HasPullRequest(repo, branch string) bool {
 // Clear removes all repositories and pull requests
 func (f *Fake) Clear() {
 	f.Repositories = make([]*scm.Repository, 0)
-	f.PullRequests = make(map[string]scm.PullRequest)
+	f.PullRequests = make(map[string]*scm.PullRequest)
 	f.Errors = make(map[string]error)
 }
 
@@ -388,4 +363,24 @@ func (f *Fake) GetAllLabels() []string {
 
 	sort.Strings(labels)
 	return labels
+}
+
+func copyPR(pr *scm.PullRequest) *scm.PullRequest {
+	// Return a copy to prevent mutations
+	result := &scm.PullRequest{
+		Title:       pr.Title,
+		Description: pr.Description,
+		Branch:      pr.Branch,
+		Repo:        pr.Repo,
+		Reviewers:   make([]string, 0, len(pr.Reviewers)),
+		ID:          pr.ID,
+		Number:      pr.Number,
+		Version:     pr.Version,
+	}
+
+	for _, rev := range pr.Reviewers {
+		result.Reviewers = append(result.Reviewers, rev)
+	}
+
+	return result
 }

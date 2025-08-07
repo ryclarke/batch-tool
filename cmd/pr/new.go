@@ -53,7 +53,7 @@ func newPR(name string, ch chan<- string) error {
 		return err
 	}
 
-	ch <- fmt.Sprintf("New pull request (#%d) %s %v\n", pr["id"], pr["branch"], pr["reviewers"])
+	ch <- fmt.Sprintf("New pull request (#%d) %s %v\n", pr.Number, pr.Branch, pr.Reviewers)
 
 	return nil
 }

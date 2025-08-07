@@ -43,7 +43,7 @@ func editPR(name string, ch chan<- string) error {
 		return err
 	}
 
-	ch <- fmt.Sprintf("Updated pull request (#%d) %s %v\n", pr.ID(), pr["title"].(string), pr.GetReviewers())
+	ch <- fmt.Sprintf("Updated pull request (#%d) %s %v\n", pr.Number, pr.Title, pr.Reviewers)
 
 	return nil
 }
