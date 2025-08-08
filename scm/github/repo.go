@@ -19,10 +19,12 @@ func (g *Github) ListRepositories() ([]*scm.Repository, error) {
 		ListOptions: github.ListOptions{PerPage: 20},
 	}
 
+	defer readLock()()
+
 	for {
-		repos, resp, err := g.client.Repositories.ListByOrg(context.TODO(), g.project, opt)
+		repos, resp, err := g.listRepositories(context.TODO(), opt)
 		if err != nil {
-			return nil, fmt.Errorf("failed to list repositories: %w", err)
+			return nil, err
 		}
 
 		for _, repo := range repos {
@@ -50,4 +52,24 @@ func (g *Github) ListRepositories() ([]*scm.Repository, error) {
 	}
 
 	return output, nil
+}
+
+func (g *Github) listRepositories(ctx context.Context, opt *github.RepositoryListByOrgOptions) ([]*github.Repository, *github.Response, error) {
+	repos, resp, err := g.client.Repositories.ListByOrg(ctx, g.project, opt)
+	if err != nil {
+		if _, ok := err.(*github.RateLimitError); !ok {
+			return nil, nil, fmt.Errorf("failed to list repositories: %w", err)
+		} else {
+			if rateErr := g.waitForRateLimit(ctx, true); rateErr != nil {
+				return nil, nil, fmt.Errorf("failed to list repositories: %w: %w", rateErr, err)
+			}
+
+			// retry the request after waiting for the rate limit to reset
+			if repos, resp, err = g.client.Repositories.ListByOrg(ctx, g.project, opt); err != nil {
+				return nil, nil, fmt.Errorf("failed to list repositories after retry: %w", err)
+			}
+		}
+	}
+
+	return repos, resp, nil
 }

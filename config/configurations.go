@@ -51,6 +51,11 @@ const (
 
 	ChannelBuffer  = "channels.buffer-size"
 	MaxConcurrency = "channels.max-concurrency"
+	WriteBackoff   = "channels.write-backoff"
+
+	GithubHourlyWriteLimit = "github.hourly-write-limit"
+	GithubBackoffSmall     = "github.write-backoff-small"
+	GithubBackoffLarge     = "github.write-backoff-large"
 )
 
 // Init reads in config file and ENV variables if set.
@@ -109,6 +114,14 @@ func initialize() {
 
 	viper.SetDefault(ChannelBuffer, 100)
 	viper.SetDefault(MaxConcurrency, runtime.NumCPU()) // Default to number of logical CPUs
+	viper.SetDefault(WriteBackoff, "1s")
+
+	// GitHub's secondary rate limit is 80 requests per minute, or 500 requests per hour
+	// 1s keeps us safely under the per-minute limit
+	// 8s keeps us safely under the per-hour limit when working with many repositories
+	viper.SetDefault(GithubHourlyWriteLimit, 500)
+	viper.SetDefault(GithubBackoffSmall, "1s")
+	viper.SetDefault(GithubBackoffLarge, "8s")
 
 	// default reviewers in the form `repo: [reviewers...]`
 	viper.SetDefault(DefaultReviewers, map[string][]string{})
