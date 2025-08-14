@@ -17,14 +17,14 @@ func TestAddBranchCmd(t *testing.T) {
 		t.Fatal("addBranchCmd() returned nil")
 	}
 
-	if cmd.Use != "branch <repository> ..." {
-		t.Errorf("Expected Use to be 'branch <repository> ...', got %s", cmd.Use)
+	if cmd.Use != "checkout <repository> ..." {
+		t.Errorf("Expected Use to be 'checkout <repository> ...', got %s", cmd.Use)
 	}
 
 	// Test aliases
 	aliases := cmd.Aliases
-	if len(aliases) != 1 || aliases[0] != "checkout" {
-		t.Errorf("Expected aliases to contain 'checkout', got %v", aliases)
+	if len(aliases) != 1 || aliases[0] != "branch" {
+		t.Errorf("Expected aliases to contain 'branch', got %v", aliases)
 	}
 
 	if cmd.Short != "Checkout a new branch across repositories" {

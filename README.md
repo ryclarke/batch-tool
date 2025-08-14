@@ -110,17 +110,29 @@ You may also use the same syntax to refer to aliases defined locally in the conf
 
 - To refer to an alias or topic, include `~` in the argument as seen above.
 - To invert a match to *exclude* a repository or alias/topic, include a `!`.
-- The `~all` alias is defined implicitly and refers to all discovered repositories for the configured namespace (user profile or organization).
+- To force selection of a repository or alias/topic, include a `+`.
+  - This bypasses unwanted label filtering and ignores exclusions from other arguments.
+  - If applied to an alias/topic, _every_ member will be included regardless of other filters.
+
+-------------------------------
+
+ℹ️ The `~all` alias is defined implicitly and refers to all discovered repositories for the configured namespace (user profile or organization).
+
+-------------------------------
 
 Example:
 ```bash
-# aliases:
-#   repos: [repo1 repo2 repo3]
+# repos.aliases:
+#   myservice: [repo1 repo2 repo3 repo4]
+#   deprecated: [repo4]
+# repos.unwanted_labels: [deprecated]
 #
-batch-tool git status '~repos' '!repo3' # matches repo1 and repo2 only
+batch-tool git status '~myservice' '!repo3' # matches repo1 and repo2 only
+batch-tool git status '~myservice' '+repo4' # forces inclusion of repo4
+batch-tool git status '+~myservice' '!~deprecated' # matches all 4 repos
 ```
 
-When using label matching and exclusion, ensure that all arguments are quoted properly to avoid improper shell expansion.
+⚠️ When using special characters for matching and exclusion, ensure that all arguments are quoted properly to avoid improper shell expansion.
 
 ## Commands
 

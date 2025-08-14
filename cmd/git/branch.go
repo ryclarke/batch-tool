@@ -14,8 +14,8 @@ import (
 func addBranchCmd() *cobra.Command {
 	// branchCmd represents the branch command
 	branchCmd := &cobra.Command{
-		Use:     "branch <repository> ...",
-		Aliases: []string{"checkout"},
+		Use:     "checkout <repository> ...",
+		Aliases: []string{"branch"},
 		Short:   "Checkout a new branch across repositories",
 		Args:    cobra.MinimumNArgs(1),
 		PreRunE: func(_ *cobra.Command, _ []string) error {
@@ -40,7 +40,7 @@ func gitCheckout(name string, ch chan<- string) error {
 
 	output, err := cmd.Output()
 	if err != nil {
-		cmd = exec.Command("git", "checkout", "-b", branch)
+		cmd = exec.Command("git", "checkout", "-B", branch)
 		cmd.Dir = utils.RepoPath(name)
 
 		output, err = cmd.Output()

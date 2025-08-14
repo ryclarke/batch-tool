@@ -38,6 +38,7 @@ const (
 	RepoAliases      = "repos.aliases"
 	UnwantedLabels   = "repos.unwanted-labels"
 	SkipUnwanted     = "repos.skip-unwanted"
+	SuperSetLabel    = "repos.catch-all"
 	DefaultReviewers = "repos.reviewers"
 	CatalogCacheFile = "repos.cache.filename"
 	CatalogCacheTTL  = "repos.cache.ttl"
@@ -48,6 +49,10 @@ const (
 	Branch    = "branch"
 	Reviewers = "reviewers"
 	AuthToken = "auth-token"
+
+	TokenLabel  = "repos.tokens.label"
+	TokenSkip   = "repos.tokens.skip"
+	TokenForced = "repos.tokens.forced"
 
 	ChannelBuffer  = "channels.buffer-size"
 	MaxConcurrency = "channels.max-concurrency"
@@ -107,8 +112,11 @@ func initialize() {
 	viper.SetDefault(GitProvider, "github")
 	viper.SetDefault(SourceBranch, "main")
 	viper.SetDefault(SortRepos, true)
+
 	viper.SetDefault(SkipUnwanted, true)
 	viper.SetDefault(UnwantedLabels, []string{"deprecated", "poc"})
+	viper.SetDefault(SuperSetLabel, "all")
+
 	viper.SetDefault(CatalogCacheFile, ".catalog")
 	viper.SetDefault(CatalogCacheTTL, "24h")
 
@@ -131,6 +139,11 @@ func initialize() {
 
 	// default git directory is $GOPATH/src if GOPATH is set, or current working directory otherwise
 	viper.SetDefault(GitDirectory, defaultGitdir())
+
+	// defaults for token identifiers
+	viper.SetDefault(TokenLabel, "~")
+	viper.SetDefault(TokenSkip, "!")
+	viper.SetDefault(TokenForced, "+")
 }
 
 // LoadFixture will load example configuration; for testing only!
