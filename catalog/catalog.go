@@ -15,12 +15,6 @@ import (
 	"github.com/ryclarke/batch-tool/scm"
 )
 
-const (
-	labelKey      = "~"
-	excludeKey    = "!"
-	supersetLabel = "all"
-)
-
 // Catalog contains a cached set of repositories and their metadata from Bitbucket
 var Catalog = make(map[string]scm.Repository)
 
@@ -42,29 +36,45 @@ func Init() {
 	}
 
 	// Add superset label which matches all repositories in the catalog
-	Labels[supersetLabel] = mapset.NewSet[string]()
+	Labels[viper.GetString(config.SuperSetLabel)] = mapset.NewSet[string]()
 
 	for name := range Catalog {
-		Labels[supersetLabel].Add(name)
+		Labels[viper.GetString(config.SuperSetLabel)].Add(name)
 	}
 }
 
 func RepositoryList(filters ...string) mapset.Set[string] {
 	includeSet := mapset.NewSet[string]()
 	excludeSet := mapset.NewSet[string]()
+	forcedSet := mapset.NewSet[string]()
 
 	// Exclude unwanted labels by default
 	if viper.GetBool(config.SkipUnwanted) {
 		for _, unwanted := range viper.GetStringSlice(config.UnwantedLabels) {
-			filters = append(filters, unwanted+labelKey+excludeKey)
+			filters = append(filters, unwanted+viper.GetString(config.TokenLabel)+viper.GetString(config.TokenSkip))
 		}
 	}
 
 	for _, filter := range filters {
-		filterName := strings.ReplaceAll(strings.ReplaceAll(filter, labelKey, ""), excludeKey, "")
+		replacer := strings.NewReplacer(
+			viper.GetString(config.TokenLabel), "",
+			viper.GetString(config.TokenSkip), "",
+			viper.GetString(config.TokenForced), "",
+		)
+		filterName := replacer.Replace(filter)
 
-		if strings.Contains(filter, excludeKey) {
-			if strings.Contains(filter, labelKey) {
+		if strings.Contains(filter, viper.GetString(config.TokenForced)) {
+			// if force token is present, add repo (or label) to forced include set
+			if strings.Contains(filter, viper.GetString(config.TokenLabel)) {
+				if set, ok := Labels[filterName]; ok {
+					forcedSet = forcedSet.Union(set)
+				}
+			} else {
+				forcedSet.Add(filterName)
+			}
+		} else if strings.Contains(filter, viper.GetString(config.TokenSkip)) {
+			// if skip token is present, add repo (or label) to exclude set
+			if strings.Contains(filter, viper.GetString(config.TokenLabel)) {
 				if set, ok := Labels[filterName]; ok {
 					excludeSet = excludeSet.Union(set)
 				}
@@ -72,7 +82,8 @@ func RepositoryList(filters ...string) mapset.Set[string] {
 				excludeSet.Add(filterName)
 			}
 		} else {
-			if strings.Contains(filter, labelKey) {
+			// otherwise, add repo (or label) to include set
+			if strings.Contains(filter, viper.GetString(config.TokenLabel)) {
 				if set, ok := Labels[filterName]; ok {
 					includeSet = includeSet.Union(set)
 				}
@@ -82,7 +93,8 @@ func RepositoryList(filters ...string) mapset.Set[string] {
 		}
 	}
 
-	return includeSet.Difference(excludeSet)
+	// Final set is (forced ∪ (include \ exclude)) - forced repos and matched repos which aren't excluded
+	return forcedSet.Union(includeSet.Difference(excludeSet))
 }
 
 func initRepositoryCatalog() error {
