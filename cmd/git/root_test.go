@@ -32,7 +32,7 @@ func TestGitCmdSubcommands(t *testing.T) {
 	cmd := Cmd()
 
 	subcommands := cmd.Commands()
-	expectedCommands := []string{"branch", "commit", "diff", "status", "update"}
+	expectedCommands := []string{"checkout", "commit", "diff", "status", "update"}
 
 	if len(subcommands) < len(expectedCommands) {
 		t.Errorf("Expected at least %d subcommands, got %d", len(expectedCommands), len(subcommands))

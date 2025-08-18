@@ -11,8 +11,9 @@ import (
 func addLabelsCmd() *cobra.Command {
 	// labelsCmd represents the labels command
 	labelsCmd := &cobra.Command{
-		Use:   "labels <repository|label> ...",
-		Short: "Inspect repository labels and test filters",
+		Use:     "labels <repository|label> ...",
+		Aliases: []string{"label"},
+		Short:   "Inspect repository labels and test filters",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// Import command(s) from the CLI flag
 			verbose, err := cmd.Flags().GetBool("verbose")
