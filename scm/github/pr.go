@@ -111,7 +111,7 @@ func (g *Github) getPullRequest(ctx context.Context, repo, branch string) (*gith
 
 	opts := &github.PullRequestListOptions{
 		State: "open",
-		Head:  branch,
+		Head:  fmt.Sprintf("%s:%s", g.project, branch),
 	}
 
 	resp, _, err := g.client.PullRequests.List(ctx, g.project, repo, opts)
