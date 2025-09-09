@@ -10,6 +10,7 @@ import (
 
 	"github.com/ryclarke/batch-tool/catalog"
 	"github.com/ryclarke/batch-tool/cmd/git"
+	"github.com/ryclarke/batch-tool/cmd/multichange"
 	"github.com/ryclarke/batch-tool/cmd/pr"
 	"github.com/ryclarke/batch-tool/config"
 
@@ -57,6 +58,7 @@ multiple git repositories, including branch management and pull request creation
 		},
 		git.Cmd(),
 		pr.Cmd(),
+		multichange.Cmd(),
 		addMakeCmd(),
 		addShellCmd(),
 		addLabelsCmd(),
