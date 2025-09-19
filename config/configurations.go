@@ -45,6 +45,7 @@ const (
 
 	CommitAmend   = "commit.amend"
 	CommitMessage = "commit.message"
+	MergeMethod   = "commit.merge-method"
 
 	Branch    = "branch"
 	Reviewers = "reviewers"

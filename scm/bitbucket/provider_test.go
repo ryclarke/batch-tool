@@ -84,7 +84,7 @@ func TestBitbucketProviderInterface(t *testing.T) {
 		t.Logf("UpdatePullRequest failed as expected: %v", err)
 	}
 
-	_, err = provider.MergePullRequest("test-repo", "test-branch")
+	_, err = provider.MergePullRequest("test-repo", "test-branch", false)
 	if err == nil {
 		t.Log("MergePullRequest succeeded (unexpected without auth)")
 	} else {

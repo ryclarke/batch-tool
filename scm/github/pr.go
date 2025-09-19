@@ -88,13 +88,13 @@ func (g *Github) UpdatePullRequest(repo, branch, title, description string, revi
 	return parsePR(pr), nil
 }
 
-func (g *Github) MergePullRequest(repo, branch string) (*scm.PullRequest, error) {
+func (g *Github) MergePullRequest(repo, branch string, verify bool) (*scm.PullRequest, error) {
 	pr, err := g.getPullRequest(context.TODO(), repo, branch)
 	if err != nil {
 		return nil, err
 	}
 
-	if !pr.GetMergeable() {
+	if verify && !pr.GetMergeable() {
 		return nil, fmt.Errorf("pull request %s [%d] for %s is not mergeable: %s", branch, pr.GetNumber(), repo, pr.GetMergeableState())
 	}
 
@@ -212,7 +212,9 @@ func (g *Github) mergePullRequest(ctx context.Context, repo string, prNumber int
 	// acquire write lock (and release it when done)
 	defer writeLock()()
 
-	_, _, err := g.client.PullRequests.Merge(ctx, g.project, repo, prNumber, "", nil)
+	_, _, err := g.client.PullRequests.Merge(ctx, g.project, repo, prNumber, "", &github.PullRequestOptions{
+		MergeMethod: viper.GetString(config.MergeMethod),
+	})
 	if err != nil {
 		if _, ok := err.(*github.RateLimitError); !ok {
 			return fmt.Errorf("failed to merge pull request: %w", err)

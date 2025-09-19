@@ -250,7 +250,7 @@ func TestMergePullRequest(t *testing.T) {
 	}
 
 	// Merge the PR
-	mergedPR, err := f.MergePullRequest("repo-1", "feature-branch")
+	mergedPR, err := f.MergePullRequest("repo-1", "feature-branch", false)
 	if err != nil {
 		t.Fatalf("Failed to merge pull request: %v", err)
 	}
@@ -270,13 +270,13 @@ func TestMergePullRequestAlreadyMerged(t *testing.T) {
 		t.Fatalf("Failed to open pull request: %v", err)
 	}
 
-	_, err = f.MergePullRequest("repo-1", "feature-branch")
+	_, err = f.MergePullRequest("repo-1", "feature-branch", false)
 	if err != nil {
 		t.Fatalf("Failed to merge pull request: %v", err)
 	}
 
 	// Try to merge again
-	_, err = f.MergePullRequest("repo-1", "feature-branch")
+	_, err = f.MergePullRequest("repo-1", "feature-branch", false)
 	if err == nil {
 		t.Error("Expected error when merging already merged pull request")
 	}
@@ -404,7 +404,7 @@ func TestErrorHandling(t *testing.T) {
 		{
 			"MergePullRequest",
 			func() error {
-				_, err := f.MergePullRequest("repo-1", "branch-1")
+				_, err := f.MergePullRequest("repo-1", "branch-1", false)
 				return err
 			},
 		},

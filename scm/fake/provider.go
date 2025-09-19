@@ -184,7 +184,7 @@ func (f *Fake) UpdatePullRequest(repo, branch, title, description string, review
 }
 
 // MergePullRequest merges an existing pull request
-func (f *Fake) MergePullRequest(repo, branch string) (*scm.PullRequest, error) {
+func (f *Fake) MergePullRequest(repo, branch string, _ bool) (*scm.PullRequest, error) {
 	if err := f.Errors["MergePullRequest"]; err != nil {
 		return nil, err
 	}
