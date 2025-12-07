@@ -24,6 +24,7 @@ package call
 
 import (
 	"bufio"
+	"context"
 	"os/exec"
 
 	"github.com/ryclarke/batch-tool/utils"
@@ -32,14 +33,28 @@ import (
 // CallFunc defines an atomic unit of work on a repository. Output should
 // be sent to the channel, which must remain open. Closing a channel from
 // within the context of a CallFunc will result in a panic.
-type CallFunc func(repo string, ch chan<- string) error
+type CallFunc func(ctx context.Context, repo string, ch chan<- string) error
+
+// Wrap each provided CallFunc into a new one that executes them order before terminating.
+func Wrap(calls ...CallFunc) CallFunc {
+	return func(ctx context.Context, repo string, ch chan<- string) error {
+		// execute each CallFunc, stopping if an error is encountered
+		for _, call := range calls {
+			if err := call(ctx, repo, ch); err != nil {
+				return err
+			}
+		}
+
+		return nil
+	}
+}
 
 // Exec creates a new CallFunc to execute the given command and arguments,
 // streaming Stdout and Stderr to the channel and returning error status.
 func Exec(command string, arguments ...string) CallFunc {
-	return func(repo string, ch chan<- string) error {
-		cmd := exec.Command(command, arguments...)
-		cmd.Dir = utils.RepoPath(repo)
+	return func(ctx context.Context, repo string, ch chan<- string) error {
+		cmd := exec.CommandContext(ctx, command, arguments...)
+		cmd.Dir = utils.RepoPath(ctx, repo)
 
 		// Configure the pipe for stdout
 		pipe, err := cmd.StdoutPipe()

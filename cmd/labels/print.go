@@ -1,21 +1,30 @@
-package catalog
+package labels
 
 import (
+	"context"
 	"fmt"
 	"sort"
 	"strings"
 
 	mapset "github.com/deckarep/golang-set/v2"
-	"github.com/spf13/viper"
 
+	"github.com/ryclarke/batch-tool/catalog"
 	"github.com/ryclarke/batch-tool/config"
+	"github.com/ryclarke/batch-tool/utils"
+)
+
+const (
+	union = " \u222A " // ∪
+	minus = " \u2216 " // ∖
 )
 
 // PrintLabels prints the given labels and their matched repositories. If no labels
 // are provided, print all available labels (except the superset label).
-func PrintLabels(labels ...string) {
+func PrintLabels(ctx context.Context, labels ...string) {
+	viper := config.Viper(ctx)
+
 	if len(labels) == 0 {
-		for label := range Labels {
+		for label := range catalog.Labels {
 			if label == viper.GetString(config.SuperSetLabel) {
 				continue
 			}
@@ -27,7 +36,7 @@ func PrintLabels(labels ...string) {
 	sort.Strings(labels)
 
 	for _, label := range labels {
-		if set, ok := Labels[label]; ok && set.Cardinality() > 0 {
+		if set, ok := catalog.Labels[label]; ok && set.Cardinality() > 0 {
 			repos := set.ToSlice()
 			if viper.GetBool(config.SortRepos) {
 				sort.Strings(repos)
@@ -41,7 +50,9 @@ func PrintLabels(labels ...string) {
 }
 
 // PrintSet prints a set-theory representation of the provided filters.
-func PrintSet(verbose bool, filters ...string) {
+func PrintSet(ctx context.Context, verbose bool, filters ...string) {
+	viper := config.Viper(ctx)
+
 	includeSet := mapset.NewSet[string]()
 	excludeSet := mapset.NewSet[string]()
 	forcedSet := mapset.NewSet[string]()
@@ -54,13 +65,8 @@ func PrintSet(verbose bool, filters ...string) {
 	}
 
 	for _, filter := range filters {
-		// standardize formatting of provided labels
-		replacer := strings.NewReplacer(
-			viper.GetString(config.TokenLabel), "",
-			viper.GetString(config.TokenSkip), "",
-			viper.GetString(config.TokenForced), "",
-		)
-		filterName := replacer.Replace(filter)
+		// standardize formatting of provided filters
+		filterName := utils.CleanFilter(ctx, filter)
 
 		if strings.Contains(filter, viper.GetString(config.TokenLabel)) {
 			filterName = viper.GetString(config.TokenLabel) + filterName
@@ -81,7 +87,7 @@ func PrintSet(verbose bool, filters ...string) {
 	sort.Strings(excludes)
 	sort.Strings(forced)
 
-	repoList := RepositoryList(filters...).ToSlice()
+	repoList := catalog.RepositoryList(ctx, filters...).ToSlice()
 	if viper.GetBool(config.SortRepos) {
 		sort.Strings(repoList)
 	}
@@ -89,17 +95,17 @@ func PrintSet(verbose bool, filters ...string) {
 	var output strings.Builder
 
 	if len(forced) > 0 {
-		_, _ = output.WriteString(fmt.Sprintf("(%s) \u222A ", strings.Join(forced, " \u222A ")))
+		_, _ = output.WriteString(fmt.Sprintf("(%s)%s", strings.Join(forced, union), union))
 
 		if len(excludes) > 0 {
 			_, _ = output.WriteString("( ")
 		}
 	}
 
-	output.WriteString(fmt.Sprintf("(%s)", strings.Join(includes, " \u222A ")))
+	output.WriteString(fmt.Sprintf("(%s)", strings.Join(includes, union)))
 
 	if len(excludes) > 0 {
-		output.WriteString(fmt.Sprintf(" \u2216 (%s)", strings.Join(excludes, " \u222A ")))
+		output.WriteString(fmt.Sprintf("%s(%s)", minus, strings.Join(excludes, union)))
 
 		if len(forced) > 0 {
 			_, _ = output.WriteString(" )")
@@ -128,7 +134,7 @@ func PrintSet(verbose bool, filters ...string) {
 
 		if len(labelForced) > 0 {
 			fmt.Printf("\nForced labels:\n")
-			PrintLabels(labelForced...)
+			PrintLabels(ctx, labelForced...)
 		}
 
 		labelIncludes := make([]string, 0, len(includes))
@@ -140,7 +146,7 @@ func PrintSet(verbose bool, filters ...string) {
 
 		if len(labelIncludes) > 0 {
 			fmt.Printf("\nIncluded labels:\n")
-			PrintLabels(labelIncludes...)
+			PrintLabels(ctx, labelIncludes...)
 		}
 
 		labelExcludes := make([]string, 0, len(excludes))
@@ -152,7 +158,7 @@ func PrintSet(verbose bool, filters ...string) {
 
 		if len(labelExcludes) > 0 {
 			fmt.Printf("\nExcluded labels:\n")
-			PrintLabels(labelExcludes...)
+			PrintLabels(ctx, labelExcludes...)
 		}
 	}
 }

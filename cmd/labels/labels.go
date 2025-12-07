@@ -1,4 +1,4 @@
-package cmd
+package labels
 
 import (
 	"fmt"
@@ -8,12 +8,14 @@ import (
 	"github.com/ryclarke/batch-tool/catalog"
 )
 
-func addLabelsCmd() *cobra.Command {
-	// labelsCmd represents the labels command
+// Cmd configures the labels command
+func Cmd() *cobra.Command {
 	labelsCmd := &cobra.Command{
 		Use:     "labels <repository|label> ...",
 		Aliases: []string{"label"},
 		Short:   "Inspect repository labels and test filters",
+		//Args:              cobra.MinimumNArgs(1),
+		ValidArgsFunction: catalog.CompletionFunc(),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// Import command(s) from the CLI flag
 			verbose, err := cmd.Flags().GetBool("verbose")
@@ -22,10 +24,10 @@ func addLabelsCmd() *cobra.Command {
 			}
 
 			if len(args) > 0 {
-				catalog.PrintSet(verbose, args...)
+				PrintSet(cmd.Context(), verbose, args...)
 			} else {
 				fmt.Println("Available labels:")
-				catalog.PrintLabels()
+				PrintLabels(cmd.Context())
 			}
 
 			return nil

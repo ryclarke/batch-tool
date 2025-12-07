@@ -8,11 +8,11 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/spf13/viper"
-
 	"github.com/ryclarke/batch-tool/config"
 	"github.com/ryclarke/batch-tool/scm"
 )
+
+const prReviewers = "pr.reviewers"
 
 // GetPullRequest retrieves a pull request by repository name and source branch.
 func (b *Bitbucket) GetPullRequest(repo, branch string) (*scm.PullRequest, error) {
@@ -32,7 +32,7 @@ func (b *Bitbucket) OpenPullRequest(repo, branch, title, description string, rev
 		title = branch
 	}
 
-	payload := genPR(repo, title, description, reviewers)
+	payload := b.genPR(repo, title, description, reviewers)
 
 	request, err := http.NewRequest(http.MethodPost, b.url(repo, nil, "pull-requests"), strings.NewReader(payload))
 	if err != nil {
@@ -80,8 +80,11 @@ func (b *Bitbucket) UpdatePullRequest(repo, branch, title, description string, r
 	if len(reviewers) == 0 {
 		if appendReviewers {
 			pr.AddReviewers(reviewers)
-		} else if len(viper.GetStringSlice(config.Reviewers)) > 0 {
-			pr.SetReviewers(reviewers)
+		} else {
+			viper := config.Viper(b.ctx)
+			if len(viper.GetStringSlice(prReviewers)) > 0 {
+				pr.SetReviewers(reviewers)
+			}
 		}
 	}
 
@@ -201,7 +204,8 @@ func (pr *prResp) SetReviewers(reviewers []string) {
 }
 
 // generate a PR payload for the Bitbucket API
-func genPR(name, title, description string, reviewers []string) string {
+func (b *Bitbucket) genPR(name, title, description string, reviewers []string) string {
+	viper := config.Viper(b.ctx)
 	project := viper.GetString(config.GitProject)
 
 	pr := &prResp{

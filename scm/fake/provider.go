@@ -1,6 +1,7 @@
 package fake
 
 import (
+	"context"
 	"fmt"
 	"maps"
 	"sort"
@@ -24,7 +25,7 @@ type Fake struct {
 }
 
 // New creates a new fake SCM provider with the specified project
-func New(project string) scm.Provider {
+func New(ctx context.Context, project string) scm.Provider {
 	return &Fake{
 		Project:      project,
 		Repositories: make([]*scm.Repository, 0),
@@ -35,7 +36,7 @@ func New(project string) scm.Provider {
 
 // NewFake creates a new fake SCM provider with the specified project with optional seed data
 func NewFake(project string, repos []*scm.Repository) *Fake {
-	f := New(project).(*Fake)
+	f := New(context.Background(), project).(*Fake)
 	f.Repositories = make([]*scm.Repository, len(repos))
 
 	// Deep copy repositories to avoid mutations affecting tests

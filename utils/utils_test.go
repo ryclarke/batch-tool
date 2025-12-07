@@ -1,176 +1,251 @@
 package utils
 
 import (
-	"strings"
+	"context"
 	"testing"
 
 	"github.com/ryclarke/batch-tool/config"
-	"github.com/spf13/viper"
 )
 
-func TestValidateRequiredConfig(t *testing.T) {
-	// Clear any existing config
-	viper.Reset()
+func loadFixture(t *testing.T) context.Context {
+	return config.LoadFixture(t, "../config")
+}
 
-	// Test with missing required config
-	err := ValidateRequiredConfig("nonexistent.key")
-	if err == nil {
-		t.Error("Expected error for missing required config")
+func TestCleanFilter(t *testing.T) {
+	ctx := loadFixture(t)
+
+	tests := []struct {
+		name       string
+		filter     string
+		wantResult string
+	}{
+		{
+			name:       "remove label token",
+			filter:     "~frontend",
+			wantResult: "frontend",
+		},
+		{
+			name:       "remove skip token",
+			filter:     "!backend",
+			wantResult: "backend",
+		},
+		{
+			name:       "remove forced token",
+			filter:     "+deprecated",
+			wantResult: "deprecated",
+		},
+		{
+			name:       "remove multiple tokens",
+			filter:     "+~frontend",
+			wantResult: "frontend",
+		},
+		{
+			name:       "remove skip and label tokens",
+			filter:     "!~backend",
+			wantResult: "backend",
+		},
+		{
+			name:       "plain name unchanged",
+			filter:     "web-app",
+			wantResult: "web-app",
+		},
 	}
 
-	// Test with existing config
-	viper.Set("test.key", "test-value")
-	err = ValidateRequiredConfig("test.key")
-	if err != nil {
-		t.Errorf("Expected no error for existing config, got: %v", err)
-	}
-
-	// Test with multiple keys, some missing
-	err = ValidateRequiredConfig("test.key", "missing.key")
-	if err == nil {
-		t.Error("Expected error when one of multiple keys is missing")
-	}
-
-	// Test with multiple keys, all present
-	viper.Set("test.key2", "test-value2")
-	err = ValidateRequiredConfig("test.key", "test.key2")
-	if err != nil {
-		t.Errorf("Expected no error for all existing configs, got: %v", err)
-	}
-
-	// Test with empty string value (should be treated as missing)
-	viper.Set("empty.key", "")
-	err = ValidateRequiredConfig("empty.key")
-	if err == nil {
-		t.Error("Expected error for empty string config value")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := CleanFilter(ctx, tt.filter)
+			checkStringEqual(t, result, tt.wantResult)
+		})
 	}
 }
 
-func TestLookupReviewers(t *testing.T) {
-	// Clear any existing config
-	viper.Reset()
+func TestValidateRequiredConfig(t *testing.T) {
+	ctx := loadFixture(t)
+	viper := config.Viper(ctx)
 
-	// Test with command-line reviewers
-	viper.Set(config.Reviewers, []string{"reviewer1", "reviewer2"})
-	reviewers := LookupReviewers("test-repo")
+	tests := []struct {
+		name      string
+		setup     func()
+		keys      []string
+		wantError bool
+	}{
+		{
+			name:      "missing required config",
+			keys:      []string{"nonexistent.key"},
+			wantError: true,
+		},
+		{
+			name: "existing config",
+			setup: func() {
+				viper.Set("test.key", "test-value")
+			},
+			keys:      []string{"test.key"},
+			wantError: false,
+		},
+		{
+			name: "multiple keys some missing",
+			setup: func() {
+				viper.Set("test.key", "test-value")
+			},
+			keys:      []string{"test.key", "missing.key"},
+			wantError: true,
+		},
+		{
+			name: "multiple keys all present",
+			setup: func() {
+				viper.Set("test.key", "test-value")
+				viper.Set("test.key2", "test-value2")
+			},
+			keys:      []string{"test.key", "test.key2"},
+			wantError: false,
+		},
+		{
+			name: "empty string value treated as missing",
+			setup: func() {
+				viper.Set("empty.key", "")
+			},
+			keys:      []string{"empty.key"},
+			wantError: true,
+		},
+	}
 
-	if len(reviewers) != 2 {
-		t.Errorf("Expected 2 reviewers, got %d", len(reviewers))
-	}
-	if reviewers[0] != "reviewer1" || reviewers[1] != "reviewer2" {
-		t.Errorf("Expected [reviewer1, reviewer2], got %v", reviewers)
-	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.setup != nil {
+				tt.setup()
+			}
 
-	// Test with default reviewers for repository
-	viper.Set(config.Reviewers, []string{}) // Clear command-line reviewers
-	defaultReviewers := map[string][]string{
-		"test-repo":  {"default1", "default2"},
-		"other-repo": {"other1"},
-	}
-	viper.Set(config.DefaultReviewers, defaultReviewers)
-
-	reviewers = LookupReviewers("test-repo")
-	if len(reviewers) != 2 {
-		t.Errorf("Expected 2 default reviewers, got %d", len(reviewers))
-	}
-	if reviewers[0] != "default1" || reviewers[1] != "default2" {
-		t.Errorf("Expected [default1, default2], got %v", reviewers)
-	}
-
-	// Test with non-existent repository
-	reviewers = LookupReviewers("nonexistent-repo")
-	if len(reviewers) != 0 {
-		t.Errorf("Expected 0 reviewers for nonexistent repo, got %d", len(reviewers))
+			err := ValidateRequiredConfig(ctx, tt.keys...)
+			if (err != nil) != tt.wantError {
+				t.Errorf("ValidateRequiredConfig() error = %v, wantError %v", err, tt.wantError)
+			}
+		})
 	}
 }
 
 func TestParseRepo(t *testing.T) {
+	ctx := loadFixture(t)
+	viper := config.Viper(ctx)
+
 	// Set up default config
 	viper.Set(config.GitHost, "github.com")
 	viper.Set(config.GitProject, "default-project")
 
-	// Test simple repo name
-	host, project, name := ParseRepo("my-repo")
-	if host != "github.com" {
-		t.Errorf("Expected host 'github.com', got %s", host)
-	}
-	if project != "default-project" {
-		t.Errorf("Expected project 'default-project', got %s", project)
-	}
-	if name != "my-repo" {
-		t.Errorf("Expected name 'my-repo', got %s", name)
+	tests := []struct {
+		name        string
+		repo        string
+		wantHost    string
+		wantProject string
+		wantName    string
+	}{
+		{
+			name:        "simple repo name",
+			repo:        "my-repo",
+			wantHost:    "github.com",
+			wantProject: "default-project",
+			wantName:    "my-repo",
+		},
+		{
+			name:        "project/repo format",
+			repo:        "custom-project/my-repo",
+			wantHost:    "github.com",
+			wantProject: "custom-project",
+			wantName:    "my-repo",
+		},
+		{
+			name:        "full host/project/repo format",
+			repo:        "example.com/custom-project/my-repo",
+			wantProject: "custom-project",
+			wantName:    "my-repo",
+		},
+		{
+			name:        "with leading/trailing slashes",
+			repo:        "/custom-project/my-repo/",
+			wantProject: "custom-project",
+			wantName:    "my-repo",
+		},
 	}
 
-	// Test project/repo format
-	host, project, name = ParseRepo("custom-project/my-repo")
-	if host != "github.com" {
-		t.Errorf("Expected host 'github.com', got %s", host)
-	}
-	if project != "custom-project" {
-		t.Errorf("Expected project 'custom-project', got %s", project)
-	}
-	if name != "my-repo" {
-		t.Errorf("Expected name 'my-repo', got %s", name)
-	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			host, project, name := ParseRepo(ctx, tt.repo)
 
-	// Test full host/project/repo format - this has complex parsing logic
-	_, project, name = ParseRepo("example.com/custom-project/my-repo")
-	// The actual parsing may be different than expected - let's verify what we get
-	if name != "my-repo" {
-		t.Errorf("Expected name 'my-repo', got %s", name)
-	}
-	if project != "custom-project" {
-		t.Errorf("Expected project 'custom-project', got %s", project)
-	}
-	// Host parsing may work differently - let's just verify name and project
-
-	// Test with leading/trailing slashes
-	_, project, name = ParseRepo("/custom-project/my-repo/")
-	if project != "custom-project" {
-		t.Errorf("Expected project 'custom-project' with trimmed slashes, got %s", project)
-	}
-	if name != "my-repo" {
-		t.Errorf("Expected name 'my-repo' with trimmed slashes, got %s", name)
+			if tt.wantHost != "" && host != tt.wantHost {
+				t.Errorf("ParseRepo() host = %v, want %v", host, tt.wantHost)
+			}
+			if project != tt.wantProject {
+				t.Errorf("ParseRepo() project = %v, want %v", project, tt.wantProject)
+			}
+			if name != tt.wantName {
+				t.Errorf("ParseRepo() name = %v, want %v", name, tt.wantName)
+			}
+		})
 	}
 }
 
 func TestRepoPath(t *testing.T) {
+	ctx := loadFixture(t)
+	viper := config.Viper(ctx)
+
 	// Set up config
 	viper.Set(config.GitDirectory, "/test/gitdir/src")
 	viper.Set(config.GitHost, "github.com")
 	viper.Set(config.GitProject, "test-project")
 
-	path := RepoPath("my-repo")
-	expected := "/test/gitdir/src/github.com/test-project/my-repo"
-	if path != expected {
-		t.Errorf("Expected path '%s', got '%s'", expected, path)
+	tests := []struct {
+		name     string
+		repo     string
+		wantPath string
+	}{
+		{
+			name:     "simple repo name",
+			repo:     "my-repo",
+			wantPath: "/test/gitdir/src/github.com/test-project/my-repo",
+		},
+		{
+			name:     "custom project",
+			repo:     "custom-project/my-repo",
+			wantPath: "/test/gitdir/src/github.com/custom-project/my-repo",
+		},
 	}
 
-	// Test with custom project
-	path = RepoPath("custom-project/my-repo")
-	expected = "/test/gitdir/src/github.com/custom-project/my-repo"
-	if path != expected {
-		t.Errorf("Expected path '%s', got '%s'", expected, path)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := RepoPath(ctx, tt.repo)
+			if got != tt.wantPath {
+				t.Errorf("RepoPath() = %v, want %v", got, tt.wantPath)
+			}
+		})
 	}
 }
 
 func TestRepoURL(t *testing.T) {
-	// Set up config
-	viper.Set(config.GitUser, "git")
-	viper.Set(config.GitHost, "github.com")
-	viper.Set(config.GitProject, "test-project")
+	ctx := loadFixture(t)
 
-	url := RepoURL("my-repo")
-	// The actual format depends on config.CloneSSHURLTmpl
-	// We'll just check that it contains the expected components
-	if !strings.Contains(url, "github.com") {
-		t.Error("Expected URL to contain github.com")
+	tests := []struct {
+		name         string
+		repo         string
+		wantContains []string
+	}{
+		{
+			name:         "generates URL with host, project, and repo",
+			repo:         "my-repo",
+			wantContains: []string{"github.com", "test-project", "my-repo"},
+		},
 	}
-	if !strings.Contains(url, "test-project") {
-		t.Error("Expected URL to contain test-project")
-	}
-	if !strings.Contains(url, "my-repo") {
-		t.Error("Expected URL to contain my-repo")
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			viper := config.Viper(ctx)
+			viper.Set(config.GitUser, "git")
+			viper.Set(config.GitHost, "github.com")
+			viper.Set(config.GitProject, "test-project")
+
+			url := RepoURL(ctx, tt.repo)
+			for _, want := range tt.wantContains {
+				checkStringContains(t, url, want)
+			}
+		})
 	}
 }
 

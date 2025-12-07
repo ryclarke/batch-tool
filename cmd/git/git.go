@@ -6,22 +6,22 @@ import (
 
 // Cmd configures the root git command along with all subcommands and flags
 func Cmd() *cobra.Command {
-	rootCmd := &cobra.Command{
+	gitCmd := &cobra.Command{
 		Use:   "git [cmd] <repository> ...",
 		Short: "Manage git branches and commits",
 		Args:  cobra.MinimumNArgs(1),
 	}
 
 	defaultCmd := addStatusCmd()
-
-	rootCmd.AddCommand(
+	gitCmd.Run = defaultCmd.Run
+	gitCmd.AddCommand(
 		defaultCmd,
 		addBranchCmd(),
 		addCommitCmd(),
 		addDiffCmd(),
+		addPushCmd(),
 		addUpdateCmd(),
 	)
-	rootCmd.Run = defaultCmd.Run
 
-	return rootCmd
+	return gitCmd
 }

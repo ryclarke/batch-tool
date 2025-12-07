@@ -102,6 +102,7 @@ _testmain.go
 *.prof
 
 # more build and test outputs
+batch-tool
 bin/
 build/
 release/

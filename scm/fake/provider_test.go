@@ -1,14 +1,21 @@
 package fake
 
 import (
+	"context"
 	"fmt"
 	"testing"
 
+	"github.com/ryclarke/batch-tool/config"
 	"github.com/ryclarke/batch-tool/scm"
 )
 
+func loadFixture(t *testing.T) context.Context {
+	return config.LoadFixture(t, "../../config")
+}
+
 func TestNew(t *testing.T) {
-	provider := New("test-project")
+	ctx := loadFixture(t)
+	provider := New(ctx, "test-project")
 	f, ok := provider.(*Fake)
 	if !ok {
 		t.Fatal("Expected provider to be of type *Fake")
@@ -283,7 +290,8 @@ func TestMergePullRequestAlreadyMerged(t *testing.T) {
 }
 
 func TestAddRepository(t *testing.T) {
-	fake := New("test-project").(*Fake)
+	ctx := loadFixture(t)
+	fake := New(ctx, "test-project").(*Fake)
 
 	repo := &scm.Repository{
 		Name:          "new-repo",
