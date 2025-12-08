@@ -5,9 +5,12 @@ import (
 	"fmt"
 	"os"
 	"runtime"
+	"strings"
 
+	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/spf13/cobra"
 
+	"github.com/ryclarke/batch-tool/call/output"
 	"github.com/ryclarke/batch-tool/catalog"
 	"github.com/ryclarke/batch-tool/cmd/exec"
 	"github.com/ryclarke/batch-tool/cmd/git"
@@ -29,6 +32,7 @@ const (
 	skipUnwantedFlag   = "skip-unwanted"
 	noSkipUnwantedFlag = "no-skip-unwanted"
 	maxConcurrencyFlag = "max-concurrency"
+	outputHandlerFlag  = "style"
 )
 
 // RootCmd configures the top-level root command along with all subcommands and flags
@@ -40,12 +44,17 @@ func RootCmd() *cobra.Command {
 
 This tool provides a collection of utility functions that facilitate work across
 multiple git repositories, including branch management and pull request creation.`,
-		PersistentPreRun: func(cmd *cobra.Command, _ []string) {
+		PersistentPreRunE: func(cmd *cobra.Command, _ []string) error {
 			viper := config.Viper(cmd.Context())
 
-			viper.BindPFlag(config.MaxConcurrency, cmd.PersistentFlags().Lookup(maxConcurrencyFlag))
-			viper.BindPFlag(config.SortRepos, cmd.PersistentFlags().Lookup(sortFlag))
-			viper.BindPFlag(config.SkipUnwanted, cmd.PersistentFlags().Lookup(skipUnwantedFlag))
+			viper.BindPFlag(config.MaxConcurrency, cmd.Flags().Lookup(maxConcurrencyFlag))
+			viper.BindPFlag(config.SortRepos, cmd.Flags().Lookup(sortFlag))
+			viper.BindPFlag(config.SkipUnwanted, cmd.Flags().Lookup(skipUnwantedFlag))
+			viper.BindPFlag(config.OutputStyle, cmd.Flags().Lookup(outputHandlerFlag))
+
+			if outputHandler := viper.GetString(config.OutputStyle); outputHandler != "" && !mapset.NewSet(output.AvailableHandlers...).Contains(outputHandler) {
+				return fmt.Errorf("invalid output style: %q (expected one of %v)", viper.GetString(config.OutputStyle), output.AvailableHandlers)
+			}
 
 			// Allow the `--sync` flag to override max-concurrency to 1
 			if sync, _ := cmd.Flags().GetBool(syncFlag); sync {
@@ -61,6 +70,8 @@ multiple git repositories, including branch management and pull request creation
 			if noSkip, _ := cmd.Flags().GetBool(noSkipUnwantedFlag); noSkip {
 				viper.Set(config.SkipUnwanted, false)
 			}
+
+			return nil
 		},
 		Version: config.Version,
 	}
@@ -82,6 +93,7 @@ multiple git repositories, including branch management and pull request creation
 	)
 
 	rootCmd.PersistentFlags().StringVar(&config.CfgFile, configFlag, "", "config file (default is batch-tool.yaml)")
+	rootCmd.PersistentFlags().StringP(outputHandlerFlag, "o", output.Native, fmt.Sprintf("output format style: \"%v\"", strings.Join(output.AvailableHandlers, "\", \"")))
 
 	rootCmd.PersistentFlags().Bool(syncFlag, false, "execute commands synchronously (alias for --max-concurrency=1)")
 	rootCmd.PersistentFlags().Int(maxConcurrencyFlag, runtime.NumCPU(), "maximum number of concurrent operations")
