@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/google/go-github/v74/github"
-	"github.com/spf13/viper"
 
 	"github.com/ryclarke/batch-tool/config"
 	"github.com/ryclarke/batch-tool/scm"
@@ -19,7 +18,7 @@ func (g *Github) ListRepositories() ([]*scm.Repository, error) {
 		ListOptions: github.ListOptions{PerPage: 20},
 	}
 
-	defer readLock()()
+	defer g.readLock()()
 
 	for {
 		repos, resp, err := g.listRepositories(context.TODO(), opt)
@@ -30,7 +29,7 @@ func (g *Github) ListRepositories() ([]*scm.Repository, error) {
 		for _, repo := range repos {
 			if repo.GetDefaultBranch() == "" {
 				// fall back on configured default branch if it isn't set for the repo
-				defaultBranch := viper.GetString(config.SourceBranch)
+				defaultBranch := config.Viper(g.ctx).GetString(config.SourceBranch)
 				repo.DefaultBranch = &defaultBranch
 			}
 

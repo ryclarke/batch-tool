@@ -1,21 +1,28 @@
 package scm_test
 
 import (
+	"context"
 	"errors"
 	"testing"
 
+	"github.com/ryclarke/batch-tool/config"
 	"github.com/ryclarke/batch-tool/scm"
 	"github.com/ryclarke/batch-tool/scm/fake"
 )
 
+func loadFixture(t *testing.T) context.Context {
+	return config.LoadFixture(t, "../config")
+}
+
 func TestRegister(t *testing.T) {
+	ctx := loadFixture(t)
 	// Register a test provider using fake package
-	scm.Register("test-provider", func(project string) scm.Provider {
-		return fake.New(project)
+	scm.Register("test-provider", func(ctx context.Context, project string) scm.Provider {
+		return fake.New(ctx, project)
 	})
 
 	// Test successful retrieval
-	provider := scm.Get("test-provider", "test-project")
+	provider := scm.Get(ctx, "test-provider", "test-project")
 	if provider == nil {
 		t.Fatal("Expected provider to be returned")
 	}
@@ -31,13 +38,14 @@ func TestRegister(t *testing.T) {
 }
 
 func TestGet(t *testing.T) {
+	ctx := loadFixture(t)
 	// Register a test provider with data
-	scm.Register("test-scm-with-data", func(project string) scm.Provider {
+	scm.Register("test-scm-with-data", func(ctx context.Context, project string) scm.Provider {
 		return fake.NewFake(project, fake.CreateTestRepositories(project))
 	})
 
 	// Test successful retrieval
-	provider := scm.Get("test-scm-with-data", "my-project")
+	provider := scm.Get(ctx, "test-scm-with-data", "my-project")
 	if provider == nil {
 		t.Fatal("Expected provider to be returned")
 	}
@@ -63,6 +71,7 @@ func TestGet(t *testing.T) {
 }
 
 func TestGetPanic(t *testing.T) {
+	ctx := loadFixture(t)
 	defer func() {
 		if r := recover(); r == nil {
 			t.Error("Expected panic when getting unregistered provider")
@@ -74,16 +83,17 @@ func TestGetPanic(t *testing.T) {
 		}
 	}()
 
-	scm.Get("nonexistent", "project")
+	scm.Get(ctx, "nonexistent", "project")
 }
 
 func TestProviderInterface(t *testing.T) {
+	ctx := loadFixture(t)
 	// Register a provider for testing
-	scm.Register("interface-test", func(project string) scm.Provider {
-		return fake.New(project)
+	scm.Register("interface-test", func(ctx context.Context, project string) scm.Provider {
+		return fake.New(ctx, project)
 	})
 
-	provider := scm.Get("interface-test", "test-project")
+	provider := scm.Get(ctx, "interface-test", "test-project")
 
 	// Test all interface methods exist and can be called
 	repos, err := provider.ListRepositories()
@@ -101,7 +111,7 @@ func TestProviderInterface(t *testing.T) {
 	}
 
 	// For testing PR operations, create a new provider with a repository
-	testProvider := fake.New("test-project").(*fake.Fake)
+	testProvider := fake.New(ctx, "test-project").(*fake.Fake)
 	testProvider.AddRepository(&scm.Repository{
 		Name:    "test-repo",
 		Project: "test-project",
@@ -136,12 +146,13 @@ func TestProviderInterface(t *testing.T) {
 }
 
 func TestProviderFactory(t *testing.T) {
+	ctx := loadFixture(t)
 	// Test that ProviderFactory type works correctly
-	factory := func(project string) scm.Provider {
-		return fake.New(project)
+	factory := func(ctx context.Context, project string) scm.Provider {
+		return fake.New(ctx, project)
 	}
 
-	provider := factory("test-project")
+	provider := factory(ctx, "test-project")
 	if provider == nil {
 		t.Error("Expected non-nil provider from factory")
 	}
@@ -157,14 +168,15 @@ func TestProviderFactory(t *testing.T) {
 }
 
 func TestErrorProviderIntegration(t *testing.T) {
+	ctx := loadFixture(t)
 	// Register an error provider
-	scm.Register("error-provider", func(project string) scm.Provider {
-		provider := fake.New(project).(*fake.Fake)
+	scm.Register("error-provider", func(ctx context.Context, project string) scm.Provider {
+		provider := fake.New(ctx, project).(*fake.Fake)
 		provider.SetError("ListRepositories", errors.New("API unavailable"))
 		return provider
 	})
 
-	provider := scm.Get("error-provider", "error-project")
+	provider := scm.Get(ctx, "error-provider", "error-project")
 
 	// Test that errors propagate correctly
 	_, err := provider.ListRepositories()
@@ -177,18 +189,19 @@ func TestErrorProviderIntegration(t *testing.T) {
 }
 
 func TestMultipleProviders(t *testing.T) {
+	ctx := loadFixture(t)
 	// Register multiple providers
-	scm.Register("provider-a", func(project string) scm.Provider {
+	scm.Register("provider-a", func(ctx context.Context, project string) scm.Provider {
 		return fake.NewFake("project-a-"+project, fake.CreateTestRepositories("project-a-"+project))
 	})
 
-	scm.Register("provider-b", func(project string) scm.Provider {
+	scm.Register("provider-b", func(ctx context.Context, project string) scm.Provider {
 		return fake.NewFake("project-b-"+project, fake.CreateTestRepositories("project-b-"+project))
 	})
 
 	// Test both providers work independently
-	providerA := scm.Get("provider-a", "test")
-	providerB := scm.Get("provider-b", "test")
+	providerA := scm.Get(ctx, "provider-a", "test")
+	providerB := scm.Get(ctx, "provider-b", "test")
 
 	reposA, err := providerA.ListRepositories()
 	if err != nil {
@@ -211,15 +224,16 @@ func TestMultipleProviders(t *testing.T) {
 }
 
 func TestDuplicateRegistration(t *testing.T) {
+	ctx := loadFixture(t)
 	// Test that duplicate registration doesn't overwrite existing provider
-	originalFactory := func(project string) scm.Provider {
-		provider := fake.New(project).(*fake.Fake)
+	originalFactory := func(ctx context.Context, project string) scm.Provider {
+		provider := fake.New(ctx, project).(*fake.Fake)
 		provider.AddRepository(&scm.Repository{Name: "original-repo", Project: project})
 		return provider
 	}
 
-	newFactory := func(project string) scm.Provider {
-		provider := fake.New(project).(*fake.Fake)
+	newFactory := func(ctx context.Context, project string) scm.Provider {
+		provider := fake.New(ctx, project).(*fake.Fake)
 		provider.AddRepository(&scm.Repository{Name: "new-repo", Project: project})
 		return provider
 	}
@@ -228,7 +242,7 @@ func TestDuplicateRegistration(t *testing.T) {
 	scm.Register("duplicate-test", originalFactory)
 
 	// Get provider and verify it's the original
-	provider1 := scm.Get("duplicate-test", "test-project")
+	provider1 := scm.Get(ctx, "duplicate-test", "test-project")
 	repos1, _ := provider1.ListRepositories()
 	if len(repos1) != 1 || repos1[0].Name != "original-repo" {
 		t.Error("Expected original provider to be preserved")
@@ -238,7 +252,7 @@ func TestDuplicateRegistration(t *testing.T) {
 	scm.Register("duplicate-test", newFactory)
 
 	// Get provider again and verify it's still the original
-	provider2 := scm.Get("duplicate-test", "test-project")
+	provider2 := scm.Get(ctx, "duplicate-test", "test-project")
 	repos2, _ := provider2.ListRepositories()
 	if len(repos2) != 1 || repos2[0].Name != "original-repo" {
 		t.Error("Expected original provider to be preserved after duplicate registration")

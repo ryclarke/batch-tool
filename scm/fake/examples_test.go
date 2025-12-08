@@ -1,6 +1,7 @@
 package fake
 
 import (
+	"context"
 	"fmt"
 	"testing"
 
@@ -9,8 +10,9 @@ import (
 
 // ExampleFake_basicUsage demonstrates basic usage of the fake SCM provider
 func ExampleFake_basicUsage() {
+	ctx := context.Background()
 	// Create a new fake provider
-	fake := New("my-project").(*Fake)
+	fake := New(ctx, "my-project").(*Fake)
 
 	// Add some test repositories
 	fake.AddRepository(&scm.Repository{
@@ -53,7 +55,8 @@ func ExampleCreateTestRepositories() {
 
 // ExampleFake_errorTesting demonstrates how to configure errors for testing
 func ExampleFake_errorTesting() {
-	fake := New("test-project").(*Fake)
+	ctx := context.Background()
+	fake := New(ctx, "test-project").(*Fake)
 
 	// Configure the provider to return an error
 	fake.SetError("ListRepositories", fmt.Errorf("simulated API error"))

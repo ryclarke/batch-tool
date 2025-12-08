@@ -1,18 +1,32 @@
 package utils
 
 import (
+	"context"
 	"fmt"
 	"os/exec"
 	"path/filepath"
 	"strings"
 
-	"github.com/spf13/viper"
-
 	"github.com/ryclarke/batch-tool/config"
 )
 
+// CleanFilter standardizes the formatting of an imput argument by removing all configured signal tokens
+func CleanFilter(ctx context.Context, input string) string {
+	viper := config.Viper(ctx)
+
+	replacer := strings.NewReplacer(
+		viper.GetString(config.TokenLabel), "",
+		viper.GetString(config.TokenSkip), "",
+		viper.GetString(config.TokenForced), "",
+	)
+
+	return replacer.Replace(input)
+}
+
 // ValidateRequiredConfig checks viper and returns an error if a key isn't set
-func ValidateRequiredConfig(opts ...string) error {
+func ValidateRequiredConfig(ctx context.Context, opts ...string) error {
+	viper := config.Viper(ctx)
+
 	for _, opt := range opts {
 		if viper.GetString(opt) == "" {
 			return fmt.Errorf("%s is required - set as flag or env", opt)
@@ -22,19 +36,10 @@ func ValidateRequiredConfig(opts ...string) error {
 	return nil
 }
 
-// LookupReviewers returns the list of reviewers for the given repository
-func LookupReviewers(name string) []string {
-	// Use the provided list of reviewers
-	if revs := viper.GetStringSlice(config.Reviewers); len(revs) > 0 {
-		return revs
-	}
-
-	// Use default reviewers for the given repository
-	return viper.GetStringMapStringSlice(config.DefaultReviewers)[name]
-}
-
 // ParseRepo splits a repo identifier into its component parts
-func ParseRepo(repo string) (host, project, name string) {
+func ParseRepo(ctx context.Context, repo string) (host, project, name string) {
+	viper := config.Viper(ctx)
+
 	parts := strings.Split(strings.Trim(repo, "/ "), "/")
 	name = parts[len(parts)-1]
 
@@ -54,8 +59,20 @@ func ParseRepo(repo string) (host, project, name string) {
 }
 
 // RepoPath returns the full repository path for the given name
-func RepoPath(repo string) string {
-	host, project, name := ParseRepo(repo)
+func RepoPath(ctx context.Context, repo string) string {
+	viper := config.Viper(ctx)
+
+	// If repo is empty, return the base working directory itself (for operations like cloning)
+	if repo == "" {
+		path, err := filepath.Abs(viper.GetString(config.GitDirectory))
+		if err != nil {
+			panic(fmt.Sprintf("error determining absolute working directory path: %v", err))
+		}
+
+		return path
+	}
+
+	host, project, name := ParseRepo(ctx, repo)
 
 	path, err := filepath.Abs(filepath.Join(viper.GetString(config.GitDirectory), host, project, name))
 	if err != nil {
@@ -66,8 +83,10 @@ func RepoPath(repo string) string {
 }
 
 // RepoURL returns the repository remote url for the given name
-func RepoURL(repo string) string {
-	host, project, name := ParseRepo(repo)
+func RepoURL(ctx context.Context, repo string) string {
+	viper := config.Viper(ctx)
+
+	host, project, name := ParseRepo(ctx, repo)
 
 	return fmt.Sprintf(config.CloneSSHURLTmpl,
 		viper.GetString(config.GitUser),
@@ -76,11 +95,13 @@ func RepoURL(repo string) string {
 }
 
 // LookupBranch returns the target branch for the given repository
-func LookupBranch(name string) (string, error) {
+func LookupBranch(ctx context.Context, name string) (string, error) {
+	viper := config.Viper(ctx)
+
 	branch := viper.GetString(config.Branch)
 	if branch == "" {
 		cmd := exec.Command("git", "rev-parse", "--abbrev-ref", "HEAD")
-		cmd.Dir = RepoPath(name)
+		cmd.Dir = RepoPath(ctx, name)
 
 		output, err := cmd.Output()
 		if err != nil {
@@ -95,9 +116,11 @@ func LookupBranch(name string) (string, error) {
 }
 
 // ValidateBranch returns an error if the current git branch is the source branch
-func ValidateBranch(repo string, ch chan<- string) error {
+func ValidateBranch(ctx context.Context, repo string, ch chan<- string) error {
+	viper := config.Viper(ctx)
+
 	cmd := exec.Command("git", "rev-parse", "--abbrev-ref", "HEAD")
-	cmd.Dir = RepoPath(repo)
+	cmd.Dir = RepoPath(ctx, repo)
 
 	output, err := cmd.Output()
 	if err != nil {

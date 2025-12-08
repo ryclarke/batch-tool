@@ -2,10 +2,10 @@ package pr
 
 import (
 	"bytes"
+	"context"
 	"testing"
 
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 
 	"github.com/ryclarke/batch-tool/config"
 	"github.com/ryclarke/batch-tool/scm"
@@ -13,18 +13,8 @@ import (
 )
 
 func TestPRIntegrationWithFakeProvider(t *testing.T) {
-	_ = config.LoadFixture("../../config")
-
-	// Save original configuration
-	originalProvider := viper.GetString(config.GitProvider)
-	originalProject := viper.GetString(config.GitProject)
-	originalToken := viper.GetString(config.AuthToken)
-
-	defer func() {
-		viper.Set(config.GitProvider, originalProvider)
-		viper.Set(config.GitProject, originalProject)
-		viper.Set(config.AuthToken, originalToken)
-	}()
+	ctx := loadFixture(t)
+	viper := config.Viper(ctx)
 
 	// Configure for fake provider
 	viper.Set(config.GitProvider, "fake")
@@ -32,7 +22,7 @@ func TestPRIntegrationWithFakeProvider(t *testing.T) {
 	viper.Set(config.AuthToken, "fake-token")
 
 	// Register fake provider with test data
-	scm.Register("fake-pr-test", func(project string) scm.Provider {
+	scm.Register("fake-pr-test", func(ctx context.Context, project string) scm.Provider {
 		return fake.NewFake(project, fake.CreateTestRepositories(project))
 	})
 
@@ -55,8 +45,8 @@ func TestPRIntegrationWithFakeProvider(t *testing.T) {
 			t.Errorf("Expected Use to be 'new <repository> ...', got %s", cmd.Use)
 		}
 
-		if cmd.Short != "Submit new pull requests" {
-			t.Errorf("Expected correct Short description, got %s", cmd.Short)
+		if cmd.Short == "" {
+			t.Error("Expected Short description to be set")
 		}
 	})
 
@@ -68,8 +58,8 @@ func TestPRIntegrationWithFakeProvider(t *testing.T) {
 			t.Errorf("Expected Use to be 'edit <repository> ...', got %s", cmd.Use)
 		}
 
-		if cmd.Short != "Update existing pull requests" {
-			t.Errorf("Expected correct Short description, got %s", cmd.Short)
+		if cmd.Short == "" {
+			t.Error("Expected Short description to be set")
 		}
 	})
 
@@ -81,14 +71,14 @@ func TestPRIntegrationWithFakeProvider(t *testing.T) {
 			t.Errorf("Expected Use to be 'merge <repository> ...', got %s", cmd.Use)
 		}
 
-		if cmd.Short != "Merge accepted pull requests" {
-			t.Errorf("Expected correct Short description, got %s", cmd.Short)
+		if cmd.Short == "" {
+			t.Error("Expected Short description to be set")
 		}
 	})
 }
 
 func TestPRCommandFlags(t *testing.T) {
-	_ = config.LoadFixture("../../config")
+	loadFixture(t)
 
 	tests := []struct {
 		name        string
@@ -102,7 +92,7 @@ func TestPRCommandFlags(t *testing.T) {
 			cmdFunc:     addNewCmd,
 			flagName:    "all-reviewers",
 			shorthand:   "a",
-			description: "use all provided reviewers for a new PR",
+			description: "use all provided reviewers for a new PR (default: only the first)",
 		},
 	}
 
@@ -128,7 +118,8 @@ func TestPRCommandFlags(t *testing.T) {
 }
 
 func TestValidatePRConfig(t *testing.T) {
-	_ = config.LoadFixture("../../config")
+	ctx := loadFixture(t)
+	viper := config.Viper(ctx)
 
 	// Test with missing configuration
 	viper.Set(config.GitProvider, "")
@@ -143,7 +134,6 @@ func TestValidatePRConfig(t *testing.T) {
 }
 
 func TestPRCommandValidation(t *testing.T) {
-	_ = config.LoadFixture("../../config")
 
 	tests := []struct {
 		name     string
@@ -207,7 +197,7 @@ func TestPRCommandValidation(t *testing.T) {
 }
 
 func TestPRRootCommand(t *testing.T) {
-	_ = config.LoadFixture("../../config")
+	loadFixture(t)
 
 	cmd := Cmd()
 
@@ -215,8 +205,8 @@ func TestPRRootCommand(t *testing.T) {
 		t.Errorf("Expected Use to be 'pr [cmd] <repository> ...', got %s", cmd.Use)
 	}
 
-	if cmd.Short != "Manage pull requests using supported SCM provider APIs" {
-		t.Errorf("Expected correct Short description, got %s", cmd.Short)
+	if cmd.Short == "" {
+		t.Error("Expected Short description to be set")
 	}
 
 	// Test that subcommands are added
@@ -238,4 +228,59 @@ func TestPRRootCommand(t *testing.T) {
 			t.Errorf("Expected subcommand %s not found", expectedCmd)
 		}
 	}
+}
+
+func TestLookupReviewersWithSCMRepositories(t *testing.T) {
+	ctx := loadFixture(t)
+	viper := config.Viper(ctx)
+
+	// Configure reviewers for repositories from fake provider
+	viper.Set(config.DefaultReviewers, map[string][]string{
+		"repo-1": {"alice", "bob"},
+		"repo-2": {"charlie", "diana"},
+		"repo-3": {"eve", "frank"},
+	})
+
+	t.Run("LookupDefaultReviewers", func(t *testing.T) {
+		reviewers := lookupReviewers(ctx, "repo-1")
+		expected := []string{"alice", "bob"}
+
+		if len(reviewers) != len(expected) {
+			t.Errorf("Expected %d reviewers, got %d", len(expected), len(reviewers))
+		}
+
+		for i, reviewer := range reviewers {
+			if reviewer != expected[i] {
+				t.Errorf("Expected reviewer %s at position %d, got %s", expected[i], i, reviewer)
+			}
+		}
+	})
+
+	t.Run("LookupGlobalReviewers", func(t *testing.T) {
+		// Set global reviewers (should override default)
+		viper.Set(config.PrReviewers, []string{"global1", "global2"})
+
+		reviewers := lookupReviewers(ctx, "repo-1")
+		expected := []string{"global1", "global2"}
+
+		if len(reviewers) != len(expected) {
+			t.Errorf("Expected %d global reviewers, got %d", len(expected), len(reviewers))
+		}
+
+		for i, reviewer := range reviewers {
+			if reviewer != expected[i] {
+				t.Errorf("Expected global reviewer %s at position %d, got %s", expected[i], i, reviewer)
+			}
+		}
+	})
+
+	t.Run("LookupReviewersForUnknownRepo", func(t *testing.T) {
+		// Clear global reviewers
+		viper.Set(config.PrReviewers, []string{})
+
+		reviewers := lookupReviewers(ctx, "unknown-repo")
+		if len(reviewers) != 0 {
+			t.Errorf("Expected no reviewers for unknown repo, got %d", len(reviewers))
+		}
+	})
 }

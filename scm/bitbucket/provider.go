@@ -1,11 +1,10 @@
 package bitbucket
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"net/url"
-
-	"github.com/spf13/viper"
 
 	"github.com/ryclarke/batch-tool/config"
 	"github.com/ryclarke/batch-tool/scm"
@@ -19,11 +18,13 @@ func init() {
 }
 
 // New creates a new Bitbucket SCM provider instance.
-func New(project string) scm.Provider {
+func New(ctx context.Context, project string) scm.Provider {
+	viper := config.Viper(ctx)
 	return &Bitbucket{
 		client:  http.DefaultClient,
 		host:    viper.GetString(config.GitHost),
 		project: project,
+		ctx:     ctx,
 	}
 }
 
@@ -32,6 +33,7 @@ type Bitbucket struct {
 	client  *http.Client
 	host    string
 	project string
+	ctx     context.Context
 }
 
 // constructs the base URL for the Bitbucket API endpoint.
@@ -71,6 +73,7 @@ func get[T any](b *Bitbucket, path string) (*T, error) {
 
 // convenience function to perform an HTTP request and unmarshal the response into the specified type.
 func do[T any](b *Bitbucket, req *http.Request) (*T, error) {
+	viper := config.Viper(b.ctx)
 	req.Header.Set("Authorization", "Bearer "+viper.GetString(config.AuthToken))
 	if req.Body != nil {
 		req.Header.Set("Content-Type", "application/json")

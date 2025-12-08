@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/google/go-github/v74/github"
-	"github.com/spf13/viper"
 	"golang.org/x/sync/semaphore"
 
 	"github.com/ryclarke/batch-tool/config"
@@ -31,17 +30,20 @@ func init() {
 	scm.Register("github", New)
 }
 
-func New(project string) scm.Provider {
+func New(ctx context.Context, project string) scm.Provider {
+	viper := config.Viper(ctx)
 	return &Github{
 		// TODO: Add support for enterprise GitHub instances (currently SaaS only)
 		client:  github.NewClient(http.DefaultClient).WithAuthToken(viper.GetString(config.AuthToken)),
 		project: project,
+		ctx:     ctx,
 	}
 }
 
 type Github struct {
 	client  *github.Client
 	project string
+	ctx     context.Context
 }
 
 func (g *Github) waitForRateLimit(ctx context.Context, search bool) error {
@@ -72,20 +74,20 @@ func (g *Github) checkRateLimit(ctx context.Context, search bool) (*github.Rate,
 	return limits.Core, nil
 }
 
-func readLock() (done func()) {
-	sem.Acquire(context.Background(), readWeight)
+func (g *Github) readLock() (done func()) {
+	sem.Acquire(g.ctx, readWeight)
 
 	return func() {
 		sem.Release(readWeight)
 	}
 }
 
-func writeLock() (done func()) {
-	sem.Acquire(context.Background(), writeWeight)
+func (g *Github) writeLock() (done func()) {
+	sem.Acquire(g.ctx, writeWeight)
 
 	return func() {
 		// delay release to avoid rate limiting
-		time.Sleep(viper.GetDuration(config.WriteBackoff))
+		time.Sleep(config.Viper(g.ctx).GetDuration(config.WriteBackoff))
 		sem.Release(writeWeight)
 	}
 }

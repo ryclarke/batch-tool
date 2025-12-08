@@ -6,7 +6,6 @@ import (
 
 	"github.com/ryclarke/batch-tool/config"
 	"github.com/ryclarke/batch-tool/scm"
-	"github.com/spf13/viper"
 )
 
 // BitBucket-specific structs to handle API response format
@@ -63,6 +62,7 @@ func (b *Bitbucket) ListRepositories() ([]*scm.Repository, error) {
 		defaultBranch, err := b.getDefaultBranch(repo.Name)
 		if err != nil {
 			// If we can't fetch the default branch, use the configured default
+			viper := config.Viper(b.ctx)
 			defaultBranch = viper.GetString(config.SourceBranch)
 			fmt.Printf("Error fetching default branch for %s - falling back on configured default '%s': %v\n", repo.Name, defaultBranch, err)
 		}

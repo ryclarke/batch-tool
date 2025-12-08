@@ -1,6 +1,7 @@
 package catalog
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -9,7 +10,6 @@ import (
 	"time"
 
 	mapset "github.com/deckarep/golang-set/v2"
-	"github.com/spf13/viper"
 
 	"github.com/ryclarke/batch-tool/config"
 	"github.com/ryclarke/batch-tool/scm"
@@ -21,8 +21,11 @@ var Catalog = make(map[string]scm.Repository)
 // Labels contains a mapping of label names with the set of repositories matching each label
 var Labels = make(map[string]mapset.Set[string])
 
-func Init() {
-	if err := initRepositoryCatalog(); err != nil {
+// Init initializes the repository catalog and label mappings, updating the cache if necessary (based on configured TTL).
+func Init(ctx context.Context) {
+	viper := config.Viper(ctx)
+
+	if err := initRepositoryCatalog(ctx); err != nil {
 		fmt.Printf("ERROR: Could not load repository metadata: %v", err)
 	}
 
@@ -43,7 +46,19 @@ func Init() {
 	}
 }
 
-func RepositoryList(filters ...string) mapset.Set[string] {
+// Flush removes the local cache of repository metadata.
+func Flush(ctx context.Context) error {
+	if err := os.Remove(catalogCachePath(ctx)); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+
+	return nil
+}
+
+// RepositoryList returns the set of repository names matching the given filters.
+func RepositoryList(ctx context.Context, filters ...string) mapset.Set[string] {
+	viper := config.Viper(ctx)
+
 	includeSet := mapset.NewSet[string]()
 	excludeSet := mapset.NewSet[string]()
 	forcedSet := mapset.NewSet[string]()
@@ -97,18 +112,18 @@ func RepositoryList(filters ...string) mapset.Set[string] {
 	return forcedSet.Union(includeSet.Difference(excludeSet))
 }
 
-func initRepositoryCatalog() error {
+func initRepositoryCatalog(ctx context.Context) error {
 	if len(Catalog) > 0 {
 		return nil
 	}
 
-	if err := loadCatalogCache(); err != nil {
+	if err := loadCatalogCache(ctx); err != nil {
 		fmt.Print(err.Error())
 	} else {
 		return nil
 	}
 
-	return fetchRepositoryData()
+	return fetchRepositoryData(ctx)
 }
 
 type repositoryCache struct {
@@ -116,8 +131,10 @@ type repositoryCache struct {
 	Repositories map[string]scm.Repository `json:"repositories"`
 }
 
-func loadCatalogCache() error {
-	file, err := os.Open(catalogCachePath())
+func loadCatalogCache(ctx context.Context) error {
+	viper := config.Viper(ctx)
+
+	file, err := os.Open(catalogCachePath(ctx))
 	if err != nil {
 		return fmt.Errorf("local cache of repository catalog is missing or invalid - fetching remote info")
 	}
@@ -148,7 +165,7 @@ func loadCatalogCache() error {
 	return nil
 }
 
-func saveCatalogCache() error {
+func saveCatalogCache(ctx context.Context) error {
 	cache := repositoryCache{
 		UpdatedAt:    time.Now().UTC(),
 		Repositories: Catalog,
@@ -159,15 +176,17 @@ func saveCatalogCache() error {
 		return err
 	}
 
-	if err := os.MkdirAll(filepath.Dir(catalogCachePath()), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(catalogCachePath(ctx)), 0755); err != nil {
 		return err
 	}
 
-	return os.WriteFile(catalogCachePath(), data, 0644)
+	return os.WriteFile(catalogCachePath(ctx), data, 0644)
 }
 
-func fetchRepositoryData() error {
-	provider := scm.Get(viper.GetString(config.GitProvider), viper.GetString(config.GitProject))
+func fetchRepositoryData(ctx context.Context) error {
+	viper := config.Viper(ctx)
+
+	provider := scm.Get(ctx, viper.GetString(config.GitProvider), viper.GetString(config.GitProject))
 
 	repos, err := provider.ListRepositories()
 	if err != nil {
@@ -186,10 +205,12 @@ func fetchRepositoryData() error {
 		}
 	}
 
-	return saveCatalogCache()
+	return saveCatalogCache(ctx)
 }
 
-func catalogCachePath() string {
+func catalogCachePath(ctx context.Context) string {
+	viper := config.Viper(ctx)
+
 	return filepath.Join(viper.GetString(config.GitDirectory),
 		viper.GetString(config.GitHost),
 		viper.GetString(config.GitProject),

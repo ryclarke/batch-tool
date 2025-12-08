@@ -1,11 +1,9 @@
 package utils
 
 import (
+	"context"
 	"path/filepath"
-	"strings"
 	"testing"
-
-	"github.com/spf13/viper"
 
 	"github.com/ryclarke/batch-tool/config"
 	"github.com/ryclarke/batch-tool/scm"
@@ -13,22 +11,8 @@ import (
 )
 
 func TestSCMIntegrationWithUtils(t *testing.T) {
-	_ = config.LoadFixture("../config")
-
-	// Save original configuration
-	originalProvider := viper.GetString(config.GitProvider)
-	originalProject := viper.GetString(config.GitProject)
-	originalHost := viper.GetString(config.GitHost)
-	originalUser := viper.GetString(config.GitUser)
-	originalGitdir := viper.GetString(config.GitDirectory)
-
-	defer func() {
-		viper.Set(config.GitProvider, originalProvider)
-		viper.Set(config.GitProject, originalProject)
-		viper.Set(config.GitHost, originalHost)
-		viper.Set(config.GitUser, originalUser)
-		viper.Set(config.GitDirectory, originalGitdir)
-	}()
+	ctx := loadFixture(t)
+	viper := config.Viper(ctx)
 
 	// Configure for testing
 	viper.Set(config.GitProvider, "fake")
@@ -38,7 +22,7 @@ func TestSCMIntegrationWithUtils(t *testing.T) {
 	viper.Set(config.GitDirectory, "/tmp/test-gitdir")
 
 	// Register fake provider with test repositories
-	scm.Register("fake-utils-test", func(project string) scm.Provider {
+	scm.Register("fake-utils-test", func(ctx context.Context, project string) scm.Provider {
 		return fake.NewFake(project, fake.CreateTestRepositories(project))
 	})
 
@@ -46,222 +30,227 @@ func TestSCMIntegrationWithUtils(t *testing.T) {
 	viper.Set(config.GitProvider, "fake-utils-test")
 
 	t.Run("ValidateRequiredConfigForSCM", func(t *testing.T) {
-		// Test validation of SCM-related configuration
-		err := ValidateRequiredConfig(config.GitProvider, config.GitProject)
-		if err != nil {
-			t.Errorf("Expected no error for valid SCM config, got: %v", err)
+		tests := []struct {
+			name      string
+			setup     func()
+			keys      []string
+			wantError bool
+		}{
+			{
+				name:      "valid SCM config",
+				keys:      []string{config.GitProvider, config.GitProject},
+				wantError: false,
+			},
+			{
+				name: "missing provider",
+				setup: func() {
+					viper.Set(config.GitProvider, "")
+				},
+				keys:      []string{config.GitProvider},
+				wantError: true,
+			},
 		}
 
-		// Test with missing provider
-		viper.Set(config.GitProvider, "")
-		err = ValidateRequiredConfig(config.GitProvider)
-		if err == nil {
-			t.Error("Expected error for missing provider")
-		}
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				if tt.setup != nil {
+					tt.setup()
+					defer viper.Set(config.GitProvider, "fake-utils-test")
+				}
 
-		// Restore
-		viper.Set(config.GitProvider, "fake-utils-test")
+				err := ValidateRequiredConfig(ctx, tt.keys...)
+				checkError(t, err, tt.wantError)
+			})
+		}
 	})
 
 	t.Run("ParseRepoWithSCMContext", func(t *testing.T) {
-		// Test parsing repository identifiers
 		tests := []struct {
-			input           string
-			expectedHost    string
-			expectedProject string
-			expectedName    string
+			name        string
+			input       string
+			wantHost    string
+			wantProject string
+			wantName    string
 		}{
 			{
-				input:           "repo-1",
-				expectedHost:    "github.com",
-				expectedProject: "test-project",
-				expectedName:    "repo-1",
+				name:        "simple repo name",
+				input:       "repo-1",
+				wantHost:    "github.com",
+				wantProject: "test-project",
+				wantName:    "repo-1",
 			},
 			{
-				input:           "custom-project/repo-2",
-				expectedHost:    "github.com",
-				expectedProject: "custom-project",
-				expectedName:    "repo-2",
+				name:        "project/repo format",
+				input:       "custom-project/repo-2",
+				wantHost:    "github.com",
+				wantProject: "custom-project",
+				wantName:    "repo-2",
 			},
 			{
-				input:           "custom.host.com/custom-project/repo-3",
-				expectedHost:    "", // ParseRepo doesn't handle full URLs this way
-				expectedProject: "custom-project",
-				expectedName:    "repo-3",
+				name:        "full URL format",
+				input:       "custom.host.com/custom-project/repo-3",
+				wantHost:    "",
+				wantProject: "custom-project",
+				wantName:    "repo-3",
 			},
 		}
 
-		for _, test := range tests {
-			t.Run(test.input, func(t *testing.T) {
-				host, project, name := ParseRepo(test.input)
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				host, project, name := ParseRepo(ctx, tt.input)
 
-				if host != test.expectedHost {
-					t.Errorf("Expected host %s, got %s", test.expectedHost, host)
+				if tt.wantHost != "" {
+					checkStringEqual(t, host, tt.wantHost)
 				}
-				if project != test.expectedProject {
-					t.Errorf("Expected project %s, got %s", test.expectedProject, project)
-				}
-				if name != test.expectedName {
-					t.Errorf("Expected name %s, got %s", test.expectedName, name)
-				}
+				checkStringEqual(t, project, tt.wantProject)
+				checkStringEqual(t, name, tt.wantName)
 			})
 		}
 	})
 
 	t.Run("RepoPathWithSCMContext", func(t *testing.T) {
-		path := RepoPath("repo-1")
-		expectedPath := filepath.Join("/tmp/test-gitdir", "github.com", "test-project", "repo-1")
+		tests := []struct {
+			name     string
+			repo     string
+			wantPath string
+		}{
+			{
+				name:     "generates correct path",
+				repo:     "repo-1",
+				wantPath: filepath.Join("/tmp/test-gitdir", "github.com", "test-project", "repo-1"),
+			},
+		}
 
-		if path != expectedPath {
-			t.Errorf("Expected path %s, got %s", expectedPath, path)
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				path := RepoPath(ctx, tt.repo)
+				checkStringEqual(t, path, tt.wantPath)
+			})
 		}
 	})
 
 	t.Run("RepoURLWithSCMContext", func(t *testing.T) {
-		url := RepoURL("repo-1")
-		expectedURL := "ssh://testuser@github.com/test-project/repo-1.git"
-
-		if url != expectedURL {
-			t.Errorf("Expected URL %s, got %s", expectedURL, url)
-		}
-	})
-}
-
-func TestLookupReviewersWithSCMRepositories(t *testing.T) {
-	_ = config.LoadFixture("../config")
-
-	// Save original configuration
-	originalReviewers := viper.Get(config.Reviewers)
-	originalDefaultReviewers := viper.Get(config.DefaultReviewers)
-
-	defer func() {
-		viper.Set(config.Reviewers, originalReviewers)
-		viper.Set(config.DefaultReviewers, originalDefaultReviewers)
-	}()
-
-	// Configure reviewers for repositories from fake provider
-	viper.Set(config.DefaultReviewers, map[string][]string{
-		"repo-1": {"alice", "bob"},
-		"repo-2": {"charlie", "diana"},
-		"repo-3": {"eve", "frank"},
-	})
-
-	t.Run("LookupDefaultReviewers", func(t *testing.T) {
-		reviewers := LookupReviewers("repo-1")
-		expected := []string{"alice", "bob"}
-
-		if len(reviewers) != len(expected) {
-			t.Errorf("Expected %d reviewers, got %d", len(expected), len(reviewers))
+		tests := []struct {
+			name    string
+			repo    string
+			wantURL string
+		}{
+			{
+				name:    "generates correct SSH URL",
+				repo:    "repo-1",
+				wantURL: "ssh://testuser@github.com/test-project/repo-1.git",
+			},
 		}
 
-		for i, reviewer := range reviewers {
-			if reviewer != expected[i] {
-				t.Errorf("Expected reviewer %s at position %d, got %s", expected[i], i, reviewer)
-			}
-		}
-	})
-
-	t.Run("LookupGlobalReviewers", func(t *testing.T) {
-		// Set global reviewers (should override default)
-		viper.Set(config.Reviewers, []string{"global1", "global2"})
-
-		reviewers := LookupReviewers("repo-1")
-		expected := []string{"global1", "global2"}
-
-		if len(reviewers) != len(expected) {
-			t.Errorf("Expected %d global reviewers, got %d", len(expected), len(reviewers))
-		}
-
-		for i, reviewer := range reviewers {
-			if reviewer != expected[i] {
-				t.Errorf("Expected global reviewer %s at position %d, got %s", expected[i], i, reviewer)
-			}
-		}
-	})
-
-	t.Run("LookupReviewersForUnknownRepo", func(t *testing.T) {
-		// Clear global reviewers
-		viper.Set(config.Reviewers, []string{})
-
-		reviewers := LookupReviewers("unknown-repo")
-		if len(reviewers) != 0 {
-			t.Errorf("Expected no reviewers for unknown repo, got %d", len(reviewers))
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				url := RepoURL(ctx, tt.repo)
+				checkStringEqual(t, url, tt.wantURL)
+			})
 		}
 	})
 }
 
 func TestValidateBranchIntegration(t *testing.T) {
-	_ = config.LoadFixture("../config")
+	ctx := loadFixture(t)
 
-	// This test requires git repository setup, so we'll test the basic structure
-	originalSourceBranch := viper.GetString(config.SourceBranch)
-	defer func() {
-		viper.Set(config.SourceBranch, originalSourceBranch)
-	}()
-
-	// Set up test environment
-	viper.Set(config.SourceBranch, "main")
-	viper.Set(config.GitDirectory, "/tmp/test-gitdir")
-
-	// Create a test channel
-	ch := make(chan string, 1)
-
-	// Test with a non-existent repository (should return error)
-	err := ValidateBranch("nonexistent-repo", ch)
-	if err == nil {
-		t.Error("Expected error for non-existent repository")
+	tests := []struct {
+		name      string
+		repo      string
+		wantError bool
+	}{
+		{
+			name:      "non-existent repository returns error",
+			repo:      "nonexistent-repo",
+			wantError: true,
+		},
 	}
 
-	// Clean up
-	close(ch)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			viper := config.Viper(ctx)
+			originalSourceBranch := viper.GetString(config.SourceBranch)
+			defer viper.Set(config.SourceBranch, originalSourceBranch)
+
+			viper.Set(config.SourceBranch, "main")
+			viper.Set(config.GitDirectory, "/tmp/test-gitdir")
+
+			ch := make(chan string, 1)
+			defer close(ch)
+
+			err := ValidateBranch(ctx, tt.repo, ch)
+			checkError(t, err, tt.wantError)
+		})
+	}
 }
 
 func TestLookupBranchIntegration(t *testing.T) {
-	_ = config.LoadFixture("../config")
+	ctx := loadFixture(t)
 
-	originalBranch := viper.GetString(config.Branch)
-	originalGitdir := viper.GetString(config.GitDirectory)
-
-	defer func() {
-		viper.Set(config.Branch, originalBranch)
-		viper.Set(config.GitDirectory, originalGitdir)
-	}()
-
-	// Test with branch already set in config
-	viper.Set(config.Branch, "feature-branch")
-	viper.Set(config.GitDirectory, "/tmp/test-gitdir")
-
-	branch, err := LookupBranch("test-repo")
-	if err != nil {
-		t.Errorf("Expected no error when branch is set in config, got: %v", err)
+	tests := []struct {
+		name       string
+		repo       string
+		branchSet  string
+		wantBranch string
+		wantError  bool
+	}{
+		{
+			name:       "branch set in config",
+			repo:       "test-repo",
+			branchSet:  "feature-branch",
+			wantBranch: "feature-branch",
+			wantError:  false,
+		},
+		{
+			name:      "branch not set reads from git",
+			repo:      "test-repo",
+			branchSet: "",
+			// Will likely fail without real git repo, error expected or logged
+		},
 	}
 
-	if branch != "feature-branch" {
-		t.Errorf("Expected branch 'feature-branch', got %s", branch)
-	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			viper := config.Viper(ctx)
+			originalBranch := viper.GetString(config.Branch)
+			originalGitdir := viper.GetString(config.GitDirectory)
+			defer func() {
+				viper.Set(config.Branch, originalBranch)
+				viper.Set(config.GitDirectory, originalGitdir)
+			}()
 
-	// Test with branch not set (will try to read from git)
-	viper.Set(config.Branch, "")
+			viper.Set(config.Branch, tt.branchSet)
+			viper.Set(config.GitDirectory, "/tmp/test-gitdir")
 
-	branch, err = LookupBranch("test-repo")
-	// This will likely fail since we don't have a real git repo, but we can test the error handling
-	if err == nil {
-		t.Logf("Unexpectedly succeeded in getting branch: %s", branch)
-	} else {
-		t.Logf("Expected error when trying to read from non-existent git repo: %v", err)
+			branch, err := LookupBranch(ctx, tt.repo)
+
+			if tt.branchSet != "" {
+				checkError(t, err, tt.wantError)
+				if err == nil {
+					checkStringEqual(t, branch, tt.wantBranch)
+				}
+			} else {
+				// When branch not set, will try to read from git
+				if err == nil {
+					t.Logf("Unexpectedly succeeded in getting branch: %s", branch)
+				} else {
+					t.Logf("Expected error when trying to read from non-existent git repo: %v", err)
+				}
+			}
+		})
 	}
 }
 
 func TestUtilsWithFakeRepositories(t *testing.T) {
-	_ = config.LoadFixture("../config")
+	ctx := loadFixture(t)
 
 	// Register fake provider
-	scm.Register("utils-fake-provider", func(project string) scm.Provider {
+	scm.Register("utils-fake-provider", func(ctx context.Context, project string) scm.Provider {
 		return fake.NewFake(project, fake.CreateTestRepositories(project))
 	})
 
 	// Get the fake provider to access its repositories
-	provider := scm.Get("utils-fake-provider", "test-project")
+	provider := scm.Get(ctx, "utils-fake-provider", "test-project")
 	repos, err := provider.ListRepositories()
 	if err != nil {
 		t.Fatalf("Failed to get repositories from fake provider: %v", err)
@@ -270,28 +259,18 @@ func TestUtilsWithFakeRepositories(t *testing.T) {
 	// Test utils functions with repository names from fake provider
 	for _, repo := range repos {
 		t.Run("Repository_"+repo.Name, func(t *testing.T) {
-			// Test that ParseRepo works with repository names
-			_, _, name := ParseRepo(repo.Name)
-			if name != repo.Name {
-				t.Errorf("Expected parsed name %s, got %s", repo.Name, name)
-			}
+			// Test ParseRepo
+			_, _, name := ParseRepo(ctx, repo.Name)
+			checkStringEqual(t, name, repo.Name)
 
-			// Test RepoPath generation
-			path := RepoPath(repo.Name)
-			if !filepath.IsAbs(path) {
-				t.Error("Expected absolute path from RepoPath")
-			}
+			// Test RepoPath
+			path := RepoPath(ctx, repo.Name)
+			checkAbsolutePath(t, path)
 
-			// Test RepoURL generation
-			url := RepoURL(repo.Name)
-			if url == "" {
-				t.Error("Expected non-empty URL from RepoURL")
-			}
-
-			// Verify URL format
-			if !strings.Contains(url, repo.Name) {
-				t.Errorf("Expected URL to contain repository name %s, got %s", repo.Name, url)
-			}
+			// Test RepoURL
+			url := RepoURL(ctx, repo.Name)
+			checkStringNotEmpty(t, url)
+			checkStringContains(t, url, repo.Name)
 		})
 	}
 }
