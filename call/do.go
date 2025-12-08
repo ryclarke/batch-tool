@@ -9,6 +9,7 @@ import (
 
 	"golang.org/x/sync/semaphore"
 
+	"github.com/ryclarke/batch-tool/call/output"
 	"github.com/ryclarke/batch-tool/catalog"
 	"github.com/ryclarke/batch-tool/config"
 	"github.com/ryclarke/batch-tool/utils"
@@ -19,16 +20,16 @@ import (
 // concurrency limits. Repository aliases are also expanded here to allow for configurable repository grouping.
 // Output formatting can be fully customized by optionally providing one or more OutputHandler functions. Each
 // repository will also be cloned first if it is missing from the local file system.
-func Do(cmd *cobra.Command, repos []string, callFunc CallFunc, handler ...OutputHandler) {
+func Do(cmd *cobra.Command, repos []string, callFunc CallFunc, handler ...output.Handler) {
 	ctx := cmd.Context()
 	viper := config.Viper(ctx)
 	repos = processArguments(ctx, repos)
 
 	// initialize channel set for CallFunc output
-	output := make([]chan string, len(repos))
+	resp := make([]chan string, len(repos))
 	errs := make([]chan error, len(repos))
 	for i := range repos {
-		output[i] = make(chan string, viper.GetInt(config.ChannelBuffer))
+		resp[i] = make(chan string, viper.GetInt(config.ChannelBuffer))
 		errs[i] = make(chan error, 1)
 	}
 
@@ -44,17 +45,17 @@ func Do(cmd *cobra.Command, repos []string, callFunc CallFunc, handler ...Output
 	// start workers with concurrency limit
 	for i := range repos {
 		wg.Add(1)
-		go runCallFunc(ctx, sem, wg, callFunc, repos[i], output[i], errs[i])
+		go runCallFunc(ctx, sem, wg, callFunc, repos[i], resp[i], errs[i])
 	}
 
 	// use the default output handler if none provided
 	if len(handler) == 0 {
-		handler = append(handler, OrderedOutput)
+		handler = append(handler, output.GetHandler(ctx))
 	}
 
 	// process output using provided handler(s)
 	for _, handle := range handler {
-		handle(cmd, repos, readOnlyChan(output), readOnlyChan(errs))
+		handle(cmd, repos, readOnlyChan(resp), readOnlyChan(errs))
 	}
 
 	wg.Wait()
@@ -77,6 +78,9 @@ func runCallFunc(ctx context.Context, sem *semaphore.Weighted, wg *sync.WaitGrou
 		return
 	}
 	defer sem.Release(1) // Release semaphore
+
+	// Initial empty line to signal start of CallFunc execution
+	ch <- ""
 
 	// If the repository is missing, attempt to clone it first
 	if _, err := os.Stat(utils.RepoPath(ctx, repoName)); os.IsNotExist(err) {
