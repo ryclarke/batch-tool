@@ -21,7 +21,7 @@ const (
 func addCommitCmd() *cobra.Command {
 	// commitCmd represents the commit command
 	commitCmd := &cobra.Command{
-		Use:               "commit <repository> ...",
+		Use:               "commit <repository>...",
 		Short:             "Commit code changes across repositories",
 		Args:              cobra.MinimumNArgs(1),
 		ValidArgsFunction: catalog.CompletionFunc(),

@@ -16,7 +16,7 @@ import (
 func addGetCmd() *cobra.Command {
 	// getCmd represents the pr get command
 	getCmd := &cobra.Command{
-		Use:               "get <repository> ...",
+		Use:               "get <repository>...",
 		Aliases:           []string{"list"},
 		Short:             "Get pull request information",
 		Args:              cobra.MinimumNArgs(1),

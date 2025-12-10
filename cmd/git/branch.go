@@ -18,7 +18,7 @@ const (
 func addBranchCmd() *cobra.Command {
 	// branchCmd represents the branch command
 	branchCmd := &cobra.Command{
-		Use:               "branch <repository> ...",
+		Use:               "branch <repository>...",
 		Aliases:           []string{"checkout"},
 		Short:             "Checkout a new branch across repositories",
 		Args:              cobra.MinimumNArgs(1),

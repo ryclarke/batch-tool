@@ -20,7 +20,7 @@ const (
 // addNewCmd initializes the pr new command
 func addNewCmd() *cobra.Command {
 	newCmd := &cobra.Command{
-		Use:               "new <repository> ...",
+		Use:               "new <repository>...",
 		Short:             "Submit new pull requests",
 		Args:              cobra.MinimumNArgs(1),
 		ValidArgsFunction: catalog.CompletionFunc(),

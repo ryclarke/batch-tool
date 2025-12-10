@@ -20,7 +20,7 @@ const (
 // addEditCmd initializes the pr edit command
 func addEditCmd() *cobra.Command {
 	editCmd := &cobra.Command{
-		Use:               "edit <repository> ...",
+		Use:               "edit <repository>...",
 		Short:             "Update existing pull requests",
 		Args:              cobra.MinimumNArgs(1),
 		ValidArgsFunction: catalog.CompletionFunc(),

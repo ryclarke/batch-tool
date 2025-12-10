@@ -26,8 +26,8 @@ func TestCmd(t *testing.T) {
 		t.Fatal("Cmd() returned nil")
 	}
 
-	if cmd.Use != "exec <repository> ..." {
-		t.Errorf("Expected Use to be 'exec <repository> ...', got %s", cmd.Use)
+	if cmd.Use != "exec <repository>..." {
+		t.Errorf("Expected Use to be 'exec <repository>...', got %s", cmd.Use)
 	}
 
 	// Test aliases

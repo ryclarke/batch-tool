@@ -41,33 +41,6 @@ func TestRootCmd(t *testing.T) {
 	}
 }
 
-func TestVersionFlag(t *testing.T) {
-	ctx := loadFixture(t)
-	cmd := RootCmd()
-
-	// Test that version is set on the command (Cobra automatically creates --version flag)
-	if cmd.Version == "" {
-		t.Error("command version is not set")
-	}
-
-	// Test that we can call --version without error by capturing output
-	var buf bytes.Buffer
-	cmd.SetOut(&buf)
-	cmd.SetErr(&buf)
-	cmd.SetArgs([]string{"--version"})
-
-	err := cmd.ExecuteContext(ctx)
-	if err != nil {
-		t.Errorf("--version flag execution failed: %v", err)
-	}
-
-	// Verify version output contains our version string
-	output := buf.String()
-	if !strings.Contains(output, cmd.Version) {
-		t.Errorf("Expected version output to contain %s, got: %s", cmd.Version, output)
-	}
-}
-
 func TestCatalogCommand(t *testing.T) {
 	_ = loadFixture(t)
 

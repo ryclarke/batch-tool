@@ -29,8 +29,8 @@ func TestCmd(t *testing.T) {
 		t.Fatal("Cmd() returned nil")
 	}
 
-	if cmd.Use != "make <repository> ..." {
-		t.Errorf("Expected Use to be 'make <repository> ...', got %s", cmd.Use)
+	if cmd.Use != "make <repository>..." {
+		t.Errorf("Expected Use to be 'make <repository>...', got %s", cmd.Use)
 	}
 
 	if cmd.Short == "" {

@@ -26,7 +26,7 @@ func Init(ctx context.Context) {
 	viper := config.Viper(ctx)
 
 	if err := initRepositoryCatalog(ctx); err != nil {
-		fmt.Printf("ERROR: Could not load repository metadata: %v", err)
+		fmt.Printf("ERROR: Could not load repository metadata: %v\n", err)
 	}
 
 	// Add locally-configured aliases to the defined labels
@@ -118,7 +118,7 @@ func initRepositoryCatalog(ctx context.Context) error {
 	}
 
 	if err := loadCatalogCache(ctx); err != nil {
-		fmt.Print(err.Error())
+		fmt.Printf("ERROR: %v\n", err)
 	} else {
 		return nil
 	}

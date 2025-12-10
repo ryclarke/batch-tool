@@ -18,7 +18,7 @@ const (
 // Cmd configures the root pr command along with all subcommands and flags
 func Cmd() *cobra.Command {
 	prCmd := &cobra.Command{
-		Use:   "pr [cmd] <repository> ...",
+		Use:   "pr [cmd] <repository>...",
 		Short: "Manage pull requests using supported SCM provider APIs",
 		Args:  cobra.MinimumNArgs(1),
 		PersistentPreRunE: func(cmd *cobra.Command, _ []string) error {

@@ -8,13 +8,21 @@ import (
 
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 	"github.com/spf13/cobra"
 )
+
+// List of flag names which should be included in the command display for context.
+var includeFlags = []string{"script", "branch"}
 
 // BubbleteaHandler is an OutputHandler that uses Bubbletea to provide a modern, interactive interface.
 // It displays repository progress with styled output, real-time updates, and a cleaner visual presentation.
 func BubbleteaHandler(cmd *cobra.Command, repos []string, output []<-chan string, errs []<-chan error) {
+	// Exit early if no repositories are provided
+	if len(repos) == 0 {
+		fmt.Fprintln(cmd.ErrOrStderr(), noReposText)
+		return
+	}
+
 	// Create a cancellable context so Ctrl+C can properly cancel subprocesses
 	ctx, cancel := context.WithCancel(cmd.Context())
 	defer cancel()
@@ -30,55 +38,9 @@ func BubbleteaHandler(cmd *cobra.Command, repos []string, output []<-chan string
 
 	if _, err := p.Run(); err != nil {
 		fmt.Fprintf(cmd.ErrOrStderr(), "Error running bubbletea UI: %v\nUsing default output handler...\n", err)
-		// Fallback to native output handler on error
+		// Fallback to native output handling
 		NativeHandler(cmd, repos, output, errs)
 	}
-}
-
-// color constants
-const (
-	colorWhite  = "#FFFFFF"
-	colorBlue   = "#0000FF"
-	colorGreen  = "#04B575"
-	colorRed    = "#FF0000"
-	colorPurple = "#7D56F4"
-	colorCyan   = "#00D4FF"
-	colorGray2  = "#222222"
-	colorGray4  = "#444444"
-	colorGray6  = "#666666"
-)
-
-// Styles for the bubbletea UI
-var (
-	repoActiveStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color(colorBlue)).Bold(true)
-	repoWaitingStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(colorGray6)).Bold(true)
-	repoSuccessStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(colorGreen)).Bold(true)
-	repoErrorStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color(colorRed)).Bold(true)
-
-	separatorStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(colorGray4))
-	outputStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color(colorWhite)).MarginLeft(2)
-	statusStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color(colorPurple)).Italic(true)
-	progressStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color(colorCyan))
-
-	progressBarCompleteStyle = lipgloss.NewStyle().
-					Foreground(lipgloss.Color(colorGreen)).
-					Background(lipgloss.Color(colorGreen))
-
-	progressBarIncompleteStyle = lipgloss.NewStyle().
-					Foreground(lipgloss.Color(colorGray4)).
-					Background(lipgloss.Color(colorGray2))
-)
-
-// repoStatus represents the state of a repository's processing
-type repoStatus struct {
-	name       string
-	output     []string
-	errors     []error
-	completed  bool
-	failed     bool
-	active     bool
-	outputDone bool
-	errorsDone bool
 }
 
 // model represents the state of the bubbletea application
@@ -96,6 +58,19 @@ type model struct {
 	ready       bool
 	width       int
 	height      int
+	styles      outputStyles
+}
+
+// repoStatus represents the state of a repository's processing
+type repoStatus struct {
+	name       string
+	output     []string
+	errors     []error
+	completed  bool
+	failed     bool
+	active     bool
+	outputDone bool
+	errorsDone bool
 }
 
 type repoOutputMsg struct {
@@ -142,9 +117,16 @@ func buildCommandString(cmd *cobra.Command) string {
 		cmdParts = append(cmdParts, args...)
 	}
 
-	// Only add the --script|-c flag if it exists and was set (relevant for `exec` command)
-	if scriptFlag := cmd.Flags().Lookup("script"); scriptFlag != nil && scriptFlag.Changed {
-		cmdParts = append(cmdParts, fmt.Sprintf("(script: `%s`)", scriptFlag.Value.String()))
+	// Add flags which add crucial context to the command
+	printedFlags := make([]string, 0)
+	for _, flagName := range includeFlags {
+		if flag := cmd.Flags().Lookup(flagName); flag != nil && flag.Changed {
+			printedFlags = append(printedFlags, fmt.Sprintf("%s: `%v`", flagName, flag.Value))
+		}
+	}
+
+	if len(printedFlags) > 0 {
+		cmdParts = append(cmdParts, "("+strings.Join(printedFlags, " ")+")")
 	}
 
 	return strings.Join(cmdParts, " ")
@@ -231,6 +213,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m model) handleWindowSize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 	m.width = msg.Width
 	m.height = msg.Height
+	m.styles = newOutputStyles(msg.Width)
 
 	if !m.ready {
 		// Initialize viewport with the terminal size
@@ -261,14 +244,21 @@ func (m model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		m.quitting = true
 		return m, tea.Quit
-	case "q":
-		// Only allow quit with 'q' after all processing is complete
+
+	case "esc", "q":
+		// Only allow quit with 'esc' or 'q' after all processing is complete
 		if m.allDone {
 			m.quitting = true
 			return m, tea.Quit
 		}
 		fallthrough
+
 	default:
+		// Use shared viewport navigation handler
+		if handleKeyPress(&m.viewport, msg.String()) {
+			return m, nil
+		}
+
 		// Let viewport handle all other keys for scrolling
 		m.viewport, cmd = m.viewport.Update(msg)
 		return m, cmd
@@ -348,33 +338,6 @@ func (m model) allReposCompleted() bool {
 	return true
 }
 
-// renderProgressBar creates a visual progress bar
-func renderProgressBar(completed, total, width int) string {
-	if width < 10 {
-		width = 40 // minimum width
-	}
-
-	if total == 0 {
-		return progressBarIncompleteStyle.Render(strings.Repeat(" ", width))
-	}
-
-	percent := float64(completed) / float64(total)
-	filledWidth := int(float64(width) * percent)
-	emptyWidth := width - filledWidth
-
-	var bar strings.Builder
-
-	if filledWidth > 0 {
-		bar.WriteString(progressBarCompleteStyle.Render(strings.Repeat("█", filledWidth)))
-	}
-
-	if emptyWidth > 0 {
-		bar.WriteString(progressBarIncompleteStyle.Render(strings.Repeat("░", emptyWidth)))
-	}
-
-	return bar.String()
-}
-
 // buildContent generates the scrollable content for the viewport
 func (m model) buildContent() string {
 	var content strings.Builder
@@ -385,19 +348,19 @@ func (m model) buildContent() string {
 
 		// Show all output
 		for _, line := range repo.output {
-			content.WriteString(outputStyle.Render(line))
+			content.WriteString(m.styles.output.Render(line))
 			content.WriteString("\n")
 		}
 
 		// Show errors
 		for _, errMsg := range repo.errors {
-			content.WriteString(outputStyle.Render(fmt.Sprintf("  ERROR: %s", errMsg.Error())))
+			content.WriteString(m.styles.output.Render(fmt.Sprintf("  ERROR: %s", errMsg.Error())))
 			content.WriteString("\n")
 		}
 
 		// Add separator between repos (except for the last one)
 		if i < len(m.repos)-1 {
-			content.WriteString(separatorStyle.Render("  ─────────────────────────────────────"))
+			content.WriteString(m.styles.separator.Render(separatorLine))
 			content.WriteString("\n")
 		}
 	}
@@ -409,19 +372,19 @@ func (m model) buildContent() string {
 func (m model) formatRepoHeader(repo repoStatus) string {
 	if repo.completed {
 		if repo.failed {
-			return repoErrorStyle.Render(fmt.Sprintf("✗ %s", repo.name))
+			return m.styles.repoError.Render(fmt.Sprintf(repoErrorFormat, repo.name))
 		}
 
-		return repoSuccessStyle.Render(fmt.Sprintf("✓ %s", repo.name))
+		return m.styles.repoSuccess.Render(fmt.Sprintf(repoSuccessFormat, repo.name))
 	}
 
 	if !repo.active {
 		// Waiting for concurrency slot to start
-		return repoWaitingStyle.Render(fmt.Sprintf("⏸ %s", repo.name))
+		return m.styles.repoWaiting.Render(fmt.Sprintf(repoWaitingFormat, repo.name))
 	}
 
 	// Active and running
-	return repoActiveStyle.Render(fmt.Sprintf("▶ %s", repo.name))
+	return m.styles.repoActive.Render(fmt.Sprintf(repoActiveFormat, repo.name))
 }
 
 func (m model) View() string {
@@ -436,7 +399,7 @@ func (m model) View() string {
 	var b strings.Builder
 
 	// Command being executed
-	b.WriteString(progressStyle.Render(m.command))
+	b.WriteString(m.styles.progress.Render(m.command))
 	b.WriteString("\n\n")
 
 	// Add viewport to output (content is already set in Update)
@@ -458,10 +421,10 @@ func (m model) renderProgress() string {
 	completed := m.countCompleted()
 	elapsed := m.calculateElapsed()
 
-	progressText := fmt.Sprintf("Progress: %d/%d repositories | Elapsed: %s",
+	progressText := fmt.Sprintf(progressText,
 		completed, len(m.repos), elapsed)
 
-	b.WriteString(progressStyle.Render(progressText))
+	b.WriteString(m.styles.progress.Render(progressText))
 	b.WriteString("\n")
 
 	// Progress bar
@@ -470,7 +433,8 @@ func (m model) renderProgress() string {
 		progressBarWidth = m.width - 10
 	}
 
-	progressBar := renderProgressBar(completed, len(m.repos), progressBarWidth)
+	errorCount := m.countErrors()
+	progressBar := renderProgressBar(m.styles, completed, errorCount, len(m.repos), progressBarWidth)
 	b.WriteString(progressBar)
 	b.WriteString(" ")
 
@@ -479,7 +443,7 @@ func (m model) renderProgress() string {
 		percentage = (completed * 100) / len(m.repos)
 	}
 
-	b.WriteString(progressStyle.Render(fmt.Sprintf("%d%%", percentage)))
+	b.WriteString(m.styles.progress.Render(fmt.Sprintf("%d%%", percentage)))
 	b.WriteString("\n")
 
 	return b.String()
@@ -491,9 +455,9 @@ func (m model) renderFooter() string {
 	b.WriteString("\n")
 
 	if m.allDone {
-		b.WriteString(statusStyle.Render("✓ All repositories processed! Use ↑/↓ or j/k to scroll, q or Ctrl+C to quit"))
+		b.WriteString(m.styles.status.Render(footerDone))
 	} else {
-		b.WriteString(statusStyle.Render("Use ↑/↓ or j/k to scroll | Ctrl+C to interrupt"))
+		b.WriteString(m.styles.status.Render(footerText))
 	}
 	b.WriteString("\n")
 
@@ -505,6 +469,18 @@ func (m model) countCompleted() int {
 	count := 0
 	for _, repo := range m.repos {
 		if repo.completed {
+			count++
+		}
+	}
+
+	return count
+}
+
+// countErrors returns the number of repositories that completed with errors
+func (m model) countErrors() int {
+	count := 0
+	for _, repo := range m.repos {
+		if repo.completed && repo.failed {
 			count++
 		}
 	}

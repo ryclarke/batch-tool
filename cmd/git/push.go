@@ -18,7 +18,7 @@ const (
 func addPushCmd() *cobra.Command {
 	// pushCmd represents the push command
 	pushCmd := &cobra.Command{
-		Use:               "push <repository> ...",
+		Use:               "push <repository>...",
 		Short:             "Push committed code changes to remote",
 		Args:              cobra.MinimumNArgs(1),
 		ValidArgsFunction: catalog.CompletionFunc(),

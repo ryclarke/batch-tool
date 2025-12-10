@@ -18,8 +18,8 @@ func TestGitCmd(t *testing.T) {
 		t.Fatal("Cmd() returned nil")
 	}
 
-	if cmd.Use != "git [cmd] <repository> ..." {
-		t.Errorf("Expected Use to be 'git [cmd] <repository> ...', got %s", cmd.Use)
+	if cmd.Use != "git [cmd] <repository>..." {
+		t.Errorf("Expected Use to be 'git [cmd] <repository>...', got %s", cmd.Use)
 	}
 
 	if cmd.Short == "" {
@@ -57,8 +57,8 @@ func TestAddStatusCmd(t *testing.T) {
 		t.Fatal("addStatusCmd() returned nil")
 	}
 
-	if cmd.Use != "status <repository> ..." {
-		t.Errorf("Expected Use to be 'status <repository> ...', got %s", cmd.Use)
+	if cmd.Use != "status <repository>..." {
+		t.Errorf("Expected Use to be 'status <repository>...', got %s", cmd.Use)
 	}
 
 	if cmd.Short == "" {
@@ -89,8 +89,8 @@ func TestAddDiffCmd(t *testing.T) {
 		t.Fatal("addDiffCmd() returned nil")
 	}
 
-	if cmd.Use != "diff <repository> ..." {
-		t.Errorf("Expected Use to be 'diff <repository> ...', got %s", cmd.Use)
+	if cmd.Use != "diff <repository>..." {
+		t.Errorf("Expected Use to be 'diff <repository>...', got %s", cmd.Use)
 	}
 
 	if cmd.Short == "" {
@@ -121,8 +121,8 @@ func TestAddUpdateCmd(t *testing.T) {
 		t.Fatal("addUpdateCmd() returned nil")
 	}
 
-	if cmd.Use != "update <repository> ..." {
-		t.Errorf("Expected Use to be 'update <repository> ...', got %s", cmd.Use)
+	if cmd.Use != "update <repository>..." {
+		t.Errorf("Expected Use to be 'update <repository>...', got %s", cmd.Use)
 	}
 
 	if cmd.Short == "" {

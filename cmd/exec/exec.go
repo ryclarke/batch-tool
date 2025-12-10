@@ -15,7 +15,7 @@ import (
 // Cmd configures the exec command
 func Cmd() *cobra.Command {
 	execCmd := &cobra.Command{
-		Use:               "exec <repository> ...",
+		Use:               "exec <repository>...",
 		Aliases:           []string{"sh"},
 		Short:             "[!DANGEROUS!] Execute a shell command across repositories",
 		Args:              cobra.MinimumNArgs(1),

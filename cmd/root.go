@@ -14,7 +14,6 @@ import (
 	"github.com/ryclarke/batch-tool/catalog"
 	"github.com/ryclarke/batch-tool/cmd/exec"
 	"github.com/ryclarke/batch-tool/cmd/git"
-	"github.com/ryclarke/batch-tool/cmd/labels"
 	"github.com/ryclarke/batch-tool/cmd/make"
 	"github.com/ryclarke/batch-tool/cmd/pr"
 	"github.com/ryclarke/batch-tool/config"
@@ -52,7 +51,7 @@ multiple git repositories, including branch management and pull request creation
 			viper.BindPFlag(config.SkipUnwanted, cmd.Flags().Lookup(skipUnwantedFlag))
 			viper.BindPFlag(config.OutputStyle, cmd.Flags().Lookup(outputHandlerFlag))
 
-			if outputHandler := viper.GetString(config.OutputStyle); outputHandler != "" && !mapset.NewSet(output.AvailableHandlers...).Contains(outputHandler) {
+			if outputStyle := viper.GetString(config.OutputStyle); outputStyle != "" && !mapset.NewSet(output.AvailableHandlers...).Contains(outputStyle) {
 				return fmt.Errorf("invalid output style: %q (expected one of %v)", viper.GetString(config.OutputStyle), output.AvailableHandlers)
 			}
 
@@ -73,27 +72,22 @@ multiple git repositories, including branch management and pull request creation
 
 			return nil
 		},
+		Args:    cobra.NoArgs,
 		Version: config.Version,
 	}
 
 	// Add all subcommands to the root
 	rootCmd.AddCommand(
-		&cobra.Command{
-			Use:   "catalog",
-			Short: "Print information on the cached repository catalog",
-			Run: func(_ *cobra.Command, _ []string) {
-				fmt.Printf("%v\n", catalog.Catalog)
-			},
-		},
+		catalogCmd(),
+		labelsCmd(),
 		exec.Cmd(),
 		git.Cmd(),
-		labels.Cmd(),
 		make.Cmd(),
 		pr.Cmd(),
 	)
 
 	rootCmd.PersistentFlags().StringVar(&config.CfgFile, configFlag, "", "config file (default is batch-tool.yaml)")
-	rootCmd.PersistentFlags().StringP(outputHandlerFlag, "o", output.Native, fmt.Sprintf("output format style: \"%v\"", strings.Join(output.AvailableHandlers, "\", \"")))
+	rootCmd.PersistentFlags().StringP(outputHandlerFlag, "o", output.TUI, fmt.Sprintf("output style: \"%v\"", strings.Join(output.AvailableHandlers, "\", \"")))
 
 	rootCmd.PersistentFlags().Bool(syncFlag, false, "execute commands synchronously (alias for --max-concurrency=1)")
 	rootCmd.PersistentFlags().Int(maxConcurrencyFlag, runtime.NumCPU(), "maximum number of concurrent operations")
@@ -122,5 +116,45 @@ func Execute() {
 	if err := RootCmd().ExecuteContext(ctx); err != nil {
 		fmt.Println(err)
 		os.Exit(1)
+	}
+}
+
+// labelsCmd configures the labels command
+func labelsCmd() *cobra.Command {
+	labelsCmd := &cobra.Command{
+		Use:               "labels <repository|label>...",
+		Aliases:           []string{"label"},
+		Short:             "Inspect repository labels and test filters",
+		Args:              cobra.ArbitraryArgs,
+		ValidArgsFunction: catalog.CompletionFunc(),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			// Import command(s) from the CLI flag
+			verbose, err := cmd.Flags().GetBool("verbose")
+			if err != nil {
+				return err
+			}
+
+			// Get the appropriate label handler based on configured output style
+			ctx := cmd.Context()
+			output.GetLabelHandler(ctx)(cmd, verbose, args...)
+
+			return nil
+		},
+	}
+
+	labelsCmd.Flags().BoolP("verbose", "v", false, "expand labels referenced in the given filter")
+
+	return labelsCmd
+}
+
+// catalogCmd configures the catalog command
+func catalogCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "catalog",
+		Short: "Print information on the cached repository catalog",
+		Args:  cobra.NoArgs,
+		Run: func(cmd *cobra.Command, _ []string) {
+			output.GetCatalogHandler(cmd.Context())(cmd)
+		},
 	}
 }

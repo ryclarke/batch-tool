@@ -16,7 +16,7 @@ import (
 // addMergeCmd initializes the pr merge command
 func addMergeCmd() *cobra.Command {
 	mergeCmd := &cobra.Command{
-		Use:               "merge <repository> ...",
+		Use:               "merge <repository>...",
 		Short:             "Merge accepted pull requests",
 		Args:              cobra.MinimumNArgs(1),
 		ValidArgsFunction: catalog.CompletionFunc(),

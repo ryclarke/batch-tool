@@ -20,8 +20,8 @@ func TestPrCmd(t *testing.T) {
 		t.Fatal("Cmd() returned nil")
 	}
 
-	if cmd.Use != "pr [cmd] <repository> ..." {
-		t.Errorf("Expected Use to be 'pr [cmd] <repository> ...', got %s", cmd.Use)
+	if cmd.Use != "pr [cmd] <repository>..." {
+		t.Errorf("Expected Use to be 'pr [cmd] <repository>...', got %s", cmd.Use)
 	}
 
 	if cmd.Short == "" {
@@ -179,8 +179,8 @@ func TestAddNewCmd(t *testing.T) {
 		t.Fatal("addNewCmd() returned nil")
 	}
 
-	if cmd.Use != "new <repository> ..." {
-		t.Errorf("Expected Use to be 'new <repository> ...', got %s", cmd.Use)
+	if cmd.Use != "new <repository>..." {
+		t.Errorf("Expected Use to be 'new <repository>...', got %s", cmd.Use)
 	}
 
 	if cmd.Short == "" {
@@ -227,8 +227,8 @@ func TestAddEditCmd(t *testing.T) {
 		t.Fatal("addEditCmd() returned nil")
 	}
 
-	if cmd.Use != "edit <repository> ..." {
-		t.Errorf("Expected Use to be 'edit <repository> ...', got %s", cmd.Use)
+	if cmd.Use != "edit <repository>..." {
+		t.Errorf("Expected Use to be 'edit <repository>...', got %s", cmd.Use)
 	}
 
 	if cmd.Short == "" {
@@ -269,8 +269,8 @@ func TestAddMergeCmd(t *testing.T) {
 		t.Fatal("addMergeCmd() returned nil")
 	}
 
-	if cmd.Use != "merge <repository> ..." {
-		t.Errorf("Expected Use to be 'merge <repository> ...', got %s", cmd.Use)
+	if cmd.Use != "merge <repository>..." {
+		t.Errorf("Expected Use to be 'merge <repository>...', got %s", cmd.Use)
 	}
 
 	if cmd.Short == "" {

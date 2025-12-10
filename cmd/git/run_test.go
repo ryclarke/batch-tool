@@ -24,8 +24,11 @@ func setupTestGitRepos(t *testing.T, repos []string) string {
 	}
 
 	cmd := testGitExecCommand(t, originPath, "git", "init", "--bare")
+	var initOut bytes.Buffer
+	cmd.Stdout = &initOut
+	cmd.Stderr = &initOut
 	if err := cmd.Run(); err != nil {
-		t.Fatalf("Failed to init bare repo: %v", err)
+		t.Fatalf("Failed to init bare repo: %v\nOutput: %s", err, initOut.String())
 	}
 
 	// Create directory structure: tmpDir/host/project/repo
@@ -46,13 +49,17 @@ func setupTestGitRepos(t *testing.T, repos []string) string {
 			{"git", "checkout", "-b", "main"},
 			{"git", "commit", "--allow-empty", "-m", "Initial commit"},
 			{"git", "remote", "add", "origin", originPath},
+			{"git", "branch", "-M", "main"}, // Ensure main branch is the current branch
 			{"git", "push", "-u", "origin", "main"},
 		}
 
 		for _, cmdArgs := range cmds {
 			cmd := testGitExecCommand(t, repoDir, cmdArgs[0], cmdArgs[1:]...)
+			var cmdOut bytes.Buffer
+			cmd.Stdout = &cmdOut
+			cmd.Stderr = &cmdOut
 			if err := cmd.Run(); err != nil {
-				t.Fatalf("Failed to run git command %v in %s: %v", cmdArgs, repoDir, err)
+				t.Fatalf("Failed to run git command %v in %s: %v\nOutput: %s", cmdArgs, repoDir, err, cmdOut.String())
 			}
 		}
 

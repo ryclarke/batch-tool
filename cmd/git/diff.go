@@ -10,7 +10,7 @@ import (
 func addDiffCmd() *cobra.Command {
 	// diffCmd represents the diff command
 	diffCmd := &cobra.Command{
-		Use:               "diff <repository> ...",
+		Use:               "diff <repository>...",
 		Short:             "Git diff of each repository",
 		Args:              cobra.MinimumNArgs(1),
 		ValidArgsFunction: catalog.CompletionFunc(),

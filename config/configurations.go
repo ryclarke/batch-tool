@@ -112,7 +112,7 @@ func Init(ctx context.Context) context.Context {
 
 	// If a config file is found, read it in.
 	if err := v.ReadInConfig(); err == nil {
-		fmt.Printf("Using config file: %v\n\n", v.ConfigFileUsed())
+		fmt.Fprintf(os.Stderr, "Using config file: %v\n\n", v.ConfigFileUsed())
 	}
 
 	return SetViper(ctx, v)
@@ -141,7 +141,7 @@ func setDefaults(v *viper.Viper) {
 
 	v.SetDefault(CatalogCacheFile, ".catalog")
 	v.SetDefault(CatalogCacheTTL, "24h")
-	v.SetDefault(OutputStyle, "native")
+	v.SetDefault(OutputStyle, "tui")
 	v.SetDefault(ChannelBuffer, 100)
 	v.SetDefault(MaxConcurrency, runtime.NumCPU()) // Default to number of logical CPUs
 	v.SetDefault(WriteBackoff, "1s")

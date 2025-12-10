@@ -11,8 +11,8 @@ func TestAddCommitCmd(t *testing.T) {
 		t.Fatal("addCommitCmd() returned nil")
 	}
 
-	if cmd.Use != "commit <repository> ..." {
-		t.Errorf("Expected Use to be 'commit <repository> ...', got %s", cmd.Use)
+	if cmd.Use != "commit <repository>..." {
+		t.Errorf("Expected Use to be 'commit <repository>...', got %s", cmd.Use)
 	}
 
 	if cmd.Short == "" {

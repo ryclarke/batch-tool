@@ -17,6 +17,18 @@ func loadFixture(t *testing.T) context.Context {
 	return config.LoadFixture(t, "../../config")
 }
 
+// fakeCmd creates a minimal cobra.Command for testing with the given context and output buffer
+func fakeCmd(t *testing.T, ctx context.Context, out io.Writer) *cobra.Command {
+	t.Helper()
+	cmd := &cobra.Command{
+		Use: "test",
+	}
+	cmd.SetContext(ctx)
+	cmd.SetOut(out)
+	cmd.SetErr(out)
+	return cmd
+}
+
 // checkOutputContains checks that all expected messages are present in the output (supports map or slice)
 func checkOutputContains(t *testing.T, got string, want any) {
 	t.Helper()
@@ -53,15 +65,4 @@ func setupDirs(t *testing.T, ctx context.Context, repos []string) {
 		gitDir := config.Viper(ctx).GetString(config.GitDirectory)
 		os.RemoveAll(gitDir)
 	})
-}
-
-// fakeCmd creates a test cobra command with the given context and output writer
-func fakeCmd(t *testing.T, ctx context.Context, out io.Writer) *cobra.Command {
-	t.Helper()
-
-	cmd := &cobra.Command{}
-	cmd.SetContext(ctx)
-	cmd.SetOut(out)
-
-	return cmd
 }

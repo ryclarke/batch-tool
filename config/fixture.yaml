@@ -3,4 +3,5 @@ git:
   directory: ./tmp
 
 channels:
+  output-style: native
   buffer-size: 10

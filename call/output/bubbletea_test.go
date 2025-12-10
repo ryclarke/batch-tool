@@ -12,7 +12,48 @@ import (
 )
 
 // testCancelFunc is a no-op cancel function for tests
-func testCancelFunc() {}
+func testCancelFunc() { /* no-op */ }
+
+// makeClosedChannels creates closed channels for testing to avoid blocking
+func makeClosedChannels(count int) ([]<-chan string, []<-chan error) {
+	outputChans := make([]<-chan string, count)
+	errChans := make([]<-chan error, count)
+	for i := 0; i < count; i++ {
+		outCh := make(chan string)
+		errCh := make(chan error)
+		close(outCh)
+		close(errCh)
+		outputChans[i] = outCh
+		errChans[i] = errCh
+	}
+	return outputChans, errChans
+}
+
+// makeTestChannels creates open channels and a cleanup function for testing
+// Returns writable channels, read-only channels for passing to initialModel, and a cleanup function
+// The cleanup function MUST be called via defer to prevent goroutine leaks
+func makeTestChannels(count int) ([]chan string, []chan error, []<-chan string, []<-chan error, func()) {
+	outChans := make([]chan string, count)
+	errChans := make([]chan error, count)
+	outReaders := make([]<-chan string, count)
+	errReaders := make([]<-chan error, count)
+
+	for i := 0; i < count; i++ {
+		outChans[i] = make(chan string)
+		errChans[i] = make(chan error)
+		outReaders[i] = outChans[i]
+		errReaders[i] = errChans[i]
+	}
+
+	cleanup := func() {
+		for i := 0; i < count; i++ {
+			close(outChans[i])
+			close(errChans[i])
+		}
+	}
+
+	return outChans, errChans, outReaders, errReaders, cleanup
+}
 
 // TestBuildCommandString tests the command string building logic
 func TestBuildCommandString(t *testing.T) {
@@ -66,11 +107,9 @@ func TestBuildCommandString(t *testing.T) {
 func TestInitialModel(t *testing.T) {
 	cmd := &cobra.Command{Use: "test"}
 	repos := []string{"repo1", "repo2", "repo3"}
-	outputChans := make([]<-chan string, 3)
-	errChans := make([]<-chan error, 3)
+	outputChans, errChans := makeClosedChannels(len(repos))
 
 	m := initialModel(cmd, repos, outputChans, errChans, testCancelFunc)
-
 	if len(m.repos) != 3 {
 		t.Errorf("Expected 3 repos, got %d", len(m.repos))
 	}
@@ -100,11 +139,7 @@ func TestInitialModel(t *testing.T) {
 func TestHandleRepoOutput(t *testing.T) {
 	cmd := &cobra.Command{Use: "test"}
 	repos := []string{"repo1"}
-
-	out := make(chan string)
-	err := make(chan error)
-	outputChans := []<-chan string{out}
-	errChans := []<-chan error{err}
+	outputChans, errChans := makeClosedChannels(len(repos))
 
 	m := initialModel(cmd, repos, outputChans, errChans, testCancelFunc)
 	m.viewport = viewport.New(80, 24)
@@ -125,9 +160,6 @@ func TestHandleRepoOutput(t *testing.T) {
 	if !m.repos[0].active {
 		t.Error("Expected repo to be active after first output")
 	}
-
-	close(out)
-	close(err)
 }
 
 // TestHandleRepoError tests error message handling
@@ -268,15 +300,61 @@ func TestCountCompleted(t *testing.T) {
 	}
 }
 
+// TestCountErrors tests the count errors function
+func TestCountErrors(t *testing.T) {
+	cmd := &cobra.Command{Use: "test"}
+	repos := []string{"repo1", "repo2", "repo3"}
+
+	out := make([]<-chan string, 3)
+	err := make([]<-chan error, 3)
+	for i := range out {
+		outChan := make(chan string)
+		errChan := make(chan error)
+		out[i] = outChan
+		err[i] = errChan
+		defer close(outChan)
+		defer close(errChan)
+	}
+
+	m := initialModel(cmd, repos, out, err, testCancelFunc)
+
+	if count := m.countErrors(); count != 0 {
+		t.Errorf("Expected 0 errors, got %d", count)
+	}
+
+	// Completed but no errors
+	m.repos[0].completed = true
+	m.repos[0].failed = false
+	if count := m.countErrors(); count != 0 {
+		t.Errorf("Expected 0 errors for completed successful repo, got %d", count)
+	}
+
+	// Completed with errors
+	m.repos[1].completed = true
+	m.repos[1].failed = true
+	if count := m.countErrors(); count != 1 {
+		t.Errorf("Expected 1 error, got %d", count)
+	}
+
+	// Not completed with failed flag (shouldn't count)
+	m.repos[2].completed = false
+	m.repos[2].failed = true
+	if count := m.countErrors(); count != 1 {
+		t.Errorf("Expected 1 error (incomplete repos shouldn't count), got %d", count)
+	}
+
+	// Complete the third repo
+	m.repos[2].completed = true
+	if count := m.countErrors(); count != 2 {
+		t.Errorf("Expected 2 errors, got %d", count)
+	}
+}
+
 // TestCalculateElapsed tests the elapsed time calculation
 func TestCalculateElapsed(t *testing.T) {
 	cmd := &cobra.Command{Use: "test"}
 	repos := []string{"repo1"}
-
-	out := make(chan string)
-	err := make(chan error)
-	outputChans := []<-chan string{out}
-	errChans := []<-chan error{err}
+	outputChans, errChans := makeClosedChannels(len(repos))
 
 	m := initialModel(cmd, repos, outputChans, errChans, testCancelFunc)
 	m.startTime = time.Now().Add(-5 * time.Second)
@@ -294,20 +372,13 @@ func TestCalculateElapsed(t *testing.T) {
 	if elapsed != 3*time.Second {
 		t.Errorf("Expected elapsed time of 3s, got %v", elapsed)
 	}
-
-	close(out)
-	close(err)
 }
 
 // TestFormatRepoHeader tests repository header formatting
 func TestFormatRepoHeader(t *testing.T) {
 	cmd := &cobra.Command{Use: "test"}
 	repos := []string{"repo1"}
-
-	out := make(chan string)
-	err := make(chan error)
-	outputChans := []<-chan string{out}
-	errChans := []<-chan error{err}
+	outputChans, errChans := makeClosedChannels(len(repos))
 
 	m := initialModel(cmd, repos, outputChans, errChans, testCancelFunc)
 
@@ -366,16 +437,15 @@ func TestFormatRepoHeader(t *testing.T) {
 			}
 		})
 	}
-
-	close(out)
-	close(err)
 }
 
 // TestRenderProgressBar tests the progress bar rendering
 func TestRenderProgressBar(t *testing.T) {
+	styles := newOutputStyles(80) // Create styles for testing
 	tests := []struct {
 		name      string
 		completed int
+		errors    int
 		total     int
 		width     int
 		check     func(string) bool
@@ -383,6 +453,7 @@ func TestRenderProgressBar(t *testing.T) {
 		{
 			name:      "zero progress",
 			completed: 0,
+			errors:    0,
 			total:     10,
 			width:     20,
 			check: func(s string) bool {
@@ -390,8 +461,9 @@ func TestRenderProgressBar(t *testing.T) {
 			},
 		},
 		{
-			name:      "full progress",
+			name:      "full progress no errors",
 			completed: 10,
+			errors:    0,
 			total:     10,
 			width:     20,
 			check: func(s string) bool {
@@ -401,6 +473,7 @@ func TestRenderProgressBar(t *testing.T) {
 		{
 			name:      "partial progress",
 			completed: 5,
+			errors:    0,
 			total:     10,
 			width:     20,
 			check: func(s string) bool {
@@ -408,8 +481,20 @@ func TestRenderProgressBar(t *testing.T) {
 			},
 		},
 		{
+			name:      "progress with errors",
+			completed: 10,
+			errors:    3,
+			total:     10,
+			width:     20,
+			check: func(s string) bool {
+				// Should contain both success and error indicators
+				return strings.Contains(s, "█")
+			},
+		},
+		{
 			name:      "zero total",
 			completed: 0,
+			errors:    0,
 			total:     0,
 			width:     20,
 			check: func(s string) bool {
@@ -420,7 +505,7 @@ func TestRenderProgressBar(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := renderProgressBar(tt.completed, tt.total, tt.width)
+			result := renderProgressBar(styles, tt.completed, tt.errors, tt.total, tt.width)
 			if !tt.check(result) {
 				t.Errorf("Progress bar check failed for %s: %s", tt.name, result)
 			}
@@ -665,7 +750,8 @@ func TestFormatRepoHeaderInactive(t *testing.T) {
 
 // TestRenderProgressBarSmallWidth tests minimum width handling
 func TestRenderProgressBarSmallWidth(t *testing.T) {
-	result := renderProgressBar(5, 10, 5)
+	styles := newOutputStyles(80)
+	result := renderProgressBar(styles, 5, 0, 10, 5)
 	// Should use minimum width of 40
 	if len(result) < 10 {
 		t.Errorf("Expected progress bar to use minimum width, got length %d", len(result))
@@ -760,17 +846,20 @@ func TestRenderFooter(t *testing.T) {
 
 	// Test footer while processing
 	footer := m.renderFooter()
-	if !strings.Contains(footer, "Ctrl+C to interrupt") {
-		t.Error("Expected footer to show interrupt message while processing")
+	if !strings.Contains(footer, "↑/↓: scroll") {
+		t.Error("Expected footer to show scroll instructions while processing")
+	}
+	if !strings.Contains(footer, "supports Vim keybinds") {
+		t.Error("Expected footer to mention vim key support")
 	}
 
 	// Test footer when done
 	m.allDone = true
 	footer = m.renderFooter()
-	if !strings.Contains(footer, "All repositories processed") {
+	if !strings.Contains(footer, "All done") {
 		t.Error("Expected footer to show completion message when done")
 	}
-	if !strings.Contains(footer, "q or Ctrl+C to quit") {
+	if !strings.Contains(footer, "q: quit") {
 		t.Error("Expected footer to show quit instructions when done")
 	}
 
