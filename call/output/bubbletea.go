@@ -36,10 +36,17 @@ func BubbleteaHandler(cmd *cobra.Command, repos []string, output []<-chan string
 		tea.WithMouseCellMotion(), // Enable mouse support
 	)
 
-	if _, err := p.Run(); err != nil {
+	finalModel, err := p.Run()
+	if err != nil {
 		fmt.Fprintf(cmd.ErrOrStderr(), "Error running bubbletea UI: %v\nUsing default output handler...\n", err)
 		// Fallback to native output handling
 		NativeHandler(cmd, repos, output, errs)
+		return
+	}
+
+	// If the user requested to persist output, print it to the terminal
+	if m, ok := finalModel.(model); ok && m.printOutput {
+		printFullOutput(cmd, m)
 	}
 }
 
@@ -54,6 +61,7 @@ type model struct {
 	endTime     time.Time
 	quitting    bool
 	allDone     bool
+	printOutput bool
 	viewport    viewport.Model
 	ready       bool
 	width       int
@@ -245,6 +253,15 @@ func (m model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.quitting = true
 		return m, tea.Quit
 
+	case "p":
+		// Only allow persist output with 'p' after all processing is complete
+		if m.allDone {
+			m.printOutput = true
+			m.quitting = true
+			return m, tea.Quit
+		}
+		fallthrough
+
 	case "esc", "q":
 		// Only allow quit with 'esc' or 'q' after all processing is complete
 		if m.allDone {
@@ -340,23 +357,17 @@ func (m model) allReposCompleted() bool {
 
 // buildContent generates the scrollable content for the viewport
 func (m model) buildContent() string {
+	return m.buildStyledContent()
+}
+
+// buildStyledContent generates styled content for all repositories.
+// This function is used by both the viewport (buildContent) and terminal output (printFullOutput).
+func (m model) buildStyledContent() string {
 	var content strings.Builder
 
 	for i, repo := range m.repos {
-		content.WriteString(m.formatRepoHeader(repo))
-		content.WriteString("\n")
-
-		// Show all output
-		for _, line := range repo.output {
-			content.WriteString(m.styles.output.Render(line))
-			content.WriteString("\n")
-		}
-
-		// Show errors
-		for _, errMsg := range repo.errors {
-			content.WriteString(m.styles.output.Render(fmt.Sprintf("  ERROR: %s", errMsg.Error())))
-			content.WriteString("\n")
-		}
+		// Add repository section
+		content.WriteString(m.formatRepoSection(repo))
 
 		// Add separator between repos (except for the last one)
 		if i < len(m.repos)-1 {
@@ -366,6 +377,50 @@ func (m model) buildContent() string {
 	}
 
 	return content.String()
+}
+
+// printFullOutput prints the complete output to the terminal without viewport wrapping.
+// This allows the full output to be persisted after the TUI exits.
+func printFullOutput(cmd *cobra.Command, m model) {
+	out := cmd.OutOrStdout()
+	err := cmd.ErrOrStderr()
+
+	// Print command header
+	fmt.Fprintln(err, m.styles.progress.Render(m.command))
+
+	// Print output summary
+	progressText := fmt.Sprintf(summaryText, len(m.repos), m.calculateElapsed())
+	fmt.Fprintln(err, m.styles.progress.Render(progressText))
+	fmt.Fprintln(err)
+
+	// Print all repository outputs using shared formatting logic
+	content := m.buildStyledContent()
+	fmt.Fprint(out, content)
+	fmt.Fprintln(out)
+}
+
+// formatRepoSection formats a complete repository section including header, output, and errors.
+func (m model) formatRepoSection(repo repoStatus) string {
+	var section strings.Builder
+
+	// Repository header
+	section.WriteString(m.formatRepoHeader(repo))
+	section.WriteString("\n")
+
+	// Show all output lines
+	for _, line := range repo.output {
+		section.WriteString(m.styles.output.Render(line))
+		section.WriteString("\n")
+	}
+
+	// Show errors
+	for _, errMsg := range repo.errors {
+		errorLine := fmt.Sprintf("  ERROR: %s", errMsg.Error())
+		section.WriteString(m.styles.outputErr.Render(errorLine))
+		section.WriteString("\n")
+	}
+
+	return section.String()
 }
 
 // formatRepoHeader returns a styled repository header based on its status

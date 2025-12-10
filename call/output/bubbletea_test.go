@@ -29,32 +29,6 @@ func makeClosedChannels(count int) ([]<-chan string, []<-chan error) {
 	return outputChans, errChans
 }
 
-// makeTestChannels creates open channels and a cleanup function for testing
-// Returns writable channels, read-only channels for passing to initialModel, and a cleanup function
-// The cleanup function MUST be called via defer to prevent goroutine leaks
-func makeTestChannels(count int) ([]chan string, []chan error, []<-chan string, []<-chan error, func()) {
-	outChans := make([]chan string, count)
-	errChans := make([]chan error, count)
-	outReaders := make([]<-chan string, count)
-	errReaders := make([]<-chan error, count)
-
-	for i := 0; i < count; i++ {
-		outChans[i] = make(chan string)
-		errChans[i] = make(chan error)
-		outReaders[i] = outChans[i]
-		errReaders[i] = errChans[i]
-	}
-
-	cleanup := func() {
-		for i := 0; i < count; i++ {
-			close(outChans[i])
-			close(errChans[i])
-		}
-	}
-
-	return outChans, errChans, outReaders, errReaders, cleanup
-}
-
 // TestBuildCommandString tests the command string building logic
 func TestBuildCommandString(t *testing.T) {
 	tests := []struct {
@@ -1003,6 +977,105 @@ func TestHandleKeyPressQ(t *testing.T) {
 
 	close(out)
 	close(err)
+}
+
+// TestHandleKeyPressP tests 'p' key handling for persist output
+func TestHandleKeyPressP(t *testing.T) {
+	cmd := &cobra.Command{Use: "test"}
+	repos := []string{"repo1"}
+
+	out := make(chan string)
+	err := make(chan error)
+	outputChans := []<-chan string{out}
+	errChans := []<-chan error{err}
+
+	m := initialModel(cmd, repos, outputChans, errChans, testCancelFunc)
+	m.ready = true
+	m.viewport = viewport.New(80, 24)
+
+	// Test 'p' when not done - should not quit or persist
+	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'p'}}
+	newModel, _ := m.handleKeyPress(msg)
+	m = newModel.(model)
+
+	if m.quitting {
+		t.Error("Expected 'p' to not quit when processing is not done")
+	}
+	if m.printOutput {
+		t.Error("Expected 'p' to not set persistAfter when processing is not done")
+	}
+
+	// Test 'p' when done - should quit and persist
+	m.allDone = true
+	newModel, _ = m.handleKeyPress(msg)
+	m = newModel.(model)
+
+	if !m.quitting {
+		t.Error("Expected 'p' to quit when all processing is done")
+	}
+	if !m.printOutput {
+		t.Error("Expected 'p' to set persistAfter when all processing is done")
+	}
+
+	close(out)
+	close(err)
+}
+
+// TestPrintFullOutput tests the printFullOutput function
+func TestPrintFullOutput(t *testing.T) {
+	var output strings.Builder
+	var errOut strings.Builder
+	cmd := &cobra.Command{Use: "test"}
+	cmd.SetOut(&output)
+	cmd.SetErr(&errOut)
+
+	repos := []string{"repo1", "repo2"}
+	outputChans, errChans := makeClosedChannels(2)
+
+	m := initialModel(cmd, repos, outputChans, errChans, testCancelFunc)
+	m.allDone = true
+	m.endTime = m.startTime.Add(2 * time.Second)
+
+	// Set up some test output
+	m.repos[0].completed = true
+	m.repos[0].failed = false
+	m.repos[0].output = []string{"line 1", "line 2"}
+
+	m.repos[1].completed = true
+	m.repos[1].failed = true
+	m.repos[1].output = []string{"error line"}
+	m.repos[1].errors = []error{errors.New("test error")}
+
+	printFullOutput(cmd, m)
+
+	result := output.String()
+	errs := errOut.String()
+
+	// Verify the output contains expected elements
+	if !strings.Contains(errs, "Executing test") {
+		t.Error("Expected output to contain command string (in stderr)")
+	}
+	if !strings.Contains(errs, "2 repositories") {
+		t.Error("Expected output to contain summary (in stderr)")
+	}
+	if !strings.Contains(result, "✓ repo1") {
+		t.Error("Expected output to contain successful repo header")
+	}
+	if !strings.Contains(result, "✗ repo2") {
+		t.Error("Expected output to contain failed repo header")
+	}
+	if !strings.Contains(result, "line 1") {
+		t.Error("Expected output to contain repo1 output")
+	}
+	if !strings.Contains(result, "line 2") {
+		t.Error("Expected output to contain repo1 output")
+	}
+	if !strings.Contains(result, "error line") {
+		t.Error("Expected output to contain repo2 output")
+	}
+	if !strings.Contains(result, "ERROR: test error") {
+		t.Error("Expected output to contain error message (from subroutine, as stdout)")
+	}
 }
 
 // TestTickCmd tests the tick command

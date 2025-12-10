@@ -32,10 +32,12 @@ const (
 const (
 	separatorLine = "  ─────────────────────────────────────"
 
-	progressText = "Progress: %d/%d repositories | Elapsed: %s"
-	noReposText  = "No repositories matched by provided filter, nothing to do."
-	footerText   = "↑/↓: scroll | also supports Vim keybinds"
-	footerDone   = "✓ All done! " + footerText + " | Esc or q: quit"
+	summaryText  = "%d repositories | Elapsed: %s"
+	progressText = "Progress: %d/" + summaryText
+
+	noReposText = "No repositories matched by provided filter, nothing to do."
+	footerText  = "↑/↓: scroll | also supports Vim keybinds"
+	footerDone  = "✓ All done! " + footerText + " | p: print output | Esc or q: quit"
 
 	repoWaitingFormat = "⏸ %s"
 	repoActiveFormat  = "▶ %s"
@@ -82,8 +84,9 @@ type outputStyles struct {
 	repoError   lipgloss.Style
 
 	separator lipgloss.Style
-	output    lipgloss.Style
 	status    lipgloss.Style
+	output    lipgloss.Style
+	outputErr lipgloss.Style
 
 	progress              lipgloss.Style
 	progressBarIncomplete lipgloss.Style
@@ -103,6 +106,7 @@ func newOutputStyles(width int) outputStyles {
 		separator: color(colorGray4),
 		status:    color(colorPurple).Italic(true),
 		output:    wrapColor(colorWhite, width),
+		outputErr: wrapColor(colorRed, width),
 
 		progress:              color(colorCyan),
 		progressBarIncomplete: color(colorGray4).Background(lipgloss.Color(colorGray2)),

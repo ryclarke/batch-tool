@@ -4,8 +4,6 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"io"
-	"os"
 	"strings"
 	"testing"
 
@@ -171,31 +169,6 @@ func TestNativeHandler(t *testing.T) {
 
 	// Verify errors were printed to stderr
 	checkOutputContains(t, errOutput, []string{"ERROR:", "test error for repo1", "test error for repo2"})
-}
-
-// captureStdout captures stdout during test execution
-func captureStdout(t *testing.T, fn func()) string {
-	t.Helper()
-	old := os.Stdout
-	r, w, _ := os.Pipe()
-	os.Stdout = w
-
-	fn()
-
-	w.Close()
-	os.Stdout = old
-
-	var buf bytes.Buffer
-	_, _ = io.Copy(&buf, r)
-	return buf.String()
-}
-
-// checkStringEqual verifies two strings are equal
-func checkStringEqual(t *testing.T, got, want string) {
-	t.Helper()
-	if got != want {
-		t.Errorf("got %q, want %q", got, want)
-	}
 }
 
 // checkOutputNotContains verifies output does not contain unwanted strings
