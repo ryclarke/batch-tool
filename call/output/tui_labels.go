@@ -157,7 +157,14 @@ func (m labelsListModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		case "q", "esc", "ctrl+c":
 			return m, tea.Quit
+
 		default:
+			// Use shared viewport navigation handler
+			if handleKeyPress(&m.viewport, msg.String()) {
+				return m, nil
+			}
+
+			// Let viewport handle all other keys for scrolling
 			m.viewport, cmd = m.viewport.Update(msg)
 			return m, cmd
 		}

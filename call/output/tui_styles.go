@@ -13,19 +13,21 @@ import (
 	"github.com/ryclarke/batch-tool/config"
 )
 
-// Color constants
+// Color constants - Dracula theme
 const (
-	colorWhite  = "#FFFFFF"
-	colorBlue   = "#0000FF"
-	colorGreen  = "#04B575"
-	colorRed    = "#FF0000"
-	colorYellow = "#FFD700"
-	colorBrown  = "#8B4513"
-	colorPurple = "#7D56F4"
-	colorCyan   = "#00D4FF"
-	colorGray2  = "#222222"
-	colorGray4  = "#444444"
-	colorGray6  = "#666666"
+	colorBackground  = "#282a36"
+	colorCurrentLine = "#44475a"
+	colorForeground  = "#f8f8f2"
+	colorComment     = "#6272a4"
+	colorCyan        = "#8be9fd"
+	colorGreen       = "#50fa7b"
+	colorGreenDark   = "#2d7a45" // Darker green for progress bar
+	colorOrange      = "#ffb86c"
+	colorPink        = "#ff79c6"
+	colorPurple      = "#bd93f9"
+	colorRed         = "#ff5555"
+	colorRedDark     = "#8b2e2e" // Darker red for progress bar
+	colorYellow      = "#f1fa8c"
 )
 
 // Common string constants and section formatting
@@ -99,20 +101,20 @@ func newOutputStyles(width int) outputStyles {
 	return outputStyles{
 		wrap: wrapStyleFunc(width),
 
-		repoActive:  color(colorBlue).Bold(true),
-		repoWaiting: color(colorGray6).Bold(true),
+		repoActive:  color(colorCyan).Bold(true),
+		repoWaiting: color(colorComment).Bold(true),
 		repoSuccess: color(colorGreen).Bold(true),
 		repoError:   color(colorRed).Bold(true),
 
-		separator: color(colorGray4),
+		separator: color(colorCurrentLine),
 		status:    color(colorPurple).Italic(true),
-		output:    wrapColor(colorWhite, width),
+		output:    wrapColor(colorForeground, width),
 		outputErr: wrapColor(colorRed, width),
 
 		progress:              color(colorCyan),
-		progressBarIncomplete: color(colorGray4).Background(lipgloss.Color(colorGray2)),
-		progressBarComplete:   color(colorGreen).Background(lipgloss.Color(colorGreen)),
-		progressBarError:      color(colorRed).Background(lipgloss.Color(colorRed)),
+		progressBarIncomplete: color(colorCurrentLine).Background(lipgloss.Color(colorBackground)),
+		progressBarComplete:   color(colorGreenDark).Background(lipgloss.Color(colorGreenDark)),
+		progressBarError:      color(colorRedDark).Background(lipgloss.Color(colorRedDark)),
 	}
 }
 
@@ -138,18 +140,18 @@ func newLabelStyles(width int) labelStyles {
 	return labelStyles{
 		wrap: wrapStyleFunc(width),
 
-		repo:     color(colorWhite),
-		unwanted: color(colorGray6),
-		count:    color(colorGray6),
+		repo:     color(colorForeground),
+		unwanted: color(colorComment),
+		count:    color(colorComment),
 		forced:   color(colorGreen).Bold(true),
-		excluded: color(colorBrown).Bold(true),
+		excluded: color(colorOrange).Bold(true),
 		normal:   color(colorPurple).Bold(true),
 		symbol:   color(colorPurple),
 
-		separator: color(colorGray4),
+		separator: color(colorCurrentLine),
 		section:   color(colorCyan).Bold(true),
 		title:     color(colorCyan).Bold(true),
-		help:      color(colorGray6),
+		help:      color(colorComment),
 	}
 }
 
@@ -176,15 +178,15 @@ func newCatalogStyles(width int) catalogStyles {
 
 		title:       color(colorCyan).Bold(true),
 		repoName:    color(colorGreen).Bold(true),
-		description: wrapColor(colorWhite, width),
+		description: wrapColor(colorForeground, width),
 
-		metaLabel:   color(colorGray4),
-		metaValue:   color(colorGray6),
-		publicRepo:  color(colorRed),
+		metaLabel:   color(colorComment),
+		metaValue:   color(colorPurple),
+		publicRepo:  color(colorPink),
 		privateRepo: color(colorYellow),
 		label:       color(colorPurple),
-		separator:   color(colorGray4),
-		help:        color(colorGray6),
+		separator:   color(colorCurrentLine),
+		help:        color(colorComment),
 	}
 }
 
