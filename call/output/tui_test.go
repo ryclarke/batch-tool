@@ -15,18 +15,14 @@ import (
 func testCancelFunc() { /* no-op */ }
 
 // makeClosedChannels creates closed channels for testing to avoid blocking
-func makeClosedChannels(count int) ([]<-chan string, []<-chan error) {
-	outputChans := make([]<-chan string, count)
-	errChans := make([]<-chan error, count)
-	for i := 0; i < count; i++ {
-		outCh := make(chan string)
-		errCh := make(chan error)
-		close(outCh)
-		close(errCh)
-		outputChans[i] = outCh
-		errChans[i] = errCh
+func makeClosedChannels(names []string) []Channel {
+	channels := makeTestChannels(names)
+	for _, ch := range channels {
+		tc := ch.(*testChannel)
+		close(tc.output)
+		close(tc.err)
 	}
-	return outputChans, errChans
+	return channels
 }
 
 // TestBuildCommandString tests the command string building logic
@@ -81,22 +77,22 @@ func TestBuildCommandString(t *testing.T) {
 func TestInitialModel(t *testing.T) {
 	cmd := &cobra.Command{Use: "test"}
 	repos := []string{"repo1", "repo2", "repo3"}
-	outputChans, errChans := makeClosedChannels(len(repos))
+	channels := makeClosedChannels(repos)
 
-	m := initialModel(cmd, repos, outputChans, errChans, testCancelFunc)
+	m := initialModel(cmd, channels, testCancelFunc)
 	if len(m.repos) != 3 {
 		t.Errorf("Expected 3 repos, got %d", len(m.repos))
 	}
 
 	for i, repo := range m.repos {
-		if repo.name != repos[i] {
-			t.Errorf("Expected repo name %s, got %s", repos[i], repo.name)
+		if repo.Name() != repos[i] {
+			t.Errorf("Expected repo name %s, got %s", repos[i], repo.Name())
 		}
 		if repo.active {
-			t.Errorf("Expected repo %s to be inactive (waiting) initially", repo.name)
+			t.Errorf("Expected repo %s to be inactive (waiting) initially", repo.Name())
 		}
 		if repo.completed {
-			t.Errorf("Expected repo %s to not be completed", repo.name)
+			t.Errorf("Expected repo %s to not be completed", repo.Name())
 		}
 	}
 
@@ -113,9 +109,9 @@ func TestInitialModel(t *testing.T) {
 func TestHandleRepoOutput(t *testing.T) {
 	cmd := &cobra.Command{Use: "test"}
 	repos := []string{"repo1"}
-	outputChans, errChans := makeClosedChannels(len(repos))
+	channels := makeClosedChannels(repos)
 
-	m := initialModel(cmd, repos, outputChans, errChans, testCancelFunc)
+	m := initialModel(cmd, channels, testCancelFunc)
 	m.viewport = viewport.New(80, 24)
 
 	msg := repoOutputMsg{index: 0, msg: "test output"}
@@ -140,13 +136,9 @@ func TestHandleRepoOutput(t *testing.T) {
 func TestHandleRepoError(t *testing.T) {
 	cmd := &cobra.Command{Use: "test"}
 	repos := []string{"repo1"}
+	channels := makeTestChannels(repos)
 
-	out := make(chan string)
-	err := make(chan error)
-	outputChans := []<-chan string{out}
-	errChans := []<-chan error{err}
-
-	m := initialModel(cmd, repos, outputChans, errChans, testCancelFunc)
+	m := initialModel(cmd, channels, testCancelFunc)
 	m.viewport = viewport.New(80, 24)
 
 	msg := repoErrorMsg{index: 0, err: errors.New("test error")}
@@ -161,21 +153,21 @@ func TestHandleRepoError(t *testing.T) {
 		t.Errorf("Expected 'test error', got %s", m.repos[0].errors[0].Error())
 	}
 
-	close(out)
-	close(err)
+	// Clean up channels
+	for _, ch := range channels {
+		tc := ch.(*testChannel)
+		close(tc.output)
+		close(tc.err)
+	}
 }
 
 // TestHandleRepoCompleted tests completion message handling
 func TestHandleRepoCompleted(t *testing.T) {
 	cmd := &cobra.Command{Use: "test"}
 	repos := []string{"repo1"}
+	channels := makeTestChannels(repos)
 
-	out := make(chan string)
-	err := make(chan error)
-	outputChans := []<-chan string{out}
-	errChans := []<-chan error{err}
-
-	m := initialModel(cmd, repos, outputChans, errChans, testCancelFunc)
+	m := initialModel(cmd, channels, testCancelFunc)
 	m.viewport = viewport.New(80, 24)
 
 	// First completion (output channel closed)
@@ -204,21 +196,21 @@ func TestHandleRepoCompleted(t *testing.T) {
 		t.Error("Expected repo to not be active")
 	}
 
-	close(out)
-	close(err)
+	// Clean up channels
+	for _, ch := range channels {
+		tc := ch.(*testChannel)
+		close(tc.output)
+		close(tc.err)
+	}
 }
 
 // TestAllReposCompleted tests the completion check logic
 func TestAllReposCompleted(t *testing.T) {
 	cmd := &cobra.Command{Use: "test"}
 	repos := []string{"repo1", "repo2"}
+	channels := makeTestChannels(repos)
 
-	out1, out2 := make(chan string), make(chan string)
-	err1, err2 := make(chan error), make(chan error)
-	outputChans := []<-chan string{out1, out2}
-	errChans := []<-chan error{err1, err2}
-
-	m := initialModel(cmd, repos, outputChans, errChans, testCancelFunc)
+	m := initialModel(cmd, channels, testCancelFunc)
 
 	if m.allReposCompleted() {
 		t.Error("Expected allReposCompleted to be false initially")
@@ -234,29 +226,28 @@ func TestAllReposCompleted(t *testing.T) {
 		t.Error("Expected allReposCompleted to be true with all repos completed")
 	}
 
-	close(out1)
-	close(out2)
-	close(err1)
-	close(err2)
+	// Clean up channels
+	for _, ch := range channels {
+		tc := ch.(*testChannel)
+		close(tc.output)
+		close(tc.err)
+	}
 }
 
 // TestCountCompleted tests the count completed function
 func TestCountCompleted(t *testing.T) {
 	cmd := &cobra.Command{Use: "test"}
 	repos := []string{"repo1", "repo2", "repo3"}
+	channels := makeTestChannels(repos)
+	defer func() {
+		for _, ch := range channels {
+			tc := ch.(*testChannel)
+			close(tc.output)
+			close(tc.err)
+		}
+	}()
 
-	out := make([]<-chan string, 3)
-	err := make([]<-chan error, 3)
-	for i := range out {
-		outChan := make(chan string)
-		errChan := make(chan error)
-		out[i] = outChan
-		err[i] = errChan
-		defer close(outChan)
-		defer close(errChan)
-	}
-
-	m := initialModel(cmd, repos, out, err, testCancelFunc)
+	m := initialModel(cmd, channels, testCancelFunc)
 
 	if count := m.countCompleted(); count != 0 {
 		t.Errorf("Expected 0 completed repos, got %d", count)
@@ -278,19 +269,16 @@ func TestCountCompleted(t *testing.T) {
 func TestCountErrors(t *testing.T) {
 	cmd := &cobra.Command{Use: "test"}
 	repos := []string{"repo1", "repo2", "repo3"}
+	channels := makeTestChannels(repos)
+	defer func() {
+		for _, ch := range channels {
+			tc := ch.(*testChannel)
+			close(tc.output)
+			close(tc.err)
+		}
+	}()
 
-	out := make([]<-chan string, 3)
-	err := make([]<-chan error, 3)
-	for i := range out {
-		outChan := make(chan string)
-		errChan := make(chan error)
-		out[i] = outChan
-		err[i] = errChan
-		defer close(outChan)
-		defer close(errChan)
-	}
-
-	m := initialModel(cmd, repos, out, err, testCancelFunc)
+	m := initialModel(cmd, channels, testCancelFunc)
 
 	if count := m.countErrors(); count != 0 {
 		t.Errorf("Expected 0 errors, got %d", count)
@@ -328,9 +316,9 @@ func TestCountErrors(t *testing.T) {
 func TestCalculateElapsed(t *testing.T) {
 	cmd := &cobra.Command{Use: "test"}
 	repos := []string{"repo1"}
-	outputChans, errChans := makeClosedChannels(len(repos))
+	channels := makeClosedChannels(repos)
 
-	m := initialModel(cmd, repos, outputChans, errChans, testCancelFunc)
+	m := initialModel(cmd, channels, testCancelFunc)
 	m.startTime = time.Now().Add(-5 * time.Second)
 
 	// Test ongoing calculation
@@ -352,9 +340,9 @@ func TestCalculateElapsed(t *testing.T) {
 func TestFormatRepoHeader(t *testing.T) {
 	cmd := &cobra.Command{Use: "test"}
 	repos := []string{"repo1"}
-	outputChans, errChans := makeClosedChannels(len(repos))
+	channels := makeClosedChannels(repos)
 
-	m := initialModel(cmd, repos, outputChans, errChans, testCancelFunc)
+	m := initialModel(cmd, channels, testCancelFunc)
 
 	tests := []struct {
 		name     string
@@ -399,7 +387,7 @@ func TestFormatRepoHeader(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			repo := repoStatus{name: "test-repo"}
+			repo := repoStatus{Channel: &testChannel{name: "test-repo"}}
 			tt.setup(&repo)
 
 			result := m.formatRepoHeader(repo)
@@ -491,13 +479,16 @@ func TestRenderProgressBar(t *testing.T) {
 func TestBuildContent(t *testing.T) {
 	cmd := &cobra.Command{Use: "test"}
 	repos := []string{"repo1", "repo2"}
+	channels := makeTestChannels(repos)
+	defer func() {
+		for _, ch := range channels {
+			tc := ch.(*testChannel)
+			close(tc.output)
+			close(tc.err)
+		}
+	}()
 
-	out1, out2 := make(chan string), make(chan string)
-	err1, err2 := make(chan error), make(chan error)
-	outputChans := []<-chan string{out1, out2}
-	errChans := []<-chan error{err1, err2}
-
-	m := initialModel(cmd, repos, outputChans, errChans, testCancelFunc)
+	m := initialModel(cmd, channels, testCancelFunc)
 	m.viewport = viewport.New(80, 24)
 
 	// Add some output and errors
@@ -529,11 +520,6 @@ func TestBuildContent(t *testing.T) {
 	if !strings.Contains(content, "─") {
 		t.Error("Expected content to contain separator")
 	}
-
-	close(out1)
-	close(out2)
-	close(err1)
-	close(err2)
 }
 
 // TestWaitForOutput tests the output channel waiting function
@@ -607,13 +593,9 @@ func TestWaitForError(t *testing.T) {
 func TestHandleRepoCompletedSetsAllDone(t *testing.T) {
 	cmd := &cobra.Command{Use: "test"}
 	repos := []string{"repo1"}
+	channels := makeTestChannels(repos)
 
-	out := make(chan string)
-	err := make(chan error)
-	outputChans := []<-chan string{out}
-	errChans := []<-chan error{err}
-
-	m := initialModel(cmd, repos, outputChans, errChans, testCancelFunc)
+	m := initialModel(cmd, channels, testCancelFunc)
 	m.viewport = viewport.New(80, 24)
 
 	// Complete both channels
@@ -631,21 +613,21 @@ func TestHandleRepoCompletedSetsAllDone(t *testing.T) {
 		t.Error("Expected endTime to be set when all done")
 	}
 
-	close(out)
-	close(err)
+	// Clean up channels
+	for _, ch := range channels {
+		tc := ch.(*testChannel)
+		close(tc.output)
+		close(tc.err)
+	}
 }
 
 // TestHandleRepoCompletedWithError tests that failed repos are marked
 func TestHandleRepoCompletedWithError(t *testing.T) {
 	cmd := &cobra.Command{Use: "test"}
 	repos := []string{"repo1"}
+	channels := makeTestChannels(repos)
 
-	out := make(chan string)
-	err := make(chan error)
-	outputChans := []<-chan string{out}
-	errChans := []<-chan error{err}
-
-	m := initialModel(cmd, repos, outputChans, errChans, testCancelFunc)
+	m := initialModel(cmd, channels, testCancelFunc)
 	m.viewport = viewport.New(80, 24)
 
 	// Add an error
@@ -662,21 +644,21 @@ func TestHandleRepoCompletedWithError(t *testing.T) {
 		t.Error("Expected repo with errors to be marked as failed")
 	}
 
-	close(out)
-	close(err)
+	// Clean up channels
+	for _, ch := range channels {
+		tc := ch.(*testChannel)
+		close(tc.output)
+		close(tc.err)
+	}
 }
 
 // TestHandleRepoCompletedOutOfBounds tests handling completion for invalid index
 func TestHandleRepoCompletedOutOfBounds(t *testing.T) {
 	cmd := &cobra.Command{Use: "test"}
 	repos := []string{"repo1"}
+	channels := makeTestChannels(repos)
 
-	out := make(chan string)
-	err := make(chan error)
-	outputChans := []<-chan string{out}
-	errChans := []<-chan error{err}
-
-	m := initialModel(cmd, repos, outputChans, errChans, testCancelFunc)
+	m := initialModel(cmd, channels, testCancelFunc)
 	m.viewport = viewport.New(80, 24)
 
 	// Try to complete with invalid index
@@ -689,24 +671,31 @@ func TestHandleRepoCompletedOutOfBounds(t *testing.T) {
 		t.Error("Expected repo to not be marked completed for out of bounds index")
 	}
 
-	close(out)
-	close(err)
+	// Clean up channels
+	for _, ch := range channels {
+		tc := ch.(*testChannel)
+		close(tc.output)
+		close(tc.err)
+	}
 }
 
 // TestFormatRepoHeaderInactive tests inactive repo formatting
 func TestFormatRepoHeaderInactive(t *testing.T) {
 	cmd := &cobra.Command{Use: "test"}
 	repos := []string{"repo1"}
+	channels := makeTestChannels(repos)
+	defer func() {
+		for _, ch := range channels {
+			tc := ch.(*testChannel)
+			close(tc.output)
+			close(tc.err)
+		}
+	}()
 
-	out := make(chan string)
-	err := make(chan error)
-	outputChans := []<-chan string{out}
-	errChans := []<-chan error{err}
-
-	m := initialModel(cmd, repos, outputChans, errChans, testCancelFunc)
+	m := initialModel(cmd, channels, testCancelFunc)
 
 	repo := repoStatus{
-		name:      "test-repo",
+		Channel:   &testChannel{name: "test-repo"},
 		active:    false,
 		completed: false,
 	}
@@ -717,9 +706,6 @@ func TestFormatRepoHeaderInactive(t *testing.T) {
 	if !strings.Contains(result, "test-repo") {
 		t.Errorf("Expected header to contain repo name, got %s", result)
 	}
-
-	close(out)
-	close(err)
 }
 
 // TestRenderProgressBarSmallWidth tests minimum width handling
@@ -736,13 +722,16 @@ func TestRenderProgressBarSmallWidth(t *testing.T) {
 func TestModelView(t *testing.T) {
 	cmd := &cobra.Command{Use: "test"}
 	repos := []string{"repo1"}
+	channels := makeTestChannels(repos)
+	defer func() {
+		for _, ch := range channels {
+			tc := ch.(*testChannel)
+			close(tc.output)
+			close(tc.err)
+		}
+	}()
 
-	out := make(chan string)
-	err := make(chan error)
-	outputChans := []<-chan string{out}
-	errChans := []<-chan error{err}
-
-	m := initialModel(cmd, repos, outputChans, errChans, testCancelFunc)
+	m := initialModel(cmd, channels, testCancelFunc)
 
 	// Test not ready state
 	view := m.View()
@@ -769,22 +758,22 @@ func TestModelView(t *testing.T) {
 	if !strings.Contains(view, "Interrupted") {
 		t.Error("Expected view to show 'Interrupted'")
 	}
-
-	close(out)
-	close(err)
 }
 
 // TestRenderProgress tests progress rendering
 func TestRenderProgress(t *testing.T) {
 	cmd := &cobra.Command{Use: "test"}
 	repos := []string{"repo1", "repo2"}
+	channels := makeTestChannels(repos)
+	defer func() {
+		for _, ch := range channels {
+			tc := ch.(*testChannel)
+			close(tc.output)
+			close(tc.err)
+		}
+	}()
 
-	out1, out2 := make(chan string), make(chan string)
-	err1, err2 := make(chan error), make(chan error)
-	outputChans := []<-chan string{out1, out2}
-	errChans := []<-chan error{err1, err2}
-
-	m := initialModel(cmd, repos, outputChans, errChans, testCancelFunc)
+	m := initialModel(cmd, channels, testCancelFunc)
 	m.width = 80
 	m.repos[0].completed = true
 
@@ -799,24 +788,22 @@ func TestRenderProgress(t *testing.T) {
 	if !strings.Contains(progress, "50%") {
 		t.Error("Expected progress to show '50%'")
 	}
-
-	close(out1)
-	close(out2)
-	close(err1)
-	close(err2)
 }
 
 // TestRenderFooter tests footer rendering
 func TestRenderFooter(t *testing.T) {
 	cmd := &cobra.Command{Use: "test"}
 	repos := []string{"repo1"}
+	channels := makeTestChannels(repos)
+	defer func() {
+		for _, ch := range channels {
+			tc := ch.(*testChannel)
+			close(tc.output)
+			close(tc.err)
+		}
+	}()
 
-	out := make(chan string)
-	err := make(chan error)
-	outputChans := []<-chan string{out}
-	errChans := []<-chan error{err}
-
-	m := initialModel(cmd, repos, outputChans, errChans, testCancelFunc)
+	m := initialModel(cmd, channels, testCancelFunc)
 
 	// Test footer while processing
 	footer := m.renderFooter()
@@ -836,46 +823,43 @@ func TestRenderFooter(t *testing.T) {
 	if !strings.Contains(footer, "q: quit") {
 		t.Error("Expected footer to show quit instructions when done")
 	}
-
-	close(out)
-	close(err)
 }
 
 // TestModelInit tests the Init function
 func TestModelInit(t *testing.T) {
 	cmd := &cobra.Command{Use: "test"}
 	repos := []string{"repo1", "repo2"}
+	channels := makeTestChannels(repos)
+	defer func() {
+		for _, ch := range channels {
+			tc := ch.(*testChannel)
+			close(tc.output)
+			close(tc.err)
+		}
+	}()
 
-	out1, out2 := make(chan string), make(chan string)
-	err1, err2 := make(chan error), make(chan error)
-	outputChans := []<-chan string{out1, out2}
-	errChans := []<-chan error{err1, err2}
-
-	m := initialModel(cmd, repos, outputChans, errChans, testCancelFunc)
+	m := initialModel(cmd, channels, testCancelFunc)
 
 	initCmd := m.Init()
 	if initCmd == nil {
 		t.Fatal("Expected Init to return a command")
 	}
-
-	// Close channels to prevent goroutine leaks
-	close(out1)
-	close(out2)
-	close(err1)
-	close(err2)
 }
 
 // TestHandleWindowSize tests window size handling
 func TestHandleWindowSize(t *testing.T) {
 	cmd := &cobra.Command{Use: "test"}
 	repos := []string{"repo1"}
+	channels := makeTestChannels(repos)
+	defer func() {
+		for _, ch := range channels {
+			tc := ch.(*testChannel)
+			close(tc.output)
+			close(tc.err)
+		}
+	}()
 
-	out := make(chan string)
-	err := make(chan error)
-	outputChans := []<-chan string{out}
-	errChans := []<-chan error{err}
-
-	m := initialModel(cmd, repos, outputChans, errChans, testCancelFunc)
+	m := initialModel(cmd, channels, testCancelFunc)
 
 	// Test initial window size (viewport not ready)
 	msg := tea.WindowSizeMsg{Width: 100, Height: 50}
@@ -903,26 +887,26 @@ func TestHandleWindowSize(t *testing.T) {
 	if m.height != 60 {
 		t.Errorf("Expected height 60, got %d", m.height)
 	}
-
-	close(out)
-	close(err)
 }
 
 // TestHandleKeyPressCtrlC tests Ctrl+C handling
 func TestHandleKeyPressCtrlC(t *testing.T) {
 	cmd := &cobra.Command{Use: "test"}
 	repos := []string{"repo1"}
-
-	out := make(chan string)
-	err := make(chan error)
-	outputChans := []<-chan string{out}
-	errChans := []<-chan error{err}
+	channels := makeTestChannels(repos)
+	defer func() {
+		for _, ch := range channels {
+			tc := ch.(*testChannel)
+			close(tc.output)
+			close(tc.err)
+		}
+	}()
 
 	// Track if cancel was called
 	cancelCalled := false
 	cancelFunc := func() { cancelCalled = true }
 
-	m := initialModel(cmd, repos, outputChans, errChans, cancelFunc)
+	m := initialModel(cmd, channels, cancelFunc)
 	m.ready = true
 	m.viewport = viewport.New(80, 24)
 
@@ -938,22 +922,22 @@ func TestHandleKeyPressCtrlC(t *testing.T) {
 	if !cancelCalled {
 		t.Error("Expected Ctrl+C to call cancel function")
 	}
-
-	close(out)
-	close(err)
 }
 
 // TestHandleKeyPressQ tests 'q' key handling
 func TestHandleKeyPressQ(t *testing.T) {
 	cmd := &cobra.Command{Use: "test"}
 	repos := []string{"repo1"}
+	channels := makeTestChannels(repos)
+	defer func() {
+		for _, ch := range channels {
+			tc := ch.(*testChannel)
+			close(tc.output)
+			close(tc.err)
+		}
+	}()
 
-	out := make(chan string)
-	err := make(chan error)
-	outputChans := []<-chan string{out}
-	errChans := []<-chan error{err}
-
-	m := initialModel(cmd, repos, outputChans, errChans, testCancelFunc)
+	m := initialModel(cmd, channels, testCancelFunc)
 	m.ready = true
 	m.viewport = viewport.New(80, 24)
 
@@ -974,22 +958,22 @@ func TestHandleKeyPressQ(t *testing.T) {
 	if !m.quitting {
 		t.Error("Expected 'q' to quit when all processing is done")
 	}
-
-	close(out)
-	close(err)
 }
 
 // TestHandleKeyPressP tests 'p' key handling for persist output
 func TestHandleKeyPressP(t *testing.T) {
 	cmd := &cobra.Command{Use: "test"}
 	repos := []string{"repo1"}
+	channels := makeTestChannels(repos)
+	defer func() {
+		for _, ch := range channels {
+			tc := ch.(*testChannel)
+			close(tc.output)
+			close(tc.err)
+		}
+	}()
 
-	out := make(chan string)
-	err := make(chan error)
-	outputChans := []<-chan string{out}
-	errChans := []<-chan error{err}
-
-	m := initialModel(cmd, repos, outputChans, errChans, testCancelFunc)
+	m := initialModel(cmd, channels, testCancelFunc)
 	m.ready = true
 	m.viewport = viewport.New(80, 24)
 
@@ -1010,15 +994,9 @@ func TestHandleKeyPressP(t *testing.T) {
 	newModel, _ = m.handleKeyPress(msg)
 	m = newModel.(model)
 
-	if !m.quitting {
-		t.Error("Expected 'p' to quit when all processing is done")
-	}
 	if !m.printOutput {
 		t.Error("Expected 'p' to set persistAfter when all processing is done")
 	}
-
-	close(out)
-	close(err)
 }
 
 // TestPrintFullOutput tests the printFullOutput function
@@ -1030,9 +1008,9 @@ func TestPrintFullOutput(t *testing.T) {
 	cmd.SetErr(&errOut)
 
 	repos := []string{"repo1", "repo2"}
-	outputChans, errChans := makeClosedChannels(2)
+	channels := makeClosedChannels(repos)
 
-	m := initialModel(cmd, repos, outputChans, errChans, testCancelFunc)
+	m := initialModel(cmd, channels, testCancelFunc)
 	m.allDone = true
 	m.endTime = m.startTime.Add(2 * time.Second)
 

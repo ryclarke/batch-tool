@@ -17,10 +17,10 @@ import (
 	"github.com/ryclarke/batch-tool/utils"
 )
 
-// BubbleteaLabels displays labels using Bubbletea for an interactive UI experience.
+// TUILabels displays labels using a TUI for an interactive experience.
 // When no filters are provided, it displays all available labels with their repositories.
 // When filters are provided, it displays a concise set-theory representation with matched repos.
-func BubbleteaLabels(cmd *cobra.Command, verbose bool, filters ...string) {
+func TUILabels(cmd *cobra.Command, verbose bool, filters ...string) {
 	ctx := cmd.Context()
 	var m tea.Model
 
@@ -37,7 +37,7 @@ func BubbleteaLabels(cmd *cobra.Command, verbose bool, filters ...string) {
 	)
 
 	if _, err := p.Run(); err != nil {
-		fmt.Fprintf(cmd.ErrOrStderr(), "Error running bubbletea UI: %v\n", err)
+		fmt.Fprintf(cmd.ErrOrStderr(), "Error running TUI: %v\n", err)
 		// Fallback to native output handling
 		NativeLabels(cmd, verbose, filters...)
 	}

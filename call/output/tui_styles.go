@@ -74,7 +74,7 @@ func color(color string) lipgloss.Style {
 	return lipgloss.NewStyle().Foreground(lipgloss.Color(color))
 }
 
-// outputStyles contains styles for the main bubbletea output handler
+// outputStyles contains styles for the main TUI output handler
 type outputStyles struct {
 	wrap func(style ...lipgloss.Style) lipgloss.Style
 

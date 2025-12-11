@@ -51,8 +51,8 @@ multiple git repositories, including branch management and pull request creation
 			viper.BindPFlag(config.SkipUnwanted, cmd.Flags().Lookup(skipUnwantedFlag))
 			viper.BindPFlag(config.OutputStyle, cmd.Flags().Lookup(outputHandlerFlag))
 
-			if outputStyle := viper.GetString(config.OutputStyle); outputStyle != "" && !mapset.NewSet(output.AvailableHandlers...).Contains(outputStyle) {
-				return fmt.Errorf("invalid output style: %q (expected one of %v)", viper.GetString(config.OutputStyle), output.AvailableHandlers)
+			if outputStyle := viper.GetString(config.OutputStyle); outputStyle != "" && !mapset.NewSet(output.AvailableStyles...).Contains(outputStyle) {
+				return fmt.Errorf("invalid output style: %q (expected one of %v)", viper.GetString(config.OutputStyle), output.AvailableStyles)
 			}
 
 			// Allow the `--sync` flag to override max-concurrency to 1
@@ -87,7 +87,7 @@ multiple git repositories, including branch management and pull request creation
 	)
 
 	rootCmd.PersistentFlags().StringVar(&config.CfgFile, configFlag, "", "config file (default is batch-tool.yaml)")
-	rootCmd.PersistentFlags().StringP(outputHandlerFlag, "o", output.TUI, fmt.Sprintf("output style: \"%v\"", strings.Join(output.AvailableHandlers, "\", \"")))
+	rootCmd.PersistentFlags().StringP(outputHandlerFlag, "o", output.TUI, fmt.Sprintf("output style: \"%v\"", strings.Join(output.AvailableStyles, "\", \"")))
 
 	rootCmd.PersistentFlags().Bool(syncFlag, false, "execute commands synchronously (alias for --max-concurrency=1)")
 	rootCmd.PersistentFlags().Int(maxConcurrencyFlag, runtime.NumCPU(), "maximum number of concurrent operations")

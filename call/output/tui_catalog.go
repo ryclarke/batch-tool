@@ -14,8 +14,8 @@ import (
 	"github.com/ryclarke/batch-tool/config"
 )
 
-// BubbleteaCatalog displays the repository catalog using Bubbletea for an interactive UI experience.
-func BubbleteaCatalog(cmd *cobra.Command) {
+// TUICatalog displays the repository catalog using a TUI for an interactive experience.
+func TUICatalog(cmd *cobra.Command) {
 	ctx := cmd.Context()
 	m := newCatalogModel(ctx)
 
@@ -26,7 +26,7 @@ func BubbleteaCatalog(cmd *cobra.Command) {
 	)
 
 	if _, err := p.Run(); err != nil {
-		fmt.Fprintf(cmd.ErrOrStderr(), "Error running bubbletea UI: %v\n", err)
+		fmt.Fprintf(cmd.ErrOrStderr(), "Error running TUI: %v\n", err)
 		// Fallback to native output
 		NativeCatalog(cmd)
 	}

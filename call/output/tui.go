@@ -14,11 +14,11 @@ import (
 // List of flag names which should be included in the command display for context.
 var includeFlags = []string{"script", "branch"}
 
-// BubbleteaHandler is an OutputHandler that uses Bubbletea to provide a modern, interactive interface.
+// TUIHandler is an OutputHandler that uses a TUI to provide a modern, interactive interface.
 // It displays repository progress with styled output, real-time updates, and a cleaner visual presentation.
-func BubbleteaHandler(cmd *cobra.Command, repos []string, output []<-chan string, errs []<-chan error) {
+func TUIHandler(cmd *cobra.Command, channels []Channel) {
 	// Exit early if no repositories are provided
-	if len(repos) == 0 {
+	if len(channels) == 0 {
 		fmt.Fprintln(cmd.ErrOrStderr(), noReposText)
 		return
 	}
@@ -31,16 +31,16 @@ func BubbleteaHandler(cmd *cobra.Command, repos []string, output []<-chan string
 	cmd.SetContext(ctx)
 
 	p := tea.NewProgram(
-		initialModel(cmd, repos, output, errs, cancel),
+		initialModel(cmd, channels, cancel),
 		tea.WithAltScreen(),       // Use alternate screen buffer
 		tea.WithMouseCellMotion(), // Enable mouse support
 	)
 
 	finalModel, err := p.Run()
 	if err != nil {
-		fmt.Fprintf(cmd.ErrOrStderr(), "Error running bubbletea UI: %v\nUsing default output handler...\n", err)
+		fmt.Fprintf(cmd.ErrOrStderr(), "Error running TUI: %v\nUsing default output handler...\n", err)
 		// Fallback to native output handling
-		NativeHandler(cmd, repos, output, errs)
+		NativeHandler(cmd, channels)
 		return
 	}
 
@@ -50,12 +50,10 @@ func BubbleteaHandler(cmd *cobra.Command, repos []string, output []<-chan string
 	}
 }
 
-// model represents the state of the bubbletea application
+// model represents the state of the TUI application
 type model struct {
 	command     string
 	repos       []repoStatus
-	outputChans []<-chan string
-	errChans    []<-chan error
 	cancelFunc  context.CancelFunc
 	startTime   time.Time
 	endTime     time.Time
@@ -71,7 +69,8 @@ type model struct {
 
 // repoStatus represents the state of a repository's processing
 type repoStatus struct {
-	name       string
+	Channel
+
 	output     []string
 	errors     []error
 	completed  bool
@@ -97,21 +96,26 @@ type repoCompletedMsg struct {
 
 type tickMsg time.Time
 
-func initialModel(cmd *cobra.Command, repos []string, output []<-chan string, errs []<-chan error, cancel context.CancelFunc) model {
-	repoStatuses := make([]repoStatus, len(repos))
-	for i, repo := range repos {
+func initialModel(cmd *cobra.Command, channels []Channel, cancel context.CancelFunc) model {
+	repoStatuses := make([]repoStatus, len(channels))
+	for i, ch := range channels {
 		repoStatuses[i] = repoStatus{
-			name: repo,
+			Channel: ch,
 		}
 	}
 
+	output := make([]<-chan string, len(channels))
+	errs := make([]<-chan error, len(channels))
+	for i, ch := range channels {
+		output[i] = ch.Out()
+		errs[i] = ch.Err()
+	}
+
 	return model{
-		command:     buildCommandString(cmd),
-		repos:       repoStatuses,
-		outputChans: output,
-		errChans:    errs,
-		cancelFunc:  cancel,
-		startTime:   time.Now(),
+		command:    buildCommandString(cmd),
+		repos:      repoStatuses,
+		cancelFunc: cancel,
+		startTime:  time.Now(),
 	}
 }
 
@@ -145,8 +149,8 @@ func (m model) Init() tea.Cmd {
 
 	// Start listening to all output and error channels
 	for i := range m.repos {
-		cmds = append(cmds, waitForOutput(i, m.outputChans[i]))
-		cmds = append(cmds, waitForError(i, m.errChans[i]))
+		cmds = append(cmds, waitForOutput(i, m.repos[i].Out()))
+		cmds = append(cmds, waitForError(i, m.repos[i].Err()))
 	}
 
 	// Add ticker for smooth UI updates
@@ -290,7 +294,7 @@ func (m model) handleRepoOutput(msg repoOutputMsg) (tea.Model, tea.Cmd) {
 			m.repos[msg.index].active = true
 			if msg.msg == "" {
 				// Skip an initial empty line
-				return m, waitForOutput(msg.index, m.outputChans[msg.index])
+				return m, waitForOutput(msg.index, m.repos[msg.index].Out())
 			}
 		}
 
@@ -298,7 +302,7 @@ func (m model) handleRepoOutput(msg repoOutputMsg) (tea.Model, tea.Cmd) {
 	}
 
 	m.viewport.SetContent(m.buildContent())
-	return m, waitForOutput(msg.index, m.outputChans[msg.index])
+	return m, waitForOutput(msg.index, m.repos[msg.index].Out())
 }
 
 // handleRepoError processes error messages from repositories
@@ -308,7 +312,7 @@ func (m model) handleRepoError(msg repoErrorMsg) (tea.Model, tea.Cmd) {
 	}
 
 	m.viewport.SetContent(m.buildContent())
-	return m, waitForError(msg.index, m.errChans[msg.index])
+	return m, waitForError(msg.index, m.repos[msg.index].Err())
 }
 
 // handleRepoCompleted processes completion messages from repositories
@@ -427,19 +431,19 @@ func (m model) formatRepoSection(repo repoStatus) string {
 func (m model) formatRepoHeader(repo repoStatus) string {
 	if repo.completed {
 		if repo.failed {
-			return m.styles.repoError.Render(fmt.Sprintf(repoErrorFormat, repo.name))
+			return m.styles.repoError.Render(fmt.Sprintf(repoErrorFormat, repo.Name()))
 		}
 
-		return m.styles.repoSuccess.Render(fmt.Sprintf(repoSuccessFormat, repo.name))
+		return m.styles.repoSuccess.Render(fmt.Sprintf(repoSuccessFormat, repo.Name()))
 	}
 
 	if !repo.active {
 		// Waiting for concurrency slot to start
-		return m.styles.repoWaiting.Render(fmt.Sprintf(repoWaitingFormat, repo.name))
+		return m.styles.repoWaiting.Render(fmt.Sprintf(repoWaitingFormat, repo.Name()))
 	}
 
 	// Active and running
-	return m.styles.repoActive.Render(fmt.Sprintf(repoActiveFormat, repo.name))
+	return m.styles.repoActive.Render(fmt.Sprintf(repoActiveFormat, repo.Name()))
 }
 
 func (m model) View() string {

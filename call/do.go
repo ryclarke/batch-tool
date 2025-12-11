@@ -25,14 +25,6 @@ func Do(cmd *cobra.Command, repos []string, callFunc CallFunc, handler ...output
 	viper := config.Viper(ctx)
 	repos = processArguments(ctx, repos)
 
-	// initialize channel set for CallFunc output
-	resp := make([]chan string, len(repos))
-	errs := make([]chan error, len(repos))
-	for i := range repos {
-		resp[i] = make(chan string, viper.GetInt(config.ChannelBuffer))
-		errs[i] = make(chan error, 1)
-	}
-
 	// Determine concurrency level
 	maxConcurrency := viper.GetInt(config.MaxConcurrency)
 	if maxConcurrency <= 0 {
@@ -42,10 +34,16 @@ func Do(cmd *cobra.Command, repos []string, callFunc CallFunc, handler ...output
 	sem := semaphore.NewWeighted(int64(maxConcurrency))
 	wg := new(sync.WaitGroup)
 
+	// initialize channel set for CallFunc output
+	channels := make([]output.Channel, len(repos))
+	for i := range repos {
+		channels[i] = output.NewChannel(ctx, repos[i], sem, wg)
+	}
+
 	// start workers with concurrency limit
 	for i := range repos {
 		wg.Add(1)
-		go runCallFunc(ctx, sem, wg, callFunc, repos[i], resp[i], errs[i])
+		go runCallFunc(ctx, channels[i], callFunc)
 	}
 
 	// use the default output handler if none provided
@@ -55,7 +53,7 @@ func Do(cmd *cobra.Command, repos []string, callFunc CallFunc, handler ...output
 
 	// process output using provided handler(s)
 	for _, handle := range handler {
-		handle(cmd, repos, readOnlyChan(resp), readOnlyChan(errs))
+		handle(cmd, channels)
 	}
 
 	wg.Wait()
@@ -63,39 +61,32 @@ func Do(cmd *cobra.Command, repos []string, callFunc CallFunc, handler ...output
 
 // runCallFunc executes the provided CallFunc for a single repository, managing concurrency via the provided semaphore and wait group.
 // Output channels are closed after execution, and the repository is cloned first if it does not exist locally.
-func runCallFunc(ctx context.Context, sem *semaphore.Weighted, wg *sync.WaitGroup, callFunc CallFunc, repoName string, ch chan<- string, er chan<- error) {
-	defer func() {
-		// signal worker completion and close channels
-		wg.Done()
-		close(ch)
-		close(er)
-	}()
+func runCallFunc(ctx context.Context, ch output.Channel, callFunc CallFunc) {
+	done, err := ch.Start(1)
+	defer done()
 
-	// Acquire semaphore
-	if err := sem.Acquire(ctx, 1); err != nil {
-		// Context cancelled, return the error and abort further processing
-		er <- err
+	if err != nil {
+		ch.WErr() <- err
 		return
 	}
-	defer sem.Release(1) // Release semaphore
 
 	// Initial empty line to signal start of CallFunc execution
-	ch <- ""
+	ch.WOut() <- ""
 
 	// If the repository is missing, attempt to clone it first
-	if _, err := os.Stat(utils.RepoPath(ctx, repoName)); os.IsNotExist(err) {
-		ch <- "Repository not found, cloning...\n"
+	if _, err := os.Stat(utils.RepoPath(ctx, ch.Name())); os.IsNotExist(err) {
+		ch.WOut() <- "Repository not found, cloning...\n"
 
-		if err = Exec("git", "clone", "--progress", utils.RepoURL(ctx, repoName))(ctx, "", ch); err != nil {
+		if err = Exec("git", "clone", "--progress", utils.RepoURL(ctx, ch.Name()))(ctx, "", ch.WOut()); err != nil {
 			// Clone failed, return the error and abort further processing
-			er <- err
+			ch.WErr() <- err
 			return
 		}
 	}
 
 	// Execute the provided CallFunc for the repository
-	if err := callFunc(ctx, repoName, ch); err != nil {
-		er <- err
+	if err := callFunc(ctx, ch.Name(), ch.WOut()); err != nil {
+		ch.WErr() <- err
 	}
 }
 
