@@ -40,6 +40,8 @@ const (
 
 	maxConcurrencyFlag = "max-concurrency"
 	syncFlag           = "sync"
+
+	catalogFlushFlag = "flush"
 )
 
 // RootCmd configures the top-level root command along with all subcommands and flags
@@ -178,12 +180,22 @@ func labelsCmd() *cobra.Command {
 
 // catalogCmd configures the catalog command
 func catalogCmd() *cobra.Command {
-	return &cobra.Command{
+	cmd := &cobra.Command{
 		Use:   "catalog",
 		Short: "Print information on the cached repository catalog",
 		Args:  cobra.NoArgs,
 		Run: func(cmd *cobra.Command, _ []string) {
+			if flush, _ := cmd.Flags().GetBool(catalogFlushFlag); flush {
+				if err := catalog.Flush(cmd.Context()); err != nil {
+					fmt.Fprintf(cmd.ErrOrStderr(), "Failed to flush catalog cache: %v\n", err)
+				}
+			}
+
 			output.GetCatalogHandler(cmd.Context())(cmd)
 		},
 	}
+
+	cmd.Flags().BoolP(catalogFlushFlag, "f", false, "Force refresh of catalog cache")
+
+	return cmd
 }

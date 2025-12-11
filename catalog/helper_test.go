@@ -80,7 +80,7 @@ func setupCacheFile(t *testing.T, ctx context.Context, repos map[string]scm.Repo
 	cachePath := filepath.Join(viper.GetString(config.GitDirectory),
 		viper.GetString(config.GitHost),
 		viper.GetString(config.GitProject),
-		viper.GetString(config.CatalogCacheFile),
+		defaultCacheFile,
 	)
 
 	cache := repositoryCache{

@@ -28,6 +28,7 @@ const (
 	GitUser      = "git.user"
 	GitHost      = "git.host"
 	GitProject   = "git.project"
+	GitProjects  = "git.projects"
 	GitProvider  = "git.provider"
 	GitDirectory = "git.directory"
 	SourceBranch = "git.default-branch"
@@ -41,7 +42,7 @@ const (
 	SkipUnwanted     = "repos.skip-unwanted"
 	SuperSetLabel    = "repos.catch-all"
 	DefaultReviewers = "repos.reviewers"
-	CatalogCacheFile = "repos.cache.filename"
+	CatalogCachePath = "repos.cache.path"
 	CatalogCacheTTL  = "repos.cache.ttl"
 
 	Branch    = "branch"
@@ -135,6 +136,7 @@ func setDefaults(v *viper.Viper) {
 
 	v.SetDefault(GitHost, "github.com")
 	v.SetDefault(GitProvider, "github")
+	v.SetDefault(GitProjects, []string{})
 	v.SetDefault(SourceBranch, "main")
 	v.SetDefault(SortRepos, true)
 
@@ -142,7 +144,7 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault(UnwantedLabels, []string{"deprecated", "poc"})
 	v.SetDefault(SuperSetLabel, "all")
 
-	v.SetDefault(CatalogCacheFile, ".catalog")
+	v.SetDefault(CatalogCachePath, "") // empty means use default: gitdir/host/.batch-tool-cache.json
 	v.SetDefault(CatalogCacheTTL, "24h")
 	v.SetDefault(OutputStyle, "tui")
 	v.SetDefault(ChannelBuffer, 100)

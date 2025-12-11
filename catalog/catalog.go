@@ -15,6 +15,8 @@ import (
 	"github.com/ryclarke/batch-tool/scm"
 )
 
+const defaultCacheFile = ".batch-tool-cache.json"
+
 // Catalog contains a cached set of repositories and their metadata from Bitbucket
 var Catalog = make(map[string]scm.Repository)
 
@@ -26,7 +28,7 @@ func Init(ctx context.Context) {
 	viper := config.Viper(ctx)
 
 	if err := initRepositoryCatalog(ctx); err != nil {
-		fmt.Printf("ERROR: Could not load repository metadata: %v\n", err)
+		fmt.Fprintf(os.Stderr, "ERROR: Could not load repository metadata: %v\n", err)
 	}
 
 	// Add locally-configured aliases to the defined labels
@@ -118,7 +120,7 @@ func initRepositoryCatalog(ctx context.Context) error {
 	}
 
 	if err := loadCatalogCache(ctx); err != nil {
-		fmt.Printf("ERROR: %v\n", err)
+		fmt.Fprintf(os.Stderr, "%v\n", err)
 	} else {
 		return nil
 	}
@@ -153,11 +155,14 @@ func loadCatalogCache(ctx context.Context) error {
 	Catalog = cached.Repositories
 
 	for _, repo := range Catalog {
+		// Use project-qualified name for consistent scoping
+		repoKey := repo.Project + "/" + repo.Name
+
 		for _, label := range repo.Labels {
 			if _, ok := Labels[label]; !ok {
-				Labels[label] = mapset.NewSet(repo.Name)
+				Labels[label] = mapset.NewSet(repoKey)
 			} else {
-				Labels[label].Add(repo.Name)
+				Labels[label].Add(repoKey)
 			}
 		}
 	}
@@ -186,21 +191,33 @@ func saveCatalogCache(ctx context.Context) error {
 func fetchRepositoryData(ctx context.Context) error {
 	viper := config.Viper(ctx)
 
-	provider := scm.Get(ctx, viper.GetString(config.GitProvider), viper.GetString(config.GitProject))
-
-	repos, err := provider.ListRepositories()
-	if err != nil {
-		return fmt.Errorf("failed to fetch repositories from provider: %w", err)
+	// Build set of all projects to fetch
+	projects := mapset.NewSet(viper.GetStringSlice(config.GitProjects)...)
+	if defaultProject := viper.GetString(config.GitProject); defaultProject != "" {
+		projects.Add(defaultProject)
 	}
 
-	for _, repo := range repos {
-		Catalog[repo.Name] = *repo
+	// Fetch repositories from all projects
+	for project := range projects.Iter() {
+		provider := scm.Get(ctx, viper.GetString(config.GitProvider), project)
 
-		for _, label := range repo.Labels {
-			if _, ok := Labels[label]; !ok {
-				Labels[label] = mapset.NewSet(repo.Name)
-			} else {
-				Labels[label].Add(repo.Name)
+		repos, err := provider.ListRepositories()
+		if err != nil {
+			return fmt.Errorf("failed to fetch repositories from project %s: %w", project, err)
+		}
+
+		for _, repo := range repos {
+			// Always store with project-qualified name for consistency
+			repoKey := repo.Project + "/" + repo.Name
+
+			Catalog[repoKey] = *repo
+
+			for _, label := range repo.Labels {
+				if _, ok := Labels[label]; !ok {
+					Labels[label] = mapset.NewSet(repoKey)
+				} else {
+					Labels[label].Add(repoKey)
+				}
 			}
 		}
 	}
@@ -211,9 +228,11 @@ func fetchRepositoryData(ctx context.Context) error {
 func catalogCachePath(ctx context.Context) string {
 	viper := config.Viper(ctx)
 
-	return filepath.Join(viper.GetString(config.GitDirectory),
-		viper.GetString(config.GitHost),
-		viper.GetString(config.GitProject),
-		viper.GetString(config.CatalogCacheFile),
-	)
+	// If a custom path is configured, use it
+	if customPath := viper.GetString(config.CatalogCachePath); customPath != "" {
+		return customPath
+	}
+
+	// Default: store in gitdir/host/.batch-tool-cache.json
+	return filepath.Join(viper.GetString(config.GitDirectory), viper.GetString(config.GitHost), defaultCacheFile)
 }
