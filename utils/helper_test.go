@@ -1,10 +1,18 @@
 package utils
 
 import (
+	"context"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/ryclarke/batch-tool/config"
 )
+
+// loadFixture loads test configuration fixture
+func loadFixture(t *testing.T) context.Context {
+	return config.LoadFixture(t, "../config")
+}
 
 // checkError verifies error expectation
 func checkError(t *testing.T, err error, wantError bool) {

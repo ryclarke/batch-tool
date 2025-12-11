@@ -3,11 +3,13 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"os"
 	"strings"
 	"testing"
 
 	"github.com/ryclarke/batch-tool/config"
+	"github.com/ryclarke/batch-tool/utils"
 	"github.com/spf13/cobra"
 )
 
@@ -423,5 +425,86 @@ func TestLongDescription(t *testing.T) {
 
 	if !strings.Contains(cmd.Long, "utility functions") {
 		t.Error("Long description should mention utility functions")
+	}
+}
+
+func TestSetTerminalWait(t *testing.T) {
+	tests := []struct {
+		name           string
+		noWaitFlagSet  bool
+		noWaitValue    bool
+		waitFlagSet    bool
+		waitValue      bool
+		expectWaitExit bool
+		description    string
+	}{
+		{
+			name:           "explicit --no-wait flag set to true",
+			noWaitFlagSet:  true,
+			noWaitValue:    true,
+			waitFlagSet:    false,
+			expectWaitExit: false,
+			description:    "Explicit --no-wait should disable wait",
+		},
+		{
+			name:           "explicit --no-wait flag set to false",
+			noWaitFlagSet:  true,
+			noWaitValue:    false,
+			waitFlagSet:    false,
+			expectWaitExit: true,
+			description:    "Explicit --no-wait=false should enable wait",
+		},
+		{
+			name:           "explicit --wait flag set (no auto-detection)",
+			noWaitFlagSet:  false,
+			waitFlagSet:    true,
+			waitValue:      true,
+			expectWaitExit: true,
+			description:    "Explicit --wait should skip auto-detection",
+		},
+		{
+			name:           "no flags set (auto-detection runs)",
+			noWaitFlagSet:  false,
+			waitFlagSet:    false,
+			expectWaitExit: false,
+			description:    "When no flags set, non-interactive environment should disable wait",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := loadFixture(t)
+			viper := config.Viper(ctx)
+
+			cmd := &cobra.Command{}
+			cmd.SetContext(ctx)
+			cmd.Flags().Bool(noWaitFlag, false, "")
+			cmd.Flags().Bool(waitFlag, true, "")
+
+			// Set flags based on test case
+			if tt.noWaitFlagSet {
+				cmd.Flags().Set(noWaitFlag, fmt.Sprintf("%v", tt.noWaitValue))
+			}
+			if tt.waitFlagSet {
+				cmd.Flags().Set(waitFlag, fmt.Sprintf("%v", tt.waitValue))
+			}
+
+			// Use BindBoolFlags to match actual command behavior
+			err := utils.BindBoolFlags(cmd, config.WaitOnExit, waitFlag, noWaitFlag)
+			if err != nil {
+				t.Errorf("%s: unexpected error from BindBoolFlags: %v", tt.description, err)
+			}
+
+			// Then run auto-detection
+			err = setTerminalWait(cmd)
+			if err != nil {
+				t.Errorf("%s: unexpected error from setTerminalWait: %v", tt.description, err)
+			}
+
+			actualWaitExit := viper.GetBool(config.WaitOnExit)
+			if actualWaitExit != tt.expectWaitExit {
+				t.Errorf("%s: expected WaitOnExit=%v, got %v", tt.description, tt.expectWaitExit, actualWaitExit)
+			}
+		})
 	}
 }

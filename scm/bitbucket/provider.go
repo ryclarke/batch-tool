@@ -2,7 +2,9 @@ package bitbucket
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 
@@ -79,5 +81,39 @@ func do[T any](b *Bitbucket, req *http.Request) (*T, error) {
 		req.Header.Set("Content-Type", "application/json")
 	}
 
-	return scm.DoResp[T](b.client, req)
+	return doResp[T](b.client, req)
+}
+
+// doResp executes the HTTP request and unmarshals the response into the provided type.
+func doResp[T any](client *http.Client, req *http.Request) (*T, error) {
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if err := parseError(resp); err != nil {
+		return nil, err
+	}
+
+	var result T
+
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
+	}
+
+	return &result, nil
+}
+
+func parseError(resp *http.Response) error {
+	if resp.StatusCode < 400 {
+		return nil
+	}
+
+	output, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("error %d: failed to read response body: %w", resp.StatusCode, err)
+	}
+
+	return fmt.Errorf("error %d: %s", resp.StatusCode, output)
 }

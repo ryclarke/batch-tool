@@ -36,10 +36,24 @@ func TUILabels(cmd *cobra.Command, verbose bool, filters ...string) {
 		tea.WithMouseCellMotion(),
 	)
 
-	if _, err := p.Run(); err != nil {
-		fmt.Fprintf(cmd.ErrOrStderr(), "Error running TUI: %v\n", err)
+	finalModel, err := p.Run()
+	if err != nil {
+		fmt.Fprintf(cmd.ErrOrStderr(), tuiFailText, err)
 		// Fallback to native output handling
 		NativeLabels(cmd, verbose, filters...)
+		return
+	}
+
+	// If the user requested to persist output (via 'p' key or --print flag), print it when exiting
+	switch m := finalModel.(type) {
+	case labelsFilterModel:
+		if m.printOutput || !m.waitOnExit {
+			m.printFullOutput(cmd)
+		}
+	case labelsListModel:
+		if m.printOutput || !m.waitOnExit {
+			m.printFullOutput(cmd)
+		}
 	}
 }
 
@@ -52,6 +66,9 @@ type labelsListModel struct {
 	width    int
 	height   int
 	verbose  bool
+
+	printOutput bool
+	waitOnExit  bool
 }
 
 type labelWithRepos struct {
@@ -97,6 +114,9 @@ func newLabelsListModel(ctx context.Context, verbose bool) labelsListModel {
 		ctx:     ctx,
 		labels:  labels,
 		verbose: verbose,
+
+		printOutput: viper.GetBool(config.PrintResults),
+		waitOnExit:  viper.GetBool(config.WaitOnExit),
 	}
 }
 
@@ -118,6 +138,10 @@ func (m labelsListModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.viewport = viewport.New(msg.Width, msg.Height-headerHeight-footerHeight)
 			m.viewport.YPosition = headerHeight
 			m.ready = true
+			// Auto-quit if wait flag is false
+			if !m.waitOnExit {
+				return m, tea.Quit
+			}
 		} else {
 			m.viewport.Width = msg.Width
 			m.viewport.Height = msg.Height - 5
@@ -128,6 +152,9 @@ func (m labelsListModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.KeyMsg:
 		switch msg.String() {
+		case "p":
+			m.printOutput = true
+			return m, tea.Quit
 		case "q", "esc", "ctrl+c":
 			return m, tea.Quit
 		default:
@@ -249,9 +276,14 @@ type labelsFilterModel struct {
 	ready    bool
 	width    int
 	height   int
+
+	printOutput bool
+	waitOnExit  bool
 }
 
 func newLabelsFilterModel(ctx context.Context, verbose bool, filters []string) labelsFilterModel {
+	viper := config.Viper(ctx)
+
 	labelGroup, repos := catalog.ParseLabels(ctx, filters...)
 
 	m := labelsFilterModel{
@@ -260,6 +292,9 @@ func newLabelsFilterModel(ctx context.Context, verbose bool, filters []string) l
 		filters:    filters,
 		labelGroup: labelGroup,
 		repos:      repos,
+
+		printOutput: viper.GetBool(config.PrintResults),
+		waitOnExit:  viper.GetBool(config.WaitOnExit),
 	}
 
 	// If verbose, build label details from parsed label group
@@ -321,6 +356,10 @@ func (m labelsFilterModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.viewport = viewport.New(msg.Width, msg.Height-headerHeight-footerHeight)
 			m.viewport.YPosition = headerHeight
 			m.ready = true
+			// Auto-quit if wait flag is false
+			if !m.waitOnExit {
+				return m, tea.Quit
+			}
 		} else {
 			m.viewport.Width = msg.Width
 			m.viewport.Height = msg.Height - 7
@@ -331,7 +370,10 @@ func (m labelsFilterModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.KeyMsg:
 		switch msg.String() {
-		case "esc", "q", "ctrl+c":
+		case "p":
+			m.printOutput = true
+			return m, tea.Quit
+		case "enter", "esc", "q", "ctrl+c":
 			return m, tea.Quit
 
 		default:
@@ -484,4 +526,31 @@ func (m labelsFilterModel) View() string {
 	b.WriteString(styles.help.Render(footerDone))
 
 	return b.String()
+}
+
+// printFullOutput prints the complete labels list output to stdout, reusing the buildContent logic
+func (m labelsListModel) printFullOutput(cmd *cobra.Command) {
+	styles := newLabelStyles(m.width)
+	out := cmd.OutOrStdout()
+
+	// Title
+	fmt.Fprintln(out, styles.title.Render("Available Labels:"))
+	fmt.Fprintln(out)
+
+	// Print content (reuses buildContent)
+	fmt.Fprint(out, m.buildContent())
+}
+
+// printFullOutput prints the complete filtered labels output to stdout, reusing the buildContent logic
+func (m labelsFilterModel) printFullOutput(cmd *cobra.Command) {
+	styles := newLabelStyles(m.width)
+	out := cmd.OutOrStdout()
+
+	// Title and set representation
+	fmt.Fprintln(out, styles.title.Render("Selected Set:"))
+	fmt.Fprintln(out, m.buildSetString())
+	fmt.Fprintln(out)
+
+	// Print content (reuses buildContent)
+	fmt.Fprint(out, m.buildContent(m.ctx))
 }

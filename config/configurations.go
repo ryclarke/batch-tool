@@ -51,7 +51,10 @@ const (
 	TokenSkip   = "repos.tokens.skip"
 	TokenForced = "repos.tokens.forced"
 
-	OutputStyle    = "channels.output-style"
+	OutputStyle  = "channels.output-style"
+	PrintResults = "channels.print-results"
+	WaitOnExit   = "channels.wait-on-exit"
+
 	ChannelBuffer  = "channels.buffer-size"
 	MaxConcurrency = "channels.max-concurrency"
 	WriteBackoff   = "channels.write-backoff"

@@ -9,6 +9,8 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
+
+	"github.com/ryclarke/batch-tool/config"
 )
 
 // List of flag names which should be included in the command display for context.
@@ -38,7 +40,7 @@ func TUIHandler(cmd *cobra.Command, channels []Channel) {
 
 	finalModel, err := p.Run()
 	if err != nil {
-		fmt.Fprintf(cmd.ErrOrStderr(), "Error running TUI: %v\nUsing default output handler...\n", err)
+		fmt.Fprintf(cmd.ErrOrStderr(), tuiFailText, err)
 		// Fallback to native output handling
 		NativeHandler(cmd, channels)
 		return
@@ -52,19 +54,21 @@ func TUIHandler(cmd *cobra.Command, channels []Channel) {
 
 // model represents the state of the TUI application
 type model struct {
-	command     string
-	repos       []repoStatus
-	cancelFunc  context.CancelFunc
-	startTime   time.Time
-	endTime     time.Time
-	quitting    bool
-	allDone     bool
+	command    string
+	repos      []repoStatus
+	cancelFunc context.CancelFunc
+	startTime  time.Time
+	endTime    time.Time
+	quitting   bool
+	allDone    bool
+	viewport   viewport.Model
+	ready      bool
+	width      int
+	height     int
+	styles     outputStyles
+
 	printOutput bool
-	viewport    viewport.Model
-	ready       bool
-	width       int
-	height      int
-	styles      outputStyles
+	waitOnExit  bool
 }
 
 // repoStatus represents the state of a repository's processing
@@ -97,6 +101,8 @@ type repoCompletedMsg struct {
 type tickMsg time.Time
 
 func initialModel(cmd *cobra.Command, channels []Channel, cancel context.CancelFunc) model {
+	viper := config.Viper(cmd.Context())
+
 	repoStatuses := make([]repoStatus, len(channels))
 	for i, ch := range channels {
 		repoStatuses[i] = repoStatus{
@@ -116,6 +122,9 @@ func initialModel(cmd *cobra.Command, channels []Channel, cancel context.CancelF
 		repos:      repoStatuses,
 		cancelFunc: cancel,
 		startTime:  time.Now(),
+
+		printOutput: viper.GetBool(config.PrintResults),
+		waitOnExit:  viper.GetBool(config.WaitOnExit),
 	}
 }
 
@@ -258,7 +267,7 @@ func (m model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 
 	case "p":
-		// Only allow persist output with 'p' after all processing is complete
+		// Only allow print and quit with 'p' after all processing is complete
 		if m.allDone {
 			m.printOutput = true
 			m.quitting = true
@@ -266,8 +275,8 @@ func (m model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		fallthrough
 
-	case "esc", "q":
-		// Only allow quit with 'esc' or 'q' after all processing is complete
+	case "enter", "esc", "q":
+		// Only allow quit with 'enter', 'esc' or 'q' after all processing is complete
 		if m.allDone {
 			m.quitting = true
 			return m, tea.Quit
@@ -342,6 +351,12 @@ func (m model) handleRepoCompleted(msg repoCompletedMsg) (tea.Model, tea.Cmd) {
 	if m.allReposCompleted() {
 		m.allDone = true
 		m.endTime = time.Now()
+
+		// Auto-quit if wait flag is false
+		if !m.waitOnExit {
+			m.quitting = true
+			return m, tea.Quit
+		}
 	}
 
 	m.viewport.SetContent(m.buildContent())

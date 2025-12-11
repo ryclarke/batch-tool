@@ -9,10 +9,22 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
+
+	"github.com/ryclarke/batch-tool/config"
 )
 
 // testCancelFunc is a no-op cancel function for tests
 func testCancelFunc() { /* no-op */ }
+
+// makeTestCommand creates a command with a properly initialized context for testing
+func makeTestCommand(t *testing.T) *cobra.Command {
+	t.Helper()
+
+	cmd := &cobra.Command{Use: "test"}
+	ctx := config.LoadFixture(t, "../../config")
+	cmd.SetContext(ctx)
+	return cmd
+}
 
 // makeClosedChannels creates closed channels for testing to avoid blocking
 func makeClosedChannels(names []string) []Channel {
@@ -75,7 +87,8 @@ func TestBuildCommandString(t *testing.T) {
 
 // TestInitialModel tests the model initialization
 func TestInitialModel(t *testing.T) {
-	cmd := &cobra.Command{Use: "test"}
+	cmd := makeTestCommand(t)
+
 	repos := []string{"repo1", "repo2", "repo3"}
 	channels := makeClosedChannels(repos)
 
@@ -107,7 +120,7 @@ func TestInitialModel(t *testing.T) {
 
 // TestHandleRepoOutput tests output message handling
 func TestHandleRepoOutput(t *testing.T) {
-	cmd := &cobra.Command{Use: "test"}
+	cmd := makeTestCommand(t)
 	repos := []string{"repo1"}
 	channels := makeClosedChannels(repos)
 
@@ -134,7 +147,7 @@ func TestHandleRepoOutput(t *testing.T) {
 
 // TestHandleRepoError tests error message handling
 func TestHandleRepoError(t *testing.T) {
-	cmd := &cobra.Command{Use: "test"}
+	cmd := makeTestCommand(t)
 	repos := []string{"repo1"}
 	channels := makeTestChannels(repos)
 
@@ -163,7 +176,7 @@ func TestHandleRepoError(t *testing.T) {
 
 // TestHandleRepoCompleted tests completion message handling
 func TestHandleRepoCompleted(t *testing.T) {
-	cmd := &cobra.Command{Use: "test"}
+	cmd := makeTestCommand(t)
 	repos := []string{"repo1"}
 	channels := makeTestChannels(repos)
 
@@ -206,7 +219,7 @@ func TestHandleRepoCompleted(t *testing.T) {
 
 // TestAllReposCompleted tests the completion check logic
 func TestAllReposCompleted(t *testing.T) {
-	cmd := &cobra.Command{Use: "test"}
+	cmd := makeTestCommand(t)
 	repos := []string{"repo1", "repo2"}
 	channels := makeTestChannels(repos)
 
@@ -236,7 +249,7 @@ func TestAllReposCompleted(t *testing.T) {
 
 // TestCountCompleted tests the count completed function
 func TestCountCompleted(t *testing.T) {
-	cmd := &cobra.Command{Use: "test"}
+	cmd := makeTestCommand(t)
 	repos := []string{"repo1", "repo2", "repo3"}
 	channels := makeTestChannels(repos)
 	defer func() {
@@ -267,7 +280,7 @@ func TestCountCompleted(t *testing.T) {
 
 // TestCountErrors tests the count errors function
 func TestCountErrors(t *testing.T) {
-	cmd := &cobra.Command{Use: "test"}
+	cmd := makeTestCommand(t)
 	repos := []string{"repo1", "repo2", "repo3"}
 	channels := makeTestChannels(repos)
 	defer func() {
@@ -314,7 +327,7 @@ func TestCountErrors(t *testing.T) {
 
 // TestCalculateElapsed tests the elapsed time calculation
 func TestCalculateElapsed(t *testing.T) {
-	cmd := &cobra.Command{Use: "test"}
+	cmd := makeTestCommand(t)
 	repos := []string{"repo1"}
 	channels := makeClosedChannels(repos)
 
@@ -338,7 +351,7 @@ func TestCalculateElapsed(t *testing.T) {
 
 // TestFormatRepoHeader tests repository header formatting
 func TestFormatRepoHeader(t *testing.T) {
-	cmd := &cobra.Command{Use: "test"}
+	cmd := makeTestCommand(t)
 	repos := []string{"repo1"}
 	channels := makeClosedChannels(repos)
 
@@ -477,7 +490,7 @@ func TestRenderProgressBar(t *testing.T) {
 
 // TestBuildContent tests content building
 func TestBuildContent(t *testing.T) {
-	cmd := &cobra.Command{Use: "test"}
+	cmd := makeTestCommand(t)
 	repos := []string{"repo1", "repo2"}
 	channels := makeTestChannels(repos)
 	defer func() {
@@ -591,7 +604,7 @@ func TestWaitForError(t *testing.T) {
 
 // TestHandleRepoCompletedSetsAllDone tests that all done is set when all repos complete
 func TestHandleRepoCompletedSetsAllDone(t *testing.T) {
-	cmd := &cobra.Command{Use: "test"}
+	cmd := makeTestCommand(t)
 	repos := []string{"repo1"}
 	channels := makeTestChannels(repos)
 
@@ -623,7 +636,7 @@ func TestHandleRepoCompletedSetsAllDone(t *testing.T) {
 
 // TestHandleRepoCompletedWithError tests that failed repos are marked
 func TestHandleRepoCompletedWithError(t *testing.T) {
-	cmd := &cobra.Command{Use: "test"}
+	cmd := makeTestCommand(t)
 	repos := []string{"repo1"}
 	channels := makeTestChannels(repos)
 
@@ -654,7 +667,7 @@ func TestHandleRepoCompletedWithError(t *testing.T) {
 
 // TestHandleRepoCompletedOutOfBounds tests handling completion for invalid index
 func TestHandleRepoCompletedOutOfBounds(t *testing.T) {
-	cmd := &cobra.Command{Use: "test"}
+	cmd := makeTestCommand(t)
 	repos := []string{"repo1"}
 	channels := makeTestChannels(repos)
 
@@ -681,7 +694,7 @@ func TestHandleRepoCompletedOutOfBounds(t *testing.T) {
 
 // TestFormatRepoHeaderInactive tests inactive repo formatting
 func TestFormatRepoHeaderInactive(t *testing.T) {
-	cmd := &cobra.Command{Use: "test"}
+	cmd := makeTestCommand(t)
 	repos := []string{"repo1"}
 	channels := makeTestChannels(repos)
 	defer func() {
@@ -720,7 +733,7 @@ func TestRenderProgressBarSmallWidth(t *testing.T) {
 
 // TestModelView tests the View rendering in different states
 func TestModelView(t *testing.T) {
-	cmd := &cobra.Command{Use: "test"}
+	cmd := makeTestCommand(t)
 	repos := []string{"repo1"}
 	channels := makeTestChannels(repos)
 	defer func() {
@@ -762,7 +775,7 @@ func TestModelView(t *testing.T) {
 
 // TestRenderProgress tests progress rendering
 func TestRenderProgress(t *testing.T) {
-	cmd := &cobra.Command{Use: "test"}
+	cmd := makeTestCommand(t)
 	repos := []string{"repo1", "repo2"}
 	channels := makeTestChannels(repos)
 	defer func() {
@@ -792,7 +805,7 @@ func TestRenderProgress(t *testing.T) {
 
 // TestRenderFooter tests footer rendering
 func TestRenderFooter(t *testing.T) {
-	cmd := &cobra.Command{Use: "test"}
+	cmd := makeTestCommand(t)
 	repos := []string{"repo1"}
 	channels := makeTestChannels(repos)
 	defer func() {
@@ -827,7 +840,7 @@ func TestRenderFooter(t *testing.T) {
 
 // TestModelInit tests the Init function
 func TestModelInit(t *testing.T) {
-	cmd := &cobra.Command{Use: "test"}
+	cmd := makeTestCommand(t)
 	repos := []string{"repo1", "repo2"}
 	channels := makeTestChannels(repos)
 	defer func() {
@@ -848,7 +861,7 @@ func TestModelInit(t *testing.T) {
 
 // TestHandleWindowSize tests window size handling
 func TestHandleWindowSize(t *testing.T) {
-	cmd := &cobra.Command{Use: "test"}
+	cmd := makeTestCommand(t)
 	repos := []string{"repo1"}
 	channels := makeTestChannels(repos)
 	defer func() {
@@ -891,7 +904,7 @@ func TestHandleWindowSize(t *testing.T) {
 
 // TestHandleKeyPressCtrlC tests Ctrl+C handling
 func TestHandleKeyPressCtrlC(t *testing.T) {
-	cmd := &cobra.Command{Use: "test"}
+	cmd := makeTestCommand(t)
 	repos := []string{"repo1"}
 	channels := makeTestChannels(repos)
 	defer func() {
@@ -926,7 +939,7 @@ func TestHandleKeyPressCtrlC(t *testing.T) {
 
 // TestHandleKeyPressQ tests 'q' key handling
 func TestHandleKeyPressQ(t *testing.T) {
-	cmd := &cobra.Command{Use: "test"}
+	cmd := makeTestCommand(t)
 	repos := []string{"repo1"}
 	channels := makeTestChannels(repos)
 	defer func() {
@@ -962,7 +975,7 @@ func TestHandleKeyPressQ(t *testing.T) {
 
 // TestHandleKeyPressP tests 'p' key handling for persist output
 func TestHandleKeyPressP(t *testing.T) {
-	cmd := &cobra.Command{Use: "test"}
+	cmd := makeTestCommand(t)
 	repos := []string{"repo1"}
 	channels := makeTestChannels(repos)
 	defer func() {
@@ -1003,7 +1016,7 @@ func TestHandleKeyPressP(t *testing.T) {
 func TestPrintFullOutput(t *testing.T) {
 	var output strings.Builder
 	var errOut strings.Builder
-	cmd := &cobra.Command{Use: "test"}
+	cmd := makeTestCommand(t)
 	cmd.SetOut(&output)
 	cmd.SetErr(&errOut)
 

@@ -25,10 +25,17 @@ func TUICatalog(cmd *cobra.Command) {
 		tea.WithMouseCellMotion(),
 	)
 
-	if _, err := p.Run(); err != nil {
-		fmt.Fprintf(cmd.ErrOrStderr(), "Error running TUI: %v\n", err)
+	finalModel, err := p.Run()
+	if err != nil {
+		fmt.Fprintf(cmd.ErrOrStderr(), tuiFailText, err)
 		// Fallback to native output
 		NativeCatalog(cmd)
+		return
+	}
+
+	// If the user requested to persist output (via 'p' key or --print flag), print it
+	if m, ok := finalModel.(catalogModel); ok && (m.printOutput || !m.waitOnExit) {
+		m.printFullOutput(cmd)
 	}
 }
 
@@ -40,6 +47,9 @@ type catalogModel struct {
 	ready    bool
 	width    int
 	height   int
+
+	printOutput bool
+	waitOnExit  bool
 }
 
 type repoWithMetadata struct {
@@ -82,6 +92,9 @@ func newCatalogModel(ctx context.Context) catalogModel {
 	return catalogModel{
 		ctx:   ctx,
 		repos: repos,
+
+		printOutput: viper.GetBool(config.PrintResults),
+		waitOnExit:  viper.GetBool(config.WaitOnExit),
 	}
 }
 
@@ -103,6 +116,10 @@ func (m catalogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.viewport = viewport.New(msg.Width, msg.Height-headerHeight-footerHeight)
 			m.viewport.YPosition = headerHeight
 			m.ready = true
+			// Auto-quit if wait flag is false
+			if !m.waitOnExit {
+				return m, tea.Quit
+			}
 		} else {
 			m.viewport.Width = msg.Width
 			m.viewport.Height = msg.Height - 5
@@ -113,7 +130,10 @@ func (m catalogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.KeyMsg:
 		switch msg.String() {
-		case "q", "esc", "ctrl+c":
+		case "p":
+			m.printOutput = true
+			return m, tea.Quit
+		case "enter", "esc", "q", "ctrl+c":
 			return m, tea.Quit
 
 		default:
@@ -219,4 +239,18 @@ func (m catalogModel) View() string {
 	b.WriteString(styles.help.Render(footerDone))
 
 	return b.String()
+}
+
+// printFullOutput prints the complete catalog output to stdout, reusing the buildContent logic
+func (m catalogModel) printFullOutput(cmd *cobra.Command) {
+	styles := newCatalogStyles(m.width)
+	out := cmd.OutOrStdout()
+
+	// Title
+	title := fmt.Sprintf("Repository Catalog (%d repositories)", len(m.repos))
+	fmt.Fprintln(out, styles.title.Render(title))
+	fmt.Fprintln(out)
+
+	// Print content (reuses buildContent)
+	fmt.Fprint(out, m.buildContent())
 }
