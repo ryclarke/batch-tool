@@ -1,11 +1,25 @@
 package output_test
 
 import (
+	"context"
+	"io"
 	"testing"
 
 	"github.com/ryclarke/batch-tool/call/output"
 	"github.com/ryclarke/batch-tool/config"
+	testhelper "github.com/ryclarke/batch-tool/utils/test"
+	"github.com/spf13/cobra"
 )
+
+func loadFixture(t *testing.T) context.Context {
+	t.Helper()
+	return testhelper.LoadFixture(t, "../../config")
+}
+
+// fakeCmd creates a minimal cobra.Command for testing with the given context and output buffer
+func fakeCmd(t *testing.T, ctx context.Context, out io.Writer) *cobra.Command {
+	return testhelper.FakeCmd(t, ctx, out)
+}
 
 // TestGetHandler tests the GetHandler function
 func TestGetHandler(t *testing.T) {
@@ -47,11 +61,6 @@ func TestGetHandler(t *testing.T) {
 			}
 
 			handler := output.GetHandler(ctx)
-
-			// Verify the handler is not nil
-			if handler == nil {
-				t.Fatal("getDefaultHandler returned nil")
-			}
 
 			// We can't directly compare function pointers, but we can verify
 			// that we got a valid handler by checking it's callable
@@ -98,11 +107,6 @@ func TestGetLabels(t *testing.T) {
 			}
 
 			labelHandler := output.GetLabelHandler(ctx)
-
-			// Verify the handler is not nil
-			if labelHandler == nil {
-				t.Fatal("GetLabels returned nil")
-			}
 
 			// Verify the handler is callable
 			if labelHandler == nil {

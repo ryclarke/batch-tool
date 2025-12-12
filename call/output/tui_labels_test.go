@@ -14,7 +14,7 @@ import (
 
 func setupLabelsTest(t *testing.T) context.Context {
 	t.Helper()
-	ctx := config.LoadFixture(t, "../../config")
+	ctx := loadFixture(t)
 
 	// Set up mock catalog
 	catalog.Labels = make(map[string]mapset.Set[string])

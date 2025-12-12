@@ -1,15 +1,10 @@
 package pr
 
 import (
-	"context"
 	"testing"
 
 	"github.com/ryclarke/batch-tool/config"
 )
-
-func loadFixture(t *testing.T) context.Context {
-	return config.LoadFixture(t, "../../config")
-}
 
 func TestPrCmd(t *testing.T) {
 	loadFixture(t)
@@ -169,127 +164,5 @@ func TestLookupReviewers(t *testing.T) {
 	reviewers = lookupReviewers(ctx, "nonexistent-repo")
 	if len(reviewers) != 0 {
 		t.Errorf("Expected 0 reviewers for nonexistent repo, got %d", len(reviewers))
-	}
-}
-
-func TestAddNewCmd(t *testing.T) {
-	cmd := addNewCmd()
-
-	if cmd == nil {
-		t.Fatal("addNewCmd() returned nil")
-	}
-
-	if cmd.Use != "new <repository>..." {
-		t.Errorf("Expected Use to be 'new <repository>...', got %s", cmd.Use)
-	}
-
-	if cmd.Short == "" {
-		t.Error("Expected Short description to be set")
-	}
-}
-
-func TestNewCmdFlags(t *testing.T) {
-	cmd := addNewCmd()
-
-	// Test all-reviewers flag
-	allReviewersFlag := cmd.Flags().Lookup("all-reviewers")
-	if allReviewersFlag == nil {
-		t.Error("all-reviewers flag not found")
-
-		return
-	}
-
-	if allReviewersFlag.Shorthand != "a" {
-		t.Errorf("Expected all-reviewers flag shorthand to be 'a', got %s", allReviewersFlag.Shorthand)
-	}
-}
-
-func TestNewCmdArgs(t *testing.T) {
-	cmd := addNewCmd()
-
-	// Test that command requires minimum arguments
-	err := cmd.Args(cmd, []string{})
-	if err == nil {
-		t.Error("Expected error when no arguments provided")
-	}
-
-	// Test that command accepts arguments
-	err = cmd.Args(cmd, []string{"repo1"})
-	if err != nil {
-		t.Errorf("Expected no error with valid arguments, got %v", err)
-	}
-}
-
-func TestAddEditCmd(t *testing.T) {
-	cmd := addEditCmd()
-
-	if cmd == nil {
-		t.Fatal("addEditCmd() returned nil")
-	}
-
-	if cmd.Use != "edit <repository>..." {
-		t.Errorf("Expected Use to be 'edit <repository>...', got %s", cmd.Use)
-	}
-
-	if cmd.Short == "" {
-		t.Error("Expected Short description to be set")
-	}
-}
-
-func TestEditCmdFlags(t *testing.T) {
-	cmd := addEditCmd()
-
-	// Test reset-reviewers flag
-	resetReviewersFlag := cmd.Flags().Lookup("reset-reviewers")
-	if resetReviewersFlag == nil {
-		t.Error("reset-reviewers flag not found")
-	}
-}
-
-func TestEditCmdArgs(t *testing.T) {
-	cmd := addEditCmd()
-
-	// Test that command requires minimum arguments
-	err := cmd.Args(cmd, []string{})
-	if err == nil {
-		t.Error("Expected error when no arguments provided")
-	}
-
-	// Test that command accepts arguments
-	err = cmd.Args(cmd, []string{"repo1"})
-	if err != nil {
-		t.Errorf("Expected no error with valid arguments, got %v", err)
-	}
-}
-
-func TestAddMergeCmd(t *testing.T) {
-	cmd := addMergeCmd()
-
-	if cmd == nil {
-		t.Fatal("addMergeCmd() returned nil")
-	}
-
-	if cmd.Use != "merge <repository>..." {
-		t.Errorf("Expected Use to be 'merge <repository>...', got %s", cmd.Use)
-	}
-
-	if cmd.Short == "" {
-		t.Error("Expected Short description to be set")
-	}
-}
-
-func TestMergeCmdArgs(t *testing.T) {
-	cmd := addMergeCmd()
-
-	// Test that command requires minimum arguments
-	err := cmd.Args(cmd, []string{})
-	if err == nil {
-		t.Error("Expected error when no arguments provided")
-	}
-
-	// Test that command accepts arguments
-	err = cmd.Args(cmd, []string{"repo1"})
-	if err != nil {
-		t.Errorf("Expected no error with valid arguments, got %v", err)
 	}
 }

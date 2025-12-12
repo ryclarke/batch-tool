@@ -1,4 +1,4 @@
-package utils
+package utils_test
 
 import (
 	"os/exec"
@@ -6,6 +6,8 @@ import (
 	"testing"
 
 	"github.com/ryclarke/batch-tool/config"
+	"github.com/ryclarke/batch-tool/utils"
+	testhelper "github.com/ryclarke/batch-tool/utils/test"
 )
 
 func TestParseRepo(t *testing.T) {
@@ -53,7 +55,7 @@ func TestParseRepo(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			host, project, name := ParseRepo(ctx, tt.repo)
+			host, project, name := utils.ParseRepo(ctx, tt.repo)
 
 			if tt.wantHost != "" && host != tt.wantHost {
 				t.Errorf("ParseRepo() host = %v, want %v", host, tt.wantHost)
@@ -96,7 +98,7 @@ func TestRepoPath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := RepoPath(ctx, tt.repo)
+			got := utils.RepoPath(ctx, tt.repo)
 			if got != tt.wantPath {
 				t.Errorf("RepoPath() = %v, want %v", got, tt.wantPath)
 			}
@@ -110,7 +112,7 @@ func TestRepoPathEmptyRepo(t *testing.T) {
 
 	viper.Set(config.GitDirectory, "/test/gitdir/src")
 
-	got := RepoPath(ctx, "")
+	got := utils.RepoPath(ctx, "")
 
 	// Should return absolute path to git directory
 	if got != "/test/gitdir/src" {
@@ -140,9 +142,9 @@ func TestRepoURL(t *testing.T) {
 			viper.Set(config.GitHost, "github.com")
 			viper.Set(config.GitProject, "test-project")
 
-			url := RepoURL(ctx, tt.repo)
+			url := utils.RepoURL(ctx, tt.repo)
 			for _, want := range tt.wantContains {
-				checkStringContains(t, url, want)
+				testhelper.AssertContains(t, url, want)
 			}
 		})
 	}
@@ -159,7 +161,7 @@ func TestLookupBranchWithConfigSet(t *testing.T) {
 	// When branch is already in config, should return it without calling git
 	viper.Set(config.Branch, "feature-branch")
 
-	branch, err := LookupBranch(ctx, "any-repo")
+	branch, err := utils.LookupBranch(ctx, "any-repo")
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
 	}
@@ -171,23 +173,18 @@ func TestLookupBranchWithConfigSet(t *testing.T) {
 
 func TestValidateBranchSourceBranchMatch(t *testing.T) {
 	ctx := loadFixture(t)
-	viper := config.Viper(ctx)
 
 	// Set up a temporary git repo for testing
-	tmpDir := t.TempDir()
-	viper.Set(config.GitDirectory, tmpDir)
-	viper.Set(config.GitHost, "github.com")
-	viper.Set(config.GitProject, "test")
-	viper.Set(config.SourceBranch, "main")
+	reposPath := testhelper.SetupRepos(t, []string{"test-repo"})
 
-	// Create a real git repo with main branch
-	repoPath := RepoPath(ctx, "test-repo")
-	if err := setupTestGitRepo(repoPath, "main"); err != nil {
-		t.Skipf("Cannot create test git repo: %v", err)
-	}
+	// Update context to use the temp repos path
+	viper := config.Viper(ctx)
+	viper.Set(config.GitDirectory, reposPath)
+	viper.Set(config.GitHost, "example.com")
+	viper.Set(config.GitProject, "test-project")
 
 	ch := make(chan string, 1)
-	err := ValidateBranch(ctx, "test-repo", ch)
+	err := utils.ValidateBranch(ctx, "test-repo", ch)
 
 	if err == nil {
 		t.Error("Expected error when current branch matches source branch")

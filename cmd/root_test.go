@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	testhelper "github.com/ryclarke/batch-tool/utils/test"
 	"bytes"
 	"context"
 	"fmt"
@@ -14,7 +15,7 @@ import (
 )
 
 func loadFixture(t *testing.T) context.Context {
-	return config.LoadFixture(t, "../config")
+	return testhelper.LoadFixture(t, "../config")
 }
 
 func TestRootCmd(t *testing.T) {

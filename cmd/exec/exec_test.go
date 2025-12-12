@@ -1,17 +1,17 @@
 package exec
 
 import (
+	testhelper "github.com/ryclarke/batch-tool/utils/test"
 	"bytes"
 	"context"
 	"io"
 	"strings"
 	"testing"
 
-	"github.com/ryclarke/batch-tool/config"
 )
 
 func loadFixture(t *testing.T) context.Context {
-	return config.LoadFixture(t, "../../config")
+	return testhelper.LoadFixture(t, "../../config")
 }
 
 // mockStdin replaces stdin with a mock for testing

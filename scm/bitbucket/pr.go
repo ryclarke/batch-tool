@@ -107,7 +107,7 @@ func (b *Bitbucket) UpdatePullRequest(repo, branch, title, description string, r
 }
 
 // MergePullRequest merges an existing pull request.
-func (b *Bitbucket) MergePullRequest(repo, branch string) (*scm.PullRequest, error) {
+func (b *Bitbucket) MergePullRequest(repo, branch string, _ bool) (*scm.PullRequest, error) {
 	pr, err := b.GetPullRequest(repo, branch)
 	if err != nil {
 		return nil, err
@@ -206,7 +206,6 @@ func (pr *prResp) SetReviewers(reviewers []string) {
 // generate a PR payload for the Bitbucket API
 func (b *Bitbucket) genPR(name, title, description string, reviewers []string) string {
 	viper := config.Viper(b.ctx)
-	project := viper.GetString(config.GitProject)
 
 	pr := &prResp{
 		Title:       title,
@@ -215,14 +214,14 @@ func (b *Bitbucket) genPR(name, title, description string, reviewers []string) s
 			ID: fmt.Sprintf("refs/heads/%s", viper.GetString(config.Branch)),
 			Repository: prRefRepo{
 				Slug:    name,
-				Project: prRefRepoProj{Key: project},
+				Project: prRefRepoProj{Key: b.project}, // Use provider's project
 			},
 		},
 		ToRef: prRef{
 			ID: fmt.Sprintf("refs/heads/%s", viper.GetString(config.SourceBranch)),
 			Repository: prRefRepo{
 				Slug:    name,
-				Project: prRefRepoProj{Key: project},
+				Project: prRefRepoProj{Key: b.project},
 			},
 		},
 	}

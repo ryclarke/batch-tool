@@ -13,6 +13,10 @@ import (
 	"github.com/ryclarke/batch-tool/utils"
 )
 
+const (
+	forceFlag = "force"
+)
+
 // addMergeCmd initializes the pr merge command
 func addMergeCmd() *cobra.Command {
 	mergeCmd := &cobra.Command{
@@ -20,10 +24,15 @@ func addMergeCmd() *cobra.Command {
 		Short:             "Merge accepted pull requests",
 		Args:              cobra.MinimumNArgs(1),
 		ValidArgsFunction: catalog.CompletionFunc(),
+		PreRunE: func(cmd *cobra.Command, _ []string) error {
+			return config.Viper(cmd.Context()).BindPFlag(config.PrForceMerge, cmd.Flags().Lookup(forceFlag))
+		},
 		Run: func(cmd *cobra.Command, args []string) {
 			call.Do(cmd, args, call.Wrap(utils.ValidateBranch, Merge))
 		},
 	}
+
+	mergeCmd.Flags().BoolP(forceFlag, "f", false, "attempt to merge without checking PR status")
 
 	return mergeCmd
 }
@@ -32,14 +41,16 @@ func addMergeCmd() *cobra.Command {
 func Merge(ctx context.Context, name string, ch chan<- string) error {
 	viper := config.Viper(ctx)
 
-	provider := scm.Get(ctx, viper.GetString(config.GitProvider), viper.GetString(config.GitProject))
+	// Get project from repository metadata in catalog, fall back to default
+	project := catalog.GetProjectForRepo(ctx, name)
+	provider := scm.Get(ctx, viper.GetString(config.GitProvider), project)
 
 	branch, err := utils.LookupBranch(ctx, name)
 	if err != nil {
 		return err
 	}
 
-	pr, err := provider.MergePullRequest(name, branch)
+	pr, err := provider.MergePullRequest(name, branch, viper.GetBool(config.PrForceMerge))
 	if err != nil {
 		return err
 	}

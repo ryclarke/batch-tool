@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
-	"testing"
 	"time"
 
 	"github.com/spf13/viper"
@@ -77,6 +76,7 @@ const (
 	PrReviewers      = "pr.args.reviewers"
 	PrResetReviewers = "pr.args.reset-reviewers"
 	PrAllReviewers   = "pr.args.all-reviewers"
+	PrForceMerge     = "pr.args.force-merge"
 
 	// make
 	MakeTargets = "make.args.targets"
@@ -84,7 +84,7 @@ const (
 
 // Init reads in config file and ENV variables if set.
 func Init(ctx context.Context) context.Context {
-	v := newViper()
+	v := New()
 
 	if CfgFile != "" {
 		// Use config file from the flag.
@@ -122,7 +122,8 @@ func Init(ctx context.Context) context.Context {
 	return SetViper(ctx, v)
 }
 
-func newViper() *viper.Viper {
+// New creates a new Viper instance with default configuration.
+func New() *viper.Viper {
 	v := viper.NewWithOptions(viper.EnvKeyReplacer(strings.NewReplacer(".", "_", "-", "_")))
 	v.AutomaticEnv() // read in environment variables that match
 	setDefaults(v)
@@ -171,23 +172,6 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault(TokenLabel, "~")
 	v.SetDefault(TokenSkip, "!")
 	v.SetDefault(TokenForced, "+")
-}
-
-// LoadFixture will load example configuration; for testing only!
-func LoadFixture(t *testing.T, dir string) context.Context {
-	t.Helper()
-
-	v := newViper()
-	ctx := SetViper(context.Background(), v)
-
-	v.SetConfigName("fixture")
-	v.AddConfigPath(dir)
-
-	if err := v.ReadInConfig(); err != nil {
-		t.Fatalf("Failed to load fixture config: %v", err)
-	}
-
-	return ctx
 }
 
 func defaultGitdir() string {

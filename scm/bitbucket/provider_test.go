@@ -6,12 +6,12 @@ import (
 	"net/url"
 	"testing"
 
-	"github.com/ryclarke/batch-tool/config"
 	"github.com/ryclarke/batch-tool/scm"
+	testhelper "github.com/ryclarke/batch-tool/utils/test"
 )
 
 func loadFixture(t *testing.T) context.Context {
-	return config.LoadFixture(t, "../../config")
+	return testhelper.LoadFixture(t, "../../config")
 }
 
 func TestNew(t *testing.T) {
@@ -93,7 +93,7 @@ func TestBitbucketProviderMethods(t *testing.T) {
 		t.Logf("UpdatePullRequest failed as expected: %v", err)
 	}
 
-	_, err = provider.MergePullRequest("test-repo", "test-branch")
+	_, err = provider.MergePullRequest("test-repo", "test-branch", false)
 	if err == nil {
 		t.Log("MergePullRequest succeeded (unexpected without auth)")
 	} else {

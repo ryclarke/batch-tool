@@ -10,6 +10,9 @@ import (
 	"github.com/ryclarke/batch-tool/config"
 )
 
+// CatalogLookup is a function type for looking up project from catalog
+var CatalogLookup func(ctx context.Context, repoName string) string
+
 // ParseRepo splits a repo identifier into its component parts
 func ParseRepo(ctx context.Context, repo string) (host, project, name string) {
 	viper := config.Viper(ctx)
@@ -20,7 +23,12 @@ func ParseRepo(ctx context.Context, repo string) (host, project, name string) {
 	if len(parts) > 1 {
 		project = parts[len(parts)-2]
 	} else {
-		project = viper.GetString(config.GitProject)
+		// Check catalog first via callback, then fall back to default project
+		if CatalogLookup != nil {
+			project = CatalogLookup(ctx, name)
+		} else {
+			project = viper.GetString(config.GitProject)
+		}
 	}
 
 	if len(parts) > 2 {

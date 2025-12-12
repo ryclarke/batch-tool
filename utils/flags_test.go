@@ -1,4 +1,4 @@
-package utils
+package utils_test
 
 import (
 	"fmt"
@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/ryclarke/batch-tool/config"
+	"github.com/ryclarke/batch-tool/utils"
 	"github.com/spf13/cobra"
 )
 
@@ -77,7 +78,7 @@ func TestCheckMutuallyExclusiveFlags(t *testing.T) {
 			}
 
 			// Run the check
-			err := CheckMutuallyExclusiveFlags(cmd, tt.checkFlags...)
+			err := utils.CheckMutuallyExclusiveFlags(cmd, tt.checkFlags...)
 
 			if tt.expectError && err == nil {
 				t.Error("Expected error but got none")
@@ -139,7 +140,7 @@ func TestBuildBoolFlags(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			cmd := &cobra.Command{Use: "test"}
 
-			BuildBoolFlags(cmd, tt.yesName, tt.yesShort, tt.noName, tt.noShort, tt.description)
+			utils.BuildBoolFlags(cmd, tt.yesName, tt.yesShort, tt.noName, tt.noShort, tt.description)
 
 			// Verify yes flag exists with correct defaults
 			yesFlag := cmd.PersistentFlags().Lookup(tt.yesName)
@@ -279,7 +280,7 @@ func TestBindBoolFlags(t *testing.T) {
 			}
 
 			// Run BindBoolFlags
-			err := BindBoolFlags(cmd, tt.key, tt.yesName, tt.noName)
+			err := utils.BindBoolFlags(cmd, tt.key, tt.yesName, tt.noName)
 
 			// Check error expectation
 			if tt.expectError {

@@ -9,38 +9,6 @@ import (
 	"golang.org/x/sync/semaphore"
 )
 
-// testChannel implements the Channel interface for testing
-type testChannel struct {
-	name   string
-	output chan string
-	err    chan error
-}
-
-func (tc *testChannel) Name() string        { return tc.name }
-func (tc *testChannel) Out() <-chan string  { return tc.output }
-func (tc *testChannel) Err() <-chan error   { return tc.err }
-func (tc *testChannel) WOut() chan<- string { return tc.output }
-func (tc *testChannel) WErr() chan<- error  { return tc.err }
-func (tc *testChannel) Start(weight int64) (func(), error) {
-	return func() {
-		close(tc.output)
-		close(tc.err)
-	}, nil
-}
-
-// makeTestChannels creates test channels for the given repo names
-func makeTestChannels(names []string) []Channel {
-	channels := make([]Channel, len(names))
-	for i, name := range names {
-		channels[i] = &testChannel{
-			name:   name,
-			output: make(chan string),
-			err:    make(chan error),
-		}
-	}
-	return channels
-}
-
 func TestNewChannel(t *testing.T) {
 	ctx := context.Background()
 	sem := semaphore.NewWeighted(10)

@@ -38,7 +38,8 @@ func TestPRIntegrationWithFakeProvider(t *testing.T) {
 
 		// Capture output
 		var output bytes.Buffer
-		cmd.SetOutput(&output)
+		cmd.SetOut(&output)
+		cmd.SetErr(&output)
 
 		// We can't easily test execution without more setup, but we can test command structure
 		if cmd.Use != "new <repository>..." {

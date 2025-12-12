@@ -1,13 +1,16 @@
-package utils
+package utils_test
 
 import (
 	"context"
 	"path/filepath"
 	"testing"
 
+	testhelper "github.com/ryclarke/batch-tool/utils/test"
+
 	"github.com/ryclarke/batch-tool/config"
 	"github.com/ryclarke/batch-tool/scm"
 	"github.com/ryclarke/batch-tool/scm/fake"
+	"github.com/ryclarke/batch-tool/utils"
 )
 
 func TestSCMIntegrationWithUtils(t *testing.T) {
@@ -58,8 +61,8 @@ func TestSCMIntegrationWithUtils(t *testing.T) {
 					defer viper.Set(config.GitProvider, "fake-utils-test")
 				}
 
-				err := ValidateRequiredConfig(ctx, tt.keys...)
-				checkError(t, err, tt.wantError)
+				err := utils.ValidateRequiredConfig(ctx, tt.keys...)
+				testhelper.AssertError(t, err, tt.wantError)
 			})
 		}
 	})
@@ -97,13 +100,14 @@ func TestSCMIntegrationWithUtils(t *testing.T) {
 
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
-				host, project, name := ParseRepo(ctx, tt.input)
+				host, project, name := utils.ParseRepo(ctx, tt.input)
 
 				if tt.wantHost != "" {
-					checkStringEqual(t, host, tt.wantHost)
+					testhelper.AssertEqual(t, host, tt.wantHost)
 				}
-				checkStringEqual(t, project, tt.wantProject)
-				checkStringEqual(t, name, tt.wantName)
+
+				testhelper.AssertEqual(t, project, tt.wantProject)
+				testhelper.AssertEqual(t, name, tt.wantName)
 			})
 		}
 	})
@@ -123,8 +127,8 @@ func TestSCMIntegrationWithUtils(t *testing.T) {
 
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
-				path := RepoPath(ctx, tt.repo)
-				checkStringEqual(t, path, tt.wantPath)
+				path := utils.RepoPath(ctx, tt.repo)
+				testhelper.AssertEqual(t, path, tt.wantPath)
 			})
 		}
 	})
@@ -144,8 +148,8 @@ func TestSCMIntegrationWithUtils(t *testing.T) {
 
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
-				url := RepoURL(ctx, tt.repo)
-				checkStringEqual(t, url, tt.wantURL)
+				url := utils.RepoURL(ctx, tt.repo)
+				testhelper.AssertEqual(t, url, tt.wantURL)
 			})
 		}
 	})
@@ -178,8 +182,8 @@ func TestValidateBranchIntegration(t *testing.T) {
 			ch := make(chan string, 1)
 			defer close(ch)
 
-			err := ValidateBranch(ctx, tt.repo, ch)
-			checkError(t, err, tt.wantError)
+			err := utils.ValidateBranch(ctx, tt.repo, ch)
+			testhelper.AssertError(t, err, tt.wantError)
 		})
 	}
 }
@@ -222,12 +226,12 @@ func TestLookupBranchIntegration(t *testing.T) {
 			viper.Set(config.Branch, tt.branchSet)
 			viper.Set(config.GitDirectory, "/tmp/test-gitdir")
 
-			branch, err := LookupBranch(ctx, tt.repo)
+			branch, err := utils.LookupBranch(ctx, tt.repo)
 
 			if tt.branchSet != "" {
-				checkError(t, err, tt.wantError)
+				testhelper.AssertError(t, err, tt.wantError)
 				if err == nil {
-					checkStringEqual(t, branch, tt.wantBranch)
+					testhelper.AssertEqual(t, branch, tt.wantBranch)
 				}
 			} else {
 				// When branch not set, will try to read from git
@@ -260,17 +264,17 @@ func TestUtilsWithFakeRepositories(t *testing.T) {
 	for _, repo := range repos {
 		t.Run("Repository_"+repo.Name, func(t *testing.T) {
 			// Test ParseRepo
-			_, _, name := ParseRepo(ctx, repo.Name)
-			checkStringEqual(t, name, repo.Name)
+			_, _, name := utils.ParseRepo(ctx, repo.Name)
+			testhelper.AssertEqual(t, name, repo.Name)
 
 			// Test RepoPath
-			path := RepoPath(ctx, repo.Name)
+			path := utils.RepoPath(ctx, repo.Name)
 			checkAbsolutePath(t, path)
 
 			// Test RepoURL
-			url := RepoURL(ctx, repo.Name)
-			checkStringNotEmpty(t, url)
-			checkStringContains(t, url, repo.Name)
+			url := utils.RepoURL(ctx, repo.Name)
+			testhelper.AssertNotEmpty(t, url)
+			testhelper.AssertContains(t, url, repo.Name)
 		})
 	}
 }

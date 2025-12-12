@@ -1,10 +1,12 @@
-package utils
+package utils_test
 
 import (
 	"strings"
 	"testing"
 
 	"github.com/ryclarke/batch-tool/config"
+	"github.com/ryclarke/batch-tool/utils"
+	testhelper "github.com/ryclarke/batch-tool/utils/test"
 	"github.com/spf13/cobra"
 )
 
@@ -50,8 +52,8 @@ func TestCleanFilter(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := CleanFilter(ctx, tt.filter)
-			checkStringEqual(t, result, tt.wantResult)
+			result := utils.CleanFilter(ctx, tt.filter)
+			testhelper.AssertEqual(t, result, tt.wantResult)
 		})
 	}
 }
@@ -112,7 +114,7 @@ func TestValidateRequiredConfig(t *testing.T) {
 				tt.setup()
 			}
 
-			err := ValidateRequiredConfig(ctx, tt.keys...)
+			err := utils.ValidateRequiredConfig(ctx, tt.keys...)
 			if (err != nil) != tt.wantError {
 				t.Errorf("ValidateRequiredConfig() error = %v, wantError %v", err, tt.wantError)
 			}
@@ -180,7 +182,7 @@ func TestValidateEnumConfig(t *testing.T) {
 			cmd.SetContext(ctx)
 
 			// Run check
-			err := ValidateEnumConfig(cmd, tt.key, tt.validChoices)
+			err := utils.ValidateEnumConfig(cmd, tt.key, tt.validChoices)
 
 			if tt.expectError {
 				if err == nil {

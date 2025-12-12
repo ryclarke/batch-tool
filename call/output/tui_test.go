@@ -9,33 +9,7 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
-
-	"github.com/ryclarke/batch-tool/config"
 )
-
-// testCancelFunc is a no-op cancel function for tests
-func testCancelFunc() { /* no-op */ }
-
-// makeTestCommand creates a command with a properly initialized context for testing
-func makeTestCommand(t *testing.T) *cobra.Command {
-	t.Helper()
-
-	cmd := &cobra.Command{Use: "test"}
-	ctx := config.LoadFixture(t, "../../config")
-	cmd.SetContext(ctx)
-	return cmd
-}
-
-// makeClosedChannels creates closed channels for testing to avoid blocking
-func makeClosedChannels(names []string) []Channel {
-	channels := makeTestChannels(names)
-	for _, ch := range channels {
-		tc := ch.(*testChannel)
-		close(tc.output)
-		close(tc.err)
-	}
-	return channels
-}
 
 // TestBuildCommandString tests the command string building logic
 func TestBuildCommandString(t *testing.T) {
@@ -90,7 +64,7 @@ func TestInitialModel(t *testing.T) {
 	cmd := makeTestCommand(t)
 
 	repos := []string{"repo1", "repo2", "repo3"}
-	channels := makeClosedChannels(repos)
+	channels := makeTestChannels(repos, true)
 
 	m := initialModel(cmd, channels, testCancelFunc)
 	if len(m.repos) != 3 {
@@ -122,7 +96,7 @@ func TestInitialModel(t *testing.T) {
 func TestHandleRepoOutput(t *testing.T) {
 	cmd := makeTestCommand(t)
 	repos := []string{"repo1"}
-	channels := makeClosedChannels(repos)
+	channels := makeTestChannels(repos, true)
 
 	m := initialModel(cmd, channels, testCancelFunc)
 	m.viewport = viewport.New(80, 24)
@@ -149,7 +123,7 @@ func TestHandleRepoOutput(t *testing.T) {
 func TestHandleRepoError(t *testing.T) {
 	cmd := makeTestCommand(t)
 	repos := []string{"repo1"}
-	channels := makeTestChannels(repos)
+	channels := makeTestChannels(repos, false)
 
 	m := initialModel(cmd, channels, testCancelFunc)
 	m.viewport = viewport.New(80, 24)
@@ -178,7 +152,7 @@ func TestHandleRepoError(t *testing.T) {
 func TestHandleRepoCompleted(t *testing.T) {
 	cmd := makeTestCommand(t)
 	repos := []string{"repo1"}
-	channels := makeTestChannels(repos)
+	channels := makeTestChannels(repos, false)
 
 	m := initialModel(cmd, channels, testCancelFunc)
 	m.viewport = viewport.New(80, 24)
@@ -221,7 +195,7 @@ func TestHandleRepoCompleted(t *testing.T) {
 func TestAllReposCompleted(t *testing.T) {
 	cmd := makeTestCommand(t)
 	repos := []string{"repo1", "repo2"}
-	channels := makeTestChannels(repos)
+	channels := makeTestChannels(repos, false)
 
 	m := initialModel(cmd, channels, testCancelFunc)
 
@@ -251,7 +225,7 @@ func TestAllReposCompleted(t *testing.T) {
 func TestCountCompleted(t *testing.T) {
 	cmd := makeTestCommand(t)
 	repos := []string{"repo1", "repo2", "repo3"}
-	channels := makeTestChannels(repos)
+	channels := makeTestChannels(repos, false)
 	defer func() {
 		for _, ch := range channels {
 			tc := ch.(*testChannel)
@@ -282,7 +256,7 @@ func TestCountCompleted(t *testing.T) {
 func TestCountErrors(t *testing.T) {
 	cmd := makeTestCommand(t)
 	repos := []string{"repo1", "repo2", "repo3"}
-	channels := makeTestChannels(repos)
+	channels := makeTestChannels(repos, false)
 	defer func() {
 		for _, ch := range channels {
 			tc := ch.(*testChannel)
@@ -329,7 +303,7 @@ func TestCountErrors(t *testing.T) {
 func TestCalculateElapsed(t *testing.T) {
 	cmd := makeTestCommand(t)
 	repos := []string{"repo1"}
-	channels := makeClosedChannels(repos)
+	channels := makeTestChannels(repos, true)
 
 	m := initialModel(cmd, channels, testCancelFunc)
 	m.startTime = time.Now().Add(-5 * time.Second)
@@ -353,7 +327,7 @@ func TestCalculateElapsed(t *testing.T) {
 func TestFormatRepoHeader(t *testing.T) {
 	cmd := makeTestCommand(t)
 	repos := []string{"repo1"}
-	channels := makeClosedChannels(repos)
+	channels := makeTestChannels(repos, true)
 
 	m := initialModel(cmd, channels, testCancelFunc)
 
@@ -492,7 +466,7 @@ func TestRenderProgressBar(t *testing.T) {
 func TestBuildContent(t *testing.T) {
 	cmd := makeTestCommand(t)
 	repos := []string{"repo1", "repo2"}
-	channels := makeTestChannels(repos)
+	channels := makeTestChannels(repos, false)
 	defer func() {
 		for _, ch := range channels {
 			tc := ch.(*testChannel)
@@ -606,7 +580,7 @@ func TestWaitForError(t *testing.T) {
 func TestHandleRepoCompletedSetsAllDone(t *testing.T) {
 	cmd := makeTestCommand(t)
 	repos := []string{"repo1"}
-	channels := makeTestChannels(repos)
+	channels := makeTestChannels(repos, false)
 
 	m := initialModel(cmd, channels, testCancelFunc)
 	m.viewport = viewport.New(80, 24)
@@ -638,7 +612,7 @@ func TestHandleRepoCompletedSetsAllDone(t *testing.T) {
 func TestHandleRepoCompletedWithError(t *testing.T) {
 	cmd := makeTestCommand(t)
 	repos := []string{"repo1"}
-	channels := makeTestChannels(repos)
+	channels := makeTestChannels(repos, false)
 
 	m := initialModel(cmd, channels, testCancelFunc)
 	m.viewport = viewport.New(80, 24)
@@ -669,7 +643,7 @@ func TestHandleRepoCompletedWithError(t *testing.T) {
 func TestHandleRepoCompletedOutOfBounds(t *testing.T) {
 	cmd := makeTestCommand(t)
 	repos := []string{"repo1"}
-	channels := makeTestChannels(repos)
+	channels := makeTestChannels(repos, false)
 
 	m := initialModel(cmd, channels, testCancelFunc)
 	m.viewport = viewport.New(80, 24)
@@ -696,7 +670,7 @@ func TestHandleRepoCompletedOutOfBounds(t *testing.T) {
 func TestFormatRepoHeaderInactive(t *testing.T) {
 	cmd := makeTestCommand(t)
 	repos := []string{"repo1"}
-	channels := makeTestChannels(repos)
+	channels := makeTestChannels(repos, false)
 	defer func() {
 		for _, ch := range channels {
 			tc := ch.(*testChannel)
@@ -735,7 +709,7 @@ func TestRenderProgressBarSmallWidth(t *testing.T) {
 func TestModelView(t *testing.T) {
 	cmd := makeTestCommand(t)
 	repos := []string{"repo1"}
-	channels := makeTestChannels(repos)
+	channels := makeTestChannels(repos, false)
 	defer func() {
 		for _, ch := range channels {
 			tc := ch.(*testChannel)
@@ -777,7 +751,7 @@ func TestModelView(t *testing.T) {
 func TestRenderProgress(t *testing.T) {
 	cmd := makeTestCommand(t)
 	repos := []string{"repo1", "repo2"}
-	channels := makeTestChannels(repos)
+	channels := makeTestChannels(repos, false)
 	defer func() {
 		for _, ch := range channels {
 			tc := ch.(*testChannel)
@@ -807,7 +781,7 @@ func TestRenderProgress(t *testing.T) {
 func TestRenderFooter(t *testing.T) {
 	cmd := makeTestCommand(t)
 	repos := []string{"repo1"}
-	channels := makeTestChannels(repos)
+	channels := makeTestChannels(repos, false)
 	defer func() {
 		for _, ch := range channels {
 			tc := ch.(*testChannel)
@@ -842,7 +816,7 @@ func TestRenderFooter(t *testing.T) {
 func TestModelInit(t *testing.T) {
 	cmd := makeTestCommand(t)
 	repos := []string{"repo1", "repo2"}
-	channels := makeTestChannels(repos)
+	channels := makeTestChannels(repos, false)
 	defer func() {
 		for _, ch := range channels {
 			tc := ch.(*testChannel)
@@ -863,7 +837,7 @@ func TestModelInit(t *testing.T) {
 func TestHandleWindowSize(t *testing.T) {
 	cmd := makeTestCommand(t)
 	repos := []string{"repo1"}
-	channels := makeTestChannels(repos)
+	channels := makeTestChannels(repos, false)
 	defer func() {
 		for _, ch := range channels {
 			tc := ch.(*testChannel)
@@ -906,7 +880,7 @@ func TestHandleWindowSize(t *testing.T) {
 func TestHandleKeyPressCtrlC(t *testing.T) {
 	cmd := makeTestCommand(t)
 	repos := []string{"repo1"}
-	channels := makeTestChannels(repos)
+	channels := makeTestChannels(repos, false)
 	defer func() {
 		for _, ch := range channels {
 			tc := ch.(*testChannel)
@@ -941,7 +915,7 @@ func TestHandleKeyPressCtrlC(t *testing.T) {
 func TestHandleKeyPressQ(t *testing.T) {
 	cmd := makeTestCommand(t)
 	repos := []string{"repo1"}
-	channels := makeTestChannels(repos)
+	channels := makeTestChannels(repos, false)
 	defer func() {
 		for _, ch := range channels {
 			tc := ch.(*testChannel)
@@ -977,7 +951,7 @@ func TestHandleKeyPressQ(t *testing.T) {
 func TestHandleKeyPressP(t *testing.T) {
 	cmd := makeTestCommand(t)
 	repos := []string{"repo1"}
-	channels := makeTestChannels(repos)
+	channels := makeTestChannels(repos, false)
 	defer func() {
 		for _, ch := range channels {
 			tc := ch.(*testChannel)
@@ -1021,7 +995,7 @@ func TestPrintFullOutput(t *testing.T) {
 	cmd.SetErr(&errOut)
 
 	repos := []string{"repo1", "repo2"}
-	channels := makeClosedChannels(repos)
+	channels := makeTestChannels(repos, true)
 
 	m := initialModel(cmd, channels, testCancelFunc)
 	m.allDone = true

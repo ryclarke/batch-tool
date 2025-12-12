@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/ryclarke/batch-tool/config"
+	testhelper "github.com/ryclarke/batch-tool/utils/test"
 )
 
 // TestWrap tests the Wrap function which combines multiple CallFuncs
@@ -92,7 +93,7 @@ func TestWrap(t *testing.T) {
 				output = append(output, msg)
 			}
 
-			checkOutput(t, output, tt.wantOutput, err, tt.wantError)
+			testhelper.AssertOutput(t, output, tt.wantOutput, err, tt.wantError)
 		})
 	}
 }
@@ -174,7 +175,7 @@ func TestExec(t *testing.T) {
 				output = append(output, msg)
 			}
 
-			checkOutput(t, output, tt.wantOutput, err, tt.wantError)
+			testhelper.AssertOutput(t, output, tt.wantOutput, err, tt.wantError)
 		})
 	}
 }

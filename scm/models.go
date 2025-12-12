@@ -15,6 +15,7 @@ type PullRequest struct {
 	Branch      string   `json:"branch"`
 	Repo        string   `json:"repo"`
 	Reviewers   []string `json:"reviewers"`
+	Mergeable   bool     `json:"mergeable"`
 
 	ID      int `json:"id"`
 	Number  int `json:"number"`

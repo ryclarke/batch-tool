@@ -118,7 +118,7 @@ multiple git repositories, including branch management and pull request creation
 func Execute() {
 	ctx := config.Init(context.Background())
 	cobra.OnInitialize(func() {
-		catalog.Init(ctx)
+		catalog.Init(ctx, false)
 	})
 
 	if err := RootCmd().ExecuteContext(ctx); err != nil {
@@ -186,9 +186,8 @@ func catalogCmd() *cobra.Command {
 		Args:  cobra.NoArgs,
 		Run: func(cmd *cobra.Command, _ []string) {
 			if flush, _ := cmd.Flags().GetBool(catalogFlushFlag); flush {
-				if err := catalog.Flush(cmd.Context()); err != nil {
-					fmt.Fprintf(cmd.ErrOrStderr(), "Failed to flush catalog cache: %v\n", err)
-				}
+				// Flush and re-initialize the catalog even if the TTL has not expired
+				catalog.Init(cmd.Context(), true)
 			}
 
 			output.GetCatalogHandler(cmd.Context())(cmd)

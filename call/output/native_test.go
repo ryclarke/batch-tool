@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"strings"
 	"testing"
 
 	mapset "github.com/deckarep/golang-set/v2"
@@ -13,12 +12,13 @@ import (
 	"github.com/ryclarke/batch-tool/catalog"
 	"github.com/ryclarke/batch-tool/config"
 	"github.com/ryclarke/batch-tool/scm"
+	testhelper "github.com/ryclarke/batch-tool/utils/test"
 )
 
 // TestNativeHandler tests that NativeHandler properly handles and prints messages and errors
 func TestNativeHandler(t *testing.T) {
 	ctx := loadFixture(t)
-	setupDirs(t, ctx, []string{"repo1", "repo2"})
+	testhelper.SetupDirs(t, ctx, []string{"repo1", "repo2"})
 
 	viper := config.Viper(ctx)
 	viper.Set(config.MaxConcurrency, 2)
@@ -41,20 +41,10 @@ func TestNativeHandler(t *testing.T) {
 	errOutput := errBuf.String()
 
 	// Verify headers and output were printed
-	checkOutputContains(t, output, []string{"------ repo1 ------", "------ repo2 ------", "some output before error"})
+	testhelper.AssertContains(t, output, []string{"------ repo1 ------", "------ repo2 ------", "some output before error"})
 
 	// Verify errors were printed to stderr
-	checkOutputContains(t, errOutput, []string{"ERROR:", "test error for repo1", "test error for repo2"})
-}
-
-// checkOutputNotContains verifies output does not contain unwanted strings
-func checkOutputNotContains(t *testing.T, output string, unwantedStrings []string) {
-	t.Helper()
-	for _, unwanted := range unwantedStrings {
-		if strings.Contains(output, unwanted) {
-			t.Errorf("Expected output to not contain %q, got:\n%s", unwanted, output)
-		}
-	}
+	testhelper.AssertContains(t, errOutput, []string{"ERROR:", "test error for repo1", "test error for repo2"})
 }
 
 func TestNativeLabels_PrintAllLabels(t *testing.T) {
@@ -111,8 +101,8 @@ func TestNativeLabels_PrintAllLabels(t *testing.T) {
 			output.NativeLabels(cmd, false)
 
 			outputStr := buf.String()
-			checkOutputContains(t, outputStr, tt.wantContains)
-			checkOutputNotContains(t, outputStr, tt.wantNotContains)
+			testhelper.AssertContains(t, outputStr, tt.wantContains)
+			testhelper.AssertNotContains(t, outputStr, tt.wantNotContains)
 		})
 	}
 }
@@ -274,8 +264,8 @@ func TestNativeLabels_PrintSet(t *testing.T) {
 			output.NativeLabels(cmd, tt.verbose, tt.filters...)
 
 			outputStr := buf.String()
-			checkOutputContains(t, outputStr, tt.wantContains)
-			checkOutputNotContains(t, outputStr, tt.wantNotContains)
+			testhelper.AssertContains(t, outputStr, tt.wantContains)
+			testhelper.AssertNotContains(t, outputStr, tt.wantNotContains)
 		})
 	}
 }

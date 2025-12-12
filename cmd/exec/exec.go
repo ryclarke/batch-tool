@@ -12,6 +12,11 @@ import (
 	"github.com/ryclarke/batch-tool/catalog"
 )
 
+const (
+	scriptFlag = "script"
+	forceFlag  = "force"
+)
+
 // Cmd configures the exec command
 func Cmd() *cobra.Command {
 	execCmd := &cobra.Command{
@@ -22,12 +27,16 @@ func Cmd() *cobra.Command {
 		ValidArgsFunction: catalog.CompletionFunc(),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// Import command script from the CLI flag
-			command, err := cmd.Flags().GetString("script")
+			command, err := cmd.Flags().GetString(scriptFlag)
 			if err != nil {
 				return err
 			}
 
-			if ok, err := cmd.Flags().GetBool("force"); err != nil {
+			if command == "" {
+				return fmt.Errorf("no command provided; use the --%s|-c flag to specify a command", scriptFlag)
+			}
+
+			if ok, err := cmd.Flags().GetBool(forceFlag); err != nil {
 				return err
 			} else if !ok {
 				// DOUBLE CHECK with the user before running anything!
@@ -48,8 +57,8 @@ func Cmd() *cobra.Command {
 		},
 	}
 
-	execCmd.Flags().StringP("script", "c", "", "shell command(s) to execute")
-	execCmd.Flags().BoolP("force", "f", false, "execute command without asking for confirmation")
+	execCmd.Flags().StringP(scriptFlag, "c", "", "shell command(s) to execute")
+	execCmd.Flags().BoolP(forceFlag, "f", false, "execute command without asking for confirmation")
 
 	return execCmd
 }

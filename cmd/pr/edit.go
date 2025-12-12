@@ -50,7 +50,9 @@ func Edit(ctx context.Context, name string, ch chan<- string) error {
 		return fmt.Errorf("failed to lookup branch for %s: %w", name, err)
 	}
 
-	provider := scm.Get(ctx, viper.GetString(config.GitProvider), viper.GetString(config.GitProject))
+	// Get project from repository metadata in catalog, fall back to default
+	project := catalog.GetProjectForRepo(ctx, name)
+	provider := scm.Get(ctx, viper.GetString(config.GitProvider), project)
 
 	pr, err := provider.UpdatePullRequest(name, branch, viper.GetString(config.PrTitle), viper.GetString(config.PrDescription),
 		lookupReviewers(ctx, name), !viper.GetBool(config.PrResetReviewers))

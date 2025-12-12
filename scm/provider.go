@@ -21,7 +21,7 @@ type Provider interface {
 	// UpdatePullRequest updates an existing pull request.
 	UpdatePullRequest(repo, branch, title, description string, reviewers []string, appendReviewers bool) (*PullRequest, error)
 	// MergePullRequest merges an existing pull request.
-	MergePullRequest(repo, branch string) (*PullRequest, error)
+	MergePullRequest(repo, branch string, force bool) (*PullRequest, error)
 }
 
 // Get retrieves a registered SCM provider by name.

@@ -14,7 +14,7 @@ import (
 
 func setupCatalogTest(t *testing.T) context.Context {
 	t.Helper()
-	ctx := config.LoadFixture(t, "../../config")
+	ctx := loadFixture(t)
 
 	// Set up mock catalog
 	catalog.Catalog = make(map[string]scm.Repository)

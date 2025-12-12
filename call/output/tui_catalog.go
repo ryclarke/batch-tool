@@ -161,7 +161,7 @@ func (m catalogModel) buildContent() string {
 
 	for i, repo := range m.repos {
 		// Repository name
-		b.WriteString(styles.repoName.Render(repo.name))
+		b.WriteString(styles.repoName.Render(strings.TrimPrefix(repo.name, repo.project+"/")))
 		b.WriteString("\n")
 
 		// Description

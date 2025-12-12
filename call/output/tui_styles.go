@@ -183,8 +183,8 @@ func newCatalogStyles(width int) catalogStyles {
 		metaLabel:   color(colorComment),
 		metaValue:   color(colorPurple),
 		publicRepo:  color(colorPink),
-		privateRepo: color(colorYellow),
-		label:       color(colorPurple),
+		privateRepo: color(colorPink),
+		label:       color(colorYellow),
 		separator:   color(colorCurrentLine),
 		help:        color(colorComment),
 	}

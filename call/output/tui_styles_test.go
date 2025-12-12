@@ -88,7 +88,7 @@ func TestHandleViewportKeyPress(t *testing.T) {
 }
 
 func TestGetUnwantedRepos(t *testing.T) {
-	ctx := config.LoadFixture(t, "../../config")
+	ctx := loadFixture(t)
 	viper := config.Viper(ctx)
 
 	// Set up unwanted labels in config
@@ -118,7 +118,7 @@ func TestGetUnwantedRepos(t *testing.T) {
 }
 
 func TestIsLabelUnwanted(t *testing.T) {
-	ctx := config.LoadFixture(t, "../../config")
+	ctx := loadFixture(t)
 	viper := config.Viper(ctx)
 
 	unwantedLabels := []string{"unwanted1", "unwanted2"}

@@ -1,68 +1,64 @@
-package output_test
+package output
 
 import (
 	"context"
-	"io"
-	"os"
-	"strings"
 	"testing"
 
-	"github.com/ryclarke/batch-tool/config"
-	"github.com/ryclarke/batch-tool/utils"
+	testhelper "github.com/ryclarke/batch-tool/utils/test"
 	"github.com/spf13/cobra"
 )
 
 func loadFixture(t *testing.T) context.Context {
 	t.Helper()
-	return config.LoadFixture(t, "../../config")
+	return testhelper.LoadFixture(t, "../../config")
 }
 
-// fakeCmd creates a minimal cobra.Command for testing with the given context and output buffer
-func fakeCmd(t *testing.T, ctx context.Context, out io.Writer) *cobra.Command {
+// testCancelFunc is a no-op cancel function for tests
+func testCancelFunc() { /* no-op */ }
+
+// makeTestCommand creates a command with a properly initialized context for testing
+func makeTestCommand(t *testing.T) *cobra.Command {
 	t.Helper()
-	cmd := &cobra.Command{
-		Use: "test",
-	}
-	cmd.SetContext(ctx)
-	cmd.SetOut(out)
-	cmd.SetErr(out)
-	return cmd
+
+	ctx := loadFixture(t)
+	return testhelper.FakeCmd(t, ctx, nil)
 }
 
-// checkOutputContains checks that all expected messages are present in the output (supports map or slice)
-func checkOutputContains(t *testing.T, got string, want any) {
-	t.Helper()
-
-	switch wantIter := want.(type) {
-	case map[string]string:
-		for key, msg := range wantIter {
-			if !strings.Contains(got, msg) {
-				t.Errorf("Expected output for %s to contain %s", key, msg)
-			}
-		}
-	case []string:
-		for _, msg := range wantIter {
-			if !strings.Contains(got, msg) {
-				t.Errorf("Expected output to contain %s", msg)
-			}
-		}
-	}
+// testChannel implements the Channel interface for testing
+type testChannel struct {
+	name   string
+	output chan string
+	err    chan error
 }
 
-// setupDirs creates the repository directories so that Do won't try to clone them
-func setupDirs(t *testing.T, ctx context.Context, repos []string) {
-	t.Helper()
+func (tc *testChannel) Name() string        { return tc.name }
+func (tc *testChannel) Out() <-chan string  { return tc.output }
+func (tc *testChannel) Err() <-chan error   { return tc.err }
+func (tc *testChannel) WOut() chan<- string { return tc.output }
+func (tc *testChannel) WErr() chan<- error  { return tc.err }
+func (tc *testChannel) Start(weight int64) (func(), error) {
+	return func() {
+		close(tc.output)
+		close(tc.err)
+	}, nil
+}
 
-	for _, repo := range repos {
-		repoPath := utils.RepoPath(ctx, repo)
-		if err := os.MkdirAll(repoPath, 0755); err != nil {
-			t.Fatalf("Failed to create repo directory %s: %v", repoPath, err)
+// makeTestChannels creates test channels for the given repo names.
+// If closed is true, the channels are immediately closed to avoid blocking in tests.
+func makeTestChannels(names []string, closed bool) []Channel {
+	channels := make([]Channel, len(names))
+	for i, name := range names {
+		tc := &testChannel{
+			name:   name,
+			output: make(chan string),
+			err:    make(chan error),
 		}
+		if closed {
+			close(tc.output)
+			close(tc.err)
+		}
+		channels[i] = tc
 	}
 
-	// Clean up after test
-	t.Cleanup(func() {
-		gitDir := config.Viper(ctx).GetString(config.GitDirectory)
-		os.RemoveAll(gitDir)
-	})
+	return channels
 }
