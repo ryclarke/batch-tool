@@ -74,10 +74,16 @@ func runCallFunc(ctx context.Context, ch output.Channel, callFunc CallFunc) {
 	ch.WOut() <- ""
 
 	// If the repository is missing, attempt to clone it first
-	if _, err := os.Stat(utils.RepoPath(ctx, ch.Name())); os.IsNotExist(err) {
-		ch.WOut() <- "Repository not found, cloning...\n"
+	repoDir := utils.RepoPath(ctx, ch.Name())
+	if _, err := os.Stat(repoDir); os.IsNotExist(err) {
+		// Create the directory if it doesn't exist yet
+		if err := os.MkdirAll(repoDir, 0755); err != nil {
+			ch.WErr() <- err
+			return
+		}
 
-		if err = Exec("git", "clone", "--progress", utils.RepoURL(ctx, ch.Name()))(ctx, "", ch.WOut()); err != nil {
+		// Execute git clone into the target directory
+		if err := Exec("git", "clone", utils.RepoURL(ctx, ch.Name()), repoDir)(ctx, ch.Name(), ch.WOut()); err != nil {
 			// Clone failed, return the error and abort further processing
 			ch.WErr() <- err
 			return

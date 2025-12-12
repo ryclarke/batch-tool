@@ -263,6 +263,7 @@ func (m labelsListModel) View() string {
 	b.WriteString("\n\n")
 
 	b.WriteString(footerDone)
+	b.WriteString(footerVim)
 
 	return b.String()
 }
@@ -531,6 +532,7 @@ func (m labelsFilterModel) View() string {
 	b.WriteString("\n\n")
 
 	b.WriteString(styles.help.Render(footerDone))
+	b.WriteString(styles.help.Render(footerVim))
 
 	return b.String()
 }

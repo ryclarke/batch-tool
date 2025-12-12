@@ -19,15 +19,19 @@ import (
 func LoadFixture(t *testing.T, configPath string) context.Context {
 	t.Helper()
 
-	v := config.New()
-	ctx := config.SetViper(context.Background(), v)
+	viper := config.New()
+	ctx := config.SetViper(context.Background(), viper)
 
-	v.SetConfigName("fixture")
-	v.AddConfigPath(configPath)
+	viper.SetConfigName("fixture")
+	viper.AddConfigPath(configPath)
 
-	if err := v.ReadInConfig(); err != nil {
+	if err := viper.ReadInConfig(); err != nil {
 		t.Fatalf("Failed to load fixture config: %v", err)
 	}
+
+	// Override GitDirectory with a temporary directory for test isolation and reliable cleanup
+	tempDir := t.TempDir()
+	viper.Set(config.GitDirectory, tempDir)
 
 	return ctx
 }

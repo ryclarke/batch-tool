@@ -237,6 +237,7 @@ func (m catalogModel) View() string {
 	b.WriteString("\n\n")
 
 	b.WriteString(styles.help.Render(footerDone))
+	b.WriteString(styles.help.Render(footerVim))
 
 	return b.String()
 }

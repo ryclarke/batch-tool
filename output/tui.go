@@ -530,8 +530,10 @@ func (m model) renderFooter() string {
 
 	if m.allDone {
 		b.WriteString(m.styles.status.Render(footerDone))
+		b.WriteString(m.styles.status.Render(footerVim))
 	} else {
 		b.WriteString(m.styles.status.Render(footerText))
+		b.WriteString(m.styles.status.Render(footerVim))
 	}
 	b.WriteString("\n")
 

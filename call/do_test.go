@@ -420,7 +420,7 @@ func TestRunCallFuncCloning(t *testing.T) {
 	output := buf.String()
 	errOutput := errBuf.String()
 
-	// Should see cloning message and error from failed clone
-	testhelper.AssertContains(t, output, []string{"Repository not found, cloning"})
+	// Should see git clone output and error from failed clone
+	testhelper.AssertContains(t, output, []string{"Cloning into"})
 	testhelper.AssertContains(t, errOutput, []string{"ERROR:"})
 }

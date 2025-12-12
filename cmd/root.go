@@ -141,6 +141,11 @@ func setTerminalWait(cmd *cobra.Command) error {
 		return nil
 	}
 
+	// If printing is requested without explicit wait/no-wait, disable wait by default regardless of terminal state
+	if print, err := cmd.Flags().GetBool(printFlag); err == nil && print {
+		viper.Set(config.WaitOnExit, false)
+	}
+
 	// Auto-detect environment type if neither flag is explicitly set
 	// This prevents hanging in pipes, redirects, and CI/CD environments
 	if !term.IsTerminal(int(os.Stdout.Fd())) {

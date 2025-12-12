@@ -794,7 +794,7 @@ func TestRenderFooter(t *testing.T) {
 
 	// Test footer while processing
 	footer := m.renderFooter()
-	if !strings.Contains(footer, "↑/↓: scroll") {
+	if !strings.Contains(footer, "scroll: ↑/↓") {
 		t.Error("Expected footer to show scroll instructions while processing")
 	}
 	if !strings.Contains(footer, "supports Vim keybinds") {
@@ -807,7 +807,7 @@ func TestRenderFooter(t *testing.T) {
 	if !strings.Contains(footer, "All done") {
 		t.Error("Expected footer to show completion message when done")
 	}
-	if !strings.Contains(footer, "q: quit") {
+	if !strings.Contains(footer, "quit: Enter/Esc or q") {
 		t.Error("Expected footer to show quit instructions when done")
 	}
 }

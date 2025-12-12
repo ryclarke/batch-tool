@@ -1,13 +1,14 @@
 package cmd
 
 import (
-	testhelper "github.com/ryclarke/batch-tool/utils/test"
 	"bytes"
 	"context"
 	"fmt"
 	"os"
 	"strings"
 	"testing"
+
+	testhelper "github.com/ryclarke/batch-tool/utils/test"
 
 	"github.com/ryclarke/batch-tool/config"
 	"github.com/ryclarke/batch-tool/utils"
@@ -436,6 +437,8 @@ func TestSetTerminalWait(t *testing.T) {
 		noWaitValue    bool
 		waitFlagSet    bool
 		waitValue      bool
+		printFlagSet   bool
+		printValue     bool
 		expectWaitExit bool
 		description    string
 	}{
@@ -444,6 +447,7 @@ func TestSetTerminalWait(t *testing.T) {
 			noWaitFlagSet:  true,
 			noWaitValue:    true,
 			waitFlagSet:    false,
+			printFlagSet:   false,
 			expectWaitExit: false,
 			description:    "Explicit --no-wait should disable wait",
 		},
@@ -452,6 +456,7 @@ func TestSetTerminalWait(t *testing.T) {
 			noWaitFlagSet:  true,
 			noWaitValue:    false,
 			waitFlagSet:    false,
+			printFlagSet:   false,
 			expectWaitExit: true,
 			description:    "Explicit --no-wait=false should enable wait",
 		},
@@ -460,6 +465,7 @@ func TestSetTerminalWait(t *testing.T) {
 			noWaitFlagSet:  false,
 			waitFlagSet:    true,
 			waitValue:      true,
+			printFlagSet:   false,
 			expectWaitExit: true,
 			description:    "Explicit --wait should skip auto-detection",
 		},
@@ -467,8 +473,37 @@ func TestSetTerminalWait(t *testing.T) {
 			name:           "no flags set (auto-detection runs)",
 			noWaitFlagSet:  false,
 			waitFlagSet:    false,
+			printFlagSet:   false,
 			expectWaitExit: false,
 			description:    "When no flags set, non-interactive environment should disable wait",
+		},
+		{
+			name:           "print flag without wait/no-wait disables wait",
+			noWaitFlagSet:  false,
+			waitFlagSet:    false,
+			printFlagSet:   true,
+			printValue:     true,
+			expectWaitExit: false,
+			description:    "Print flag without explicit wait flags should disable wait regardless of terminal state",
+		},
+		{
+			name:           "print flag with explicit wait enables wait",
+			noWaitFlagSet:  false,
+			waitFlagSet:    true,
+			waitValue:      true,
+			printFlagSet:   true,
+			printValue:     true,
+			expectWaitExit: true,
+			description:    "Print flag with explicit --wait should enable wait",
+		},
+		{
+			name:           "print flag false does not affect wait behavior",
+			noWaitFlagSet:  false,
+			waitFlagSet:    false,
+			printFlagSet:   true,
+			printValue:     false,
+			expectWaitExit: false,
+			description:    "Print flag set to false should not affect wait (auto-detection applies)",
 		},
 	}
 
@@ -481,6 +516,7 @@ func TestSetTerminalWait(t *testing.T) {
 			cmd.SetContext(ctx)
 			cmd.Flags().Bool(noWaitFlag, false, "")
 			cmd.Flags().Bool(waitFlag, true, "")
+			cmd.Flags().BoolP(printFlag, "p", false, "")
 
 			// Set flags based on test case
 			if tt.noWaitFlagSet {
@@ -488,6 +524,9 @@ func TestSetTerminalWait(t *testing.T) {
 			}
 			if tt.waitFlagSet {
 				cmd.Flags().Set(waitFlag, fmt.Sprintf("%v", tt.waitValue))
+			}
+			if tt.printFlagSet {
+				cmd.Flags().Set(printFlag, fmt.Sprintf("%v", tt.printValue))
 			}
 
 			// Use BindBoolFlags to match actual command behavior
