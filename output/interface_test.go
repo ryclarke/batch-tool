@@ -5,15 +5,15 @@ import (
 	"io"
 	"testing"
 
-	"github.com/ryclarke/batch-tool/call/output"
 	"github.com/ryclarke/batch-tool/config"
+	"github.com/ryclarke/batch-tool/output"
 	testhelper "github.com/ryclarke/batch-tool/utils/test"
 	"github.com/spf13/cobra"
 )
 
 func loadFixture(t *testing.T) context.Context {
 	t.Helper()
-	return testhelper.LoadFixture(t, "../../config")
+	return testhelper.LoadFixture(t, "../config")
 }
 
 // fakeCmd creates a minimal cobra.Command for testing with the given context and output buffer

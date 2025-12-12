@@ -9,9 +9,9 @@ import (
 
 	"golang.org/x/sync/semaphore"
 
-	"github.com/ryclarke/batch-tool/call/output"
 	"github.com/ryclarke/batch-tool/catalog"
 	"github.com/ryclarke/batch-tool/config"
+	"github.com/ryclarke/batch-tool/output"
 	"github.com/ryclarke/batch-tool/utils"
 	"github.com/spf13/cobra"
 )

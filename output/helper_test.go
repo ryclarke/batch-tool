@@ -10,7 +10,7 @@ import (
 
 func loadFixture(t *testing.T) context.Context {
 	t.Helper()
-	return testhelper.LoadFixture(t, "../../config")
+	return testhelper.LoadFixture(t, "../config")
 }
 
 // testCancelFunc is a no-op cancel function for tests

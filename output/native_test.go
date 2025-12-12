@@ -8,9 +8,9 @@ import (
 
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/ryclarke/batch-tool/call"
-	"github.com/ryclarke/batch-tool/call/output"
 	"github.com/ryclarke/batch-tool/catalog"
 	"github.com/ryclarke/batch-tool/config"
+	"github.com/ryclarke/batch-tool/output"
 	"github.com/ryclarke/batch-tool/scm"
 	testhelper "github.com/ryclarke/batch-tool/utils/test"
 )

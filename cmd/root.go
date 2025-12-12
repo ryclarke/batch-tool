@@ -10,13 +10,13 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 
-	"github.com/ryclarke/batch-tool/call/output"
 	"github.com/ryclarke/batch-tool/catalog"
 	"github.com/ryclarke/batch-tool/cmd/exec"
 	"github.com/ryclarke/batch-tool/cmd/git"
 	"github.com/ryclarke/batch-tool/cmd/make"
 	"github.com/ryclarke/batch-tool/cmd/pr"
 	"github.com/ryclarke/batch-tool/config"
+	"github.com/ryclarke/batch-tool/output"
 	"github.com/ryclarke/batch-tool/utils"
 
 	// Register the SCM providers
