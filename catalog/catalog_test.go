@@ -400,11 +400,6 @@ func TestSaveCatalogCache(t *testing.T) {
 	}
 }
 
-// TestFetchRepositoryData tests fetching repositories from SCM provider
-func TestFetchRepositoryData(t *testing.T) {
-	t.Skip("Skipping TestFetchRepositoryData - requires live SCM provider or complex mocking")
-}
-
 // TestCatalogCachePath tests the cache path generation
 func TestCatalogCachePath(t *testing.T) {
 	tests := []struct {

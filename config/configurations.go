@@ -51,6 +51,7 @@ const (
 	TokenSkip   = "repos.tokens.skip"
 	TokenForced = "repos.tokens.forced"
 
+	OutputStyle    = "channels.output-style"
 	ChannelBuffer  = "channels.buffer-size"
 	MaxConcurrency = "channels.max-concurrency"
 	WriteBackoff   = "channels.write-backoff"
@@ -140,6 +141,7 @@ func setDefaults(v *viper.Viper) {
 
 	v.SetDefault(CatalogCacheFile, ".catalog")
 	v.SetDefault(CatalogCacheTTL, "24h")
+	v.SetDefault(OutputStyle, "native")
 	v.SetDefault(ChannelBuffer, 100)
 	v.SetDefault(MaxConcurrency, runtime.NumCPU()) // Default to number of logical CPUs
 	v.SetDefault(WriteBackoff, "1s")

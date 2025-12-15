@@ -63,6 +63,9 @@ git:
   project: your-username-or-org
   default-branch: main # fallback for a repo with no default branch
 
+channels:
+  output-style: bubbletea  # Use modern TUI interface
+
 repos:
   sort: true  # sort output alphabetically by repository name
 
@@ -263,13 +266,34 @@ repos:
       - backend-team
 ```
 
-### Performance and Concurrency Settings
+### Output Style and Concurrency Settings
 
 ```yaml
 channels:
+  output-style: bubbletea    # Output style: "native" (default) or "bubbletea" (modern TUI)
   buffer-size: 100           # Channel buffer size for console output (default: 100)
   max-concurrency: 8         # Maximum concurrent operations (default: number of logical CPUs)
 ```
+
+#### Output Styles
+
+The `output-style` setting controls how command output is displayed:
+
+- **`native`** (default): Traditional sequential output with repository headers. Output from each repository is batched and displayed after completion.
+  
+- **`bubbletea`**: Modern terminal UI with real-time updates, styled output, and progress indicators. Features include:
+  - Live progress tracking with completion status
+  - Styled repository names and status indicators
+  - Real-time output streaming with full scrolling support
+  - Color-coded errors and messages
+  - Elapsed time display
+  - Keyboard controls for navigation:
+    - `↑`/`↓` or `j`/`k` - Scroll up/down one line
+    - `PgUp`/`PgDn` or `b`/`f` or `Space` - Scroll by page
+    - `Home`/`End` or `g`/`G` - Jump to top/bottom
+    - `q` or `Ctrl+C` - Quit
+
+**Note**: The bubbletea style provides a better experience for operations with many repositories or long-running commands, while the native style is more suitable for scripting and non-interactive use.
 
 #### Concurrency Control
 
