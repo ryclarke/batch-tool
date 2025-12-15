@@ -17,7 +17,7 @@ const (
 // Cmd configures the make command
 func Cmd() *cobra.Command {
 	makeCmd := &cobra.Command{
-		Use:   "make <repository> ...",
+		Use:   "make <repository>...",
 		Short: "Execute make targets across repositories",
 		Long: `Execute make targets across repositories
 

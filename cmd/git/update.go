@@ -13,7 +13,7 @@ import (
 func addUpdateCmd() *cobra.Command {
 	// updateCmd represents the update command
 	updateCmd := &cobra.Command{
-		Use:               "update <repository> ...",
+		Use:               "update <repository>...",
 		Short:             "Update primary branch across repositories",
 		Args:              cobra.MinimumNArgs(1),
 		ValidArgsFunction: catalog.CompletionFunc(),

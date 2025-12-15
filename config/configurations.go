@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
-	"testing"
 	"time"
 
 	"github.com/spf13/viper"
@@ -28,6 +27,7 @@ const (
 	GitUser      = "git.user"
 	GitHost      = "git.host"
 	GitProject   = "git.project"
+	GitProjects  = "git.projects"
 	GitProvider  = "git.provider"
 	GitDirectory = "git.directory"
 	SourceBranch = "git.default-branch"
@@ -41,7 +41,7 @@ const (
 	SkipUnwanted     = "repos.skip-unwanted"
 	SuperSetLabel    = "repos.catch-all"
 	DefaultReviewers = "repos.reviewers"
-	CatalogCacheFile = "repos.cache.filename"
+	CatalogCachePath = "repos.cache.path"
 	CatalogCacheTTL  = "repos.cache.ttl"
 
 	Branch    = "branch"
@@ -51,7 +51,10 @@ const (
 	TokenSkip   = "repos.tokens.skip"
 	TokenForced = "repos.tokens.forced"
 
-	OutputStyle    = "channels.output-style"
+	OutputStyle  = "channels.output-style"
+	PrintResults = "channels.print-results"
+	WaitOnExit   = "channels.wait-on-exit"
+
 	ChannelBuffer  = "channels.buffer-size"
 	MaxConcurrency = "channels.max-concurrency"
 	WriteBackoff   = "channels.write-backoff"
@@ -73,6 +76,7 @@ const (
 	PrReviewers      = "pr.args.reviewers"
 	PrResetReviewers = "pr.args.reset-reviewers"
 	PrAllReviewers   = "pr.args.all-reviewers"
+	PrForceMerge     = "pr.args.force-merge"
 
 	// make
 	MakeTargets = "make.args.targets"
@@ -80,7 +84,7 @@ const (
 
 // Init reads in config file and ENV variables if set.
 func Init(ctx context.Context) context.Context {
-	v := newViper()
+	v := New()
 
 	if CfgFile != "" {
 		// Use config file from the flag.
@@ -112,13 +116,14 @@ func Init(ctx context.Context) context.Context {
 
 	// If a config file is found, read it in.
 	if err := v.ReadInConfig(); err == nil {
-		fmt.Printf("Using config file: %v\n\n", v.ConfigFileUsed())
+		fmt.Fprintf(os.Stderr, "Using config file: %v\n\n", v.ConfigFileUsed())
 	}
 
 	return SetViper(ctx, v)
 }
 
-func newViper() *viper.Viper {
+// New creates a new Viper instance with default configuration.
+func New() *viper.Viper {
 	v := viper.NewWithOptions(viper.EnvKeyReplacer(strings.NewReplacer(".", "_", "-", "_")))
 	v.AutomaticEnv() // read in environment variables that match
 	setDefaults(v)
@@ -132,6 +137,7 @@ func setDefaults(v *viper.Viper) {
 
 	v.SetDefault(GitHost, "github.com")
 	v.SetDefault(GitProvider, "github")
+	v.SetDefault(GitProjects, []string{})
 	v.SetDefault(SourceBranch, "main")
 	v.SetDefault(SortRepos, true)
 
@@ -139,9 +145,9 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault(UnwantedLabels, []string{"deprecated", "poc"})
 	v.SetDefault(SuperSetLabel, "all")
 
-	v.SetDefault(CatalogCacheFile, ".catalog")
+	v.SetDefault(CatalogCachePath, "") // empty means use default: gitdir/host/.batch-tool-cache.json
 	v.SetDefault(CatalogCacheTTL, "24h")
-	v.SetDefault(OutputStyle, "native")
+	v.SetDefault(OutputStyle, "tui")
 	v.SetDefault(ChannelBuffer, 100)
 	v.SetDefault(MaxConcurrency, runtime.NumCPU()) // Default to number of logical CPUs
 	v.SetDefault(WriteBackoff, "1s")
@@ -166,23 +172,6 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault(TokenLabel, "~")
 	v.SetDefault(TokenSkip, "!")
 	v.SetDefault(TokenForced, "+")
-}
-
-// LoadFixture will load example configuration; for testing only!
-func LoadFixture(t *testing.T, dir string) context.Context {
-	t.Helper()
-
-	v := newViper()
-	ctx := SetViper(context.Background(), v)
-
-	v.SetConfigName("fixture")
-	v.AddConfigPath(dir)
-
-	if err := v.ReadInConfig(); err != nil {
-		t.Fatalf("Failed to load fixture config: %v", err)
-	}
-
-	return ctx
 }
 
 func defaultGitdir() string {

@@ -12,7 +12,7 @@ import (
 func addStatusCmd() *cobra.Command {
 	// statusCmd represents the git status command
 	statusCmd := &cobra.Command{
-		Use:               "status <repository> ...",
+		Use:               "status <repository>...",
 		Short:             "Git status of each repository",
 		Args:              cobra.MinimumNArgs(1),
 		ValidArgsFunction: catalog.CompletionFunc(),

@@ -81,6 +81,7 @@ func TestCompletionFunc(t *testing.T) {
 		name              string
 		toComplete        string
 		wantCount         int
+		wantDirective     cobra.ShellCompDirective
 		wantCompletions   []string
 		unwantCompletions []string
 	}{
@@ -88,24 +89,28 @@ func TestCompletionFunc(t *testing.T) {
 			name:            "empty input returns all repos and labels",
 			toComplete:      "",
 			wantCount:       8, // 5 repos + 3 labels with token suffix
+			wantDirective:   cobra.ShellCompDirectiveNoFileComp,
 			wantCompletions: []string{"web-app", "mobile-app", "api-server", "worker", "tools", "frontend~", "backend~", "util~"},
 		},
 		{
 			name:            "partial repo name",
 			toComplete:      "web",
 			wantCount:       1, // just web-app repo
+			wantDirective:   cobra.ShellCompDirectiveNoFileComp,
 			wantCompletions: []string{"web-app"},
 		},
 		{
 			name:            "partial label name without token",
 			toComplete:      "front",
 			wantCount:       1,
+			wantDirective:   cobra.ShellCompDirectiveNoFileComp,
 			wantCompletions: []string{"frontend~"},
 		},
 		{
 			name:              "label with token prefix",
 			toComplete:        "~front",
 			wantCount:         1,
+			wantDirective:     cobra.ShellCompDirectiveNoFileComp,
 			wantCompletions:   []string{"~frontend"},
 			unwantCompletions: []string{"frontend~"},
 		},
@@ -113,12 +118,14 @@ func TestCompletionFunc(t *testing.T) {
 			name:            "partial match multiple repos",
 			toComplete:      "app",
 			wantCount:       2,
+			wantDirective:   cobra.ShellCompDirectiveNoFileComp,
 			wantCompletions: []string{"web-app", "mobile-app"},
 		},
 		{
 			name:              "label token suppresses repo suggestions",
 			toComplete:        "~",
 			wantCount:         3, // only labels, no repos
+			wantDirective:     cobra.ShellCompDirectiveNoFileComp,
 			wantCompletions:   []string{"~frontend", "~backend", "~util"},
 			unwantCompletions: []string{"web-app", "mobile-app"},
 		},
@@ -126,12 +133,14 @@ func TestCompletionFunc(t *testing.T) {
 			name:            "non-matching input",
 			toComplete:      "xyz",
 			wantCount:       0,
+			wantDirective:   cobra.ShellCompDirectiveNoFileComp,
 			wantCompletions: []string{},
 		},
 		{
 			name:            "case-sensitive matching",
 			toComplete:      "Web",
 			wantCount:       0, // shouldn't match "web-app"
+			wantDirective:   cobra.ShellCompDirectiveNoFileComp,
 			wantCompletions: []string{},
 		},
 	}
@@ -160,46 +169,9 @@ func TestCompletionFunc(t *testing.T) {
 			completions, directive := completionFunc(cmd, []string{}, tt.toComplete)
 
 			checkCompletionCount(t, completions, tt.wantCount)
-			checkDirective(t, directive, cobra.ShellCompDirectiveNoSpace)
+			checkDirective(t, directive, tt.wantDirective)
 			checkCompletionContains(t, completions, tt.wantCompletions)
 			checkCompletionNotContains(t, completions, tt.unwantCompletions)
-		})
-	}
-}
-
-func TestCompletionFuncWithCustomCompletions(t *testing.T) {
-	ctx := loadFixture(t)
-
-	tests := []struct {
-		name            string
-		wantCompletions []string
-	}{
-		{
-			name:            "custom completions included with repos and labels",
-			wantCompletions: []string{"custom1", "custom2", "repo1"},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			Catalog = map[string]scm.Repository{
-				"repo1": {Name: "repo1"},
-				"repo2": {Name: "repo2"},
-			}
-
-			Labels = map[string]mapset.Set[string]{
-				"label1": mapset.NewSet("repo1"),
-			}
-
-			cmd := &cobra.Command{}
-			cmd.SetContext(ctx)
-			cmd.SetOut(io.Discard)
-
-			customCompletions := []cobra.Completion{"custom1", "custom2"}
-			completionFunc := CompletionFunc(customCompletions...)
-			completions, _ := completionFunc(cmd, []string{}, "")
-
-			checkCompletionContains(t, completions, tt.wantCompletions)
 		})
 	}
 }
@@ -386,7 +358,7 @@ func TestCompletionFuncEmptyCatalogAndLabels(t *testing.T) {
 			completions, directive := completionFunc(cmd, []string{}, "")
 
 			checkCompletionCount(t, completions, tt.wantCount)
-			checkDirective(t, directive, cobra.ShellCompDirectiveNoSpace)
+			checkDirective(t, directive, cobra.ShellCompDirectiveNoFileComp)
 		})
 	}
 }

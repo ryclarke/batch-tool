@@ -5,13 +5,13 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/ryclarke/batch-tool/config"
 	"github.com/ryclarke/batch-tool/scm"
 	"github.com/ryclarke/batch-tool/scm/fake"
+	testhelper "github.com/ryclarke/batch-tool/utils/test"
 )
 
 func loadFixture(t *testing.T) context.Context {
-	return config.LoadFixture(t, "../config")
+	return testhelper.LoadFixture(t, "../config")
 }
 
 func TestRegister(t *testing.T) {
@@ -137,7 +137,7 @@ func TestProviderInterface(t *testing.T) {
 	}
 
 	// Test MergePullRequest
-	if _, err := testProvider.MergePullRequest("test-repo", "feature-branch"); err != nil {
+	if _, err := testProvider.MergePullRequest("test-repo", "feature-branch", false); err != nil {
 		t.Errorf("MergePullRequest failed: %v", err)
 	}
 	if _, ok := testProvider.PullRequests["test-repo"]; ok {

@@ -1,6 +1,7 @@
 package make
 
 import (
+	testhelper "github.com/ryclarke/batch-tool/utils/test"
 	"bytes"
 	"context"
 	"io"
@@ -11,7 +12,7 @@ import (
 )
 
 func loadFixture(t *testing.T) context.Context {
-	return config.LoadFixture(t, "../../config")
+	return testhelper.LoadFixture(t, "../../config")
 }
 
 // testCmd creates a test cobra command with the given context and output writer
@@ -29,8 +30,8 @@ func TestCmd(t *testing.T) {
 		t.Fatal("Cmd() returned nil")
 	}
 
-	if cmd.Use != "make <repository> ..." {
-		t.Errorf("Expected Use to be 'make <repository> ...', got %s", cmd.Use)
+	if cmd.Use != "make <repository>..." {
+		t.Errorf("Expected Use to be 'make <repository>...', got %s", cmd.Use)
 	}
 
 	if cmd.Short == "" {

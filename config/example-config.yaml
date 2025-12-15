@@ -1,7 +1,10 @@
 git:
   provider: github      # also supports bitbucket (SaaS or private cloud)
   host: github.com      # only SaaS Github is currently supported for this provider
-  project: ryclarke     # username or organization name
+  project: ryclarke     # username or organization name (default project)
+  projects:             # optional list of additional projects to include in catalog (default project is included implicitly)
+    - other-org
+    - another-team
   directory: ./tmp      # directory where repositories are cloned, defaults to $GOPATH/src if set, else the current working directory
   default-branch: main  # fallback if no default branch is configured for a repository
 
@@ -18,8 +21,11 @@ repos:
       - ryclarke
     another-repo:
       - ryclarke
+  cache:
+    path:               # optional custom path for catalog cache (default: <git.directory>/<git.host>/.batch-tool-cache.json)
+    ttl: 24h            # cache time-to-live
 
 channels:
-  output-style: native  # output handler type: "native" (default) or "bubbletea" (modern TUI)
+  output-style: tui     # output handler type: "tui" (default, modern terminal UI) or "native" (fallback)
   buffer-size: 100      # channel buffer size for streaming output
   max-concurrency: 8    # maximum number of concurrent operations (defaults to number of logical CPUs)

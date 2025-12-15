@@ -1,15 +1,14 @@
-package utils
+package utils_test
 
 import (
-	"context"
+	"strings"
 	"testing"
 
 	"github.com/ryclarke/batch-tool/config"
+	"github.com/ryclarke/batch-tool/utils"
+	testhelper "github.com/ryclarke/batch-tool/utils/test"
+	"github.com/spf13/cobra"
 )
-
-func loadFixture(t *testing.T) context.Context {
-	return config.LoadFixture(t, "../config")
-}
 
 func TestCleanFilter(t *testing.T) {
 	ctx := loadFixture(t)
@@ -53,8 +52,8 @@ func TestCleanFilter(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := CleanFilter(ctx, tt.filter)
-			checkStringEqual(t, result, tt.wantResult)
+			result := utils.CleanFilter(ctx, tt.filter)
+			testhelper.AssertEqual(t, result, tt.wantResult)
 		})
 	}
 }
@@ -115,7 +114,7 @@ func TestValidateRequiredConfig(t *testing.T) {
 				tt.setup()
 			}
 
-			err := ValidateRequiredConfig(ctx, tt.keys...)
+			err := utils.ValidateRequiredConfig(ctx, tt.keys...)
 			if (err != nil) != tt.wantError {
 				t.Errorf("ValidateRequiredConfig() error = %v, wantError %v", err, tt.wantError)
 			}
@@ -123,132 +122,79 @@ func TestValidateRequiredConfig(t *testing.T) {
 	}
 }
 
-func TestParseRepo(t *testing.T) {
-	ctx := loadFixture(t)
-	viper := config.Viper(ctx)
-
-	// Set up default config
-	viper.Set(config.GitHost, "github.com")
-	viper.Set(config.GitProject, "default-project")
-
-	tests := []struct {
-		name        string
-		repo        string
-		wantHost    string
-		wantProject string
-		wantName    string
-	}{
-		{
-			name:        "simple repo name",
-			repo:        "my-repo",
-			wantHost:    "github.com",
-			wantProject: "default-project",
-			wantName:    "my-repo",
-		},
-		{
-			name:        "project/repo format",
-			repo:        "custom-project/my-repo",
-			wantHost:    "github.com",
-			wantProject: "custom-project",
-			wantName:    "my-repo",
-		},
-		{
-			name:        "full host/project/repo format",
-			repo:        "example.com/custom-project/my-repo",
-			wantProject: "custom-project",
-			wantName:    "my-repo",
-		},
-		{
-			name:        "with leading/trailing slashes",
-			repo:        "/custom-project/my-repo/",
-			wantProject: "custom-project",
-			wantName:    "my-repo",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			host, project, name := ParseRepo(ctx, tt.repo)
-
-			if tt.wantHost != "" && host != tt.wantHost {
-				t.Errorf("ParseRepo() host = %v, want %v", host, tt.wantHost)
-			}
-			if project != tt.wantProject {
-				t.Errorf("ParseRepo() project = %v, want %v", project, tt.wantProject)
-			}
-			if name != tt.wantName {
-				t.Errorf("ParseRepo() name = %v, want %v", name, tt.wantName)
-			}
-		})
-	}
-}
-
-func TestRepoPath(t *testing.T) {
-	ctx := loadFixture(t)
-	viper := config.Viper(ctx)
-
-	// Set up config
-	viper.Set(config.GitDirectory, "/test/gitdir/src")
-	viper.Set(config.GitHost, "github.com")
-	viper.Set(config.GitProject, "test-project")
-
-	tests := []struct {
-		name     string
-		repo     string
-		wantPath string
-	}{
-		{
-			name:     "simple repo name",
-			repo:     "my-repo",
-			wantPath: "/test/gitdir/src/github.com/test-project/my-repo",
-		},
-		{
-			name:     "custom project",
-			repo:     "custom-project/my-repo",
-			wantPath: "/test/gitdir/src/github.com/custom-project/my-repo",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := RepoPath(ctx, tt.repo)
-			if got != tt.wantPath {
-				t.Errorf("RepoPath() = %v, want %v", got, tt.wantPath)
-			}
-		})
-	}
-}
-
-func TestRepoURL(t *testing.T) {
-	ctx := loadFixture(t)
-
+func TestValidateEnumConfig(t *testing.T) {
 	tests := []struct {
 		name         string
-		repo         string
-		wantContains []string
+		key          string
+		configValue  string
+		validChoices []string
+		expectError  bool
 	}{
 		{
-			name:         "generates URL with host, project, and repo",
-			repo:         "my-repo",
-			wantContains: []string{"github.com", "test-project", "my-repo"},
+			name:         "valid choice",
+			key:          "output-style",
+			configValue:  "json",
+			validChoices: []string{"json", "yaml", "text"},
+			expectError:  false,
+		},
+		{
+			name:         "empty value - should pass",
+			key:          "output-style",
+			configValue:  "",
+			validChoices: []string{"json", "yaml", "text"},
+			expectError:  false,
+		},
+		{
+			name:         "invalid choice",
+			key:          "output-style",
+			configValue:  "xml",
+			validChoices: []string{"json", "yaml", "text"},
+			expectError:  true,
+		},
+		{
+			name:         "single valid choice",
+			key:          "format",
+			configValue:  "table",
+			validChoices: []string{"table"},
+			expectError:  false,
+		},
+		{
+			name:         "invalid with single choice",
+			key:          "format",
+			configValue:  "list",
+			validChoices: []string{"table"},
+			expectError:  true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			ctx := loadFixture(t)
 			viper := config.Viper(ctx)
-			viper.Set(config.GitUser, "git")
-			viper.Set(config.GitHost, "github.com")
-			viper.Set(config.GitProject, "test-project")
 
-			url := RepoURL(ctx, tt.repo)
-			for _, want := range tt.wantContains {
-				checkStringContains(t, url, want)
+			// Set config value
+			if tt.configValue != "" {
+				viper.Set(tt.key, tt.configValue)
+			}
+
+			// Create command
+			cmd := &cobra.Command{Use: "test"}
+			cmd.SetContext(ctx)
+
+			// Run check
+			err := utils.ValidateEnumConfig(cmd, tt.key, tt.validChoices)
+
+			if tt.expectError {
+				if err == nil {
+					t.Error("Expected error but got none")
+				} else if !strings.Contains(err.Error(), "invalid") {
+					t.Errorf("Error should contain 'invalid', got: %v", err)
+				}
+			} else {
+				if err != nil {
+					t.Errorf("Unexpected error: %v", err)
+				}
 			}
 		})
 	}
 }
-
-// Note: LookupBranch and ValidateBranch functions require git repository setup
-// and would be better tested in integration tests rather than unit tests
-// since they execute git commands.

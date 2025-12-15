@@ -2,10 +2,7 @@ package scm
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 )
 
 var providerFactories = make(map[string]ProviderFactory)
@@ -24,7 +21,7 @@ type Provider interface {
 	// UpdatePullRequest updates an existing pull request.
 	UpdatePullRequest(repo, branch, title, description string, reviewers []string, appendReviewers bool) (*PullRequest, error)
 	// MergePullRequest merges an existing pull request.
-	MergePullRequest(repo, branch string) (*PullRequest, error)
+	MergePullRequest(repo, branch string, force bool) (*PullRequest, error)
 }
 
 // Get retrieves a registered SCM provider by name.
@@ -42,49 +39,4 @@ func Register(name string, factory ProviderFactory) {
 	if _, exists := providerFactories[name]; !exists {
 		providerFactories[name] = factory
 	}
-}
-
-// Do executes the HTTP request and returns an error if the response status code is not successful.
-func Do(client *http.Client, req *http.Request) error {
-	resp, err := client.Do(req)
-	if err != nil {
-		return fmt.Errorf("failed to execute request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	return parseError(resp)
-}
-
-// DoResp executes the HTTP request and unmarshals the response into the provided type.
-func DoResp[T any](client *http.Client, req *http.Request) (*T, error) {
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to execute request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if err := parseError(resp); err != nil {
-		return nil, err
-	}
-
-	var result T
-
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
-	}
-
-	return &result, nil
-}
-
-func parseError(resp *http.Response) error {
-	if resp.StatusCode < 400 {
-		return nil
-	}
-
-	output, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return fmt.Errorf("error %d: failed to read response body: %w", resp.StatusCode, err)
-	}
-
-	return fmt.Errorf("error %d: %s", resp.StatusCode, output)
 }

@@ -7,17 +7,17 @@ import (
 	"runtime"
 	"strings"
 
-	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 
-	"github.com/ryclarke/batch-tool/call/output"
 	"github.com/ryclarke/batch-tool/catalog"
 	"github.com/ryclarke/batch-tool/cmd/exec"
 	"github.com/ryclarke/batch-tool/cmd/git"
-	"github.com/ryclarke/batch-tool/cmd/labels"
 	"github.com/ryclarke/batch-tool/cmd/make"
 	"github.com/ryclarke/batch-tool/cmd/pr"
 	"github.com/ryclarke/batch-tool/config"
+	"github.com/ryclarke/batch-tool/output"
+	"github.com/ryclarke/batch-tool/utils"
 
 	// Register the SCM providers
 	_ "github.com/ryclarke/batch-tool/scm/bitbucket"
@@ -25,14 +25,23 @@ import (
 )
 
 const (
-	configFlag         = "config"
-	sortFlag           = "sort"
-	noSortFlag         = "no-sort"
-	syncFlag           = "sync"
+	configFlag = "config"
+	styleFlag  = "style"
+	printFlag  = "print"
+
+	waitFlag   = "wait"
+	noWaitFlag = "no-" + waitFlag
+
 	skipUnwantedFlag   = "skip-unwanted"
-	noSkipUnwantedFlag = "no-skip-unwanted"
+	noSkipUnwantedFlag = "no-" + skipUnwantedFlag
+
+	sortFlag   = "sort"
+	noSortFlag = "no-" + sortFlag
+
 	maxConcurrencyFlag = "max-concurrency"
-	outputHandlerFlag  = "style"
+	syncFlag           = "sync"
+
+	catalogFlushFlag = "flush"
 )
 
 // RootCmd configures the top-level root command along with all subcommands and flags
@@ -47,13 +56,18 @@ multiple git repositories, including branch management and pull request creation
 		PersistentPreRunE: func(cmd *cobra.Command, _ []string) error {
 			viper := config.Viper(cmd.Context())
 
+			viper.BindPFlag(config.OutputStyle, cmd.Flags().Lookup(styleFlag))
+			viper.BindPFlag(config.PrintResults, cmd.Flags().Lookup(printFlag))
 			viper.BindPFlag(config.MaxConcurrency, cmd.Flags().Lookup(maxConcurrencyFlag))
-			viper.BindPFlag(config.SortRepos, cmd.Flags().Lookup(sortFlag))
-			viper.BindPFlag(config.SkipUnwanted, cmd.Flags().Lookup(skipUnwantedFlag))
-			viper.BindPFlag(config.OutputStyle, cmd.Flags().Lookup(outputHandlerFlag))
 
-			if outputHandler := viper.GetString(config.OutputStyle); outputHandler != "" && !mapset.NewSet(output.AvailableHandlers...).Contains(outputHandler) {
-				return fmt.Errorf("invalid output style: %q (expected one of %v)", viper.GetString(config.OutputStyle), output.AvailableHandlers)
+			// Validate output style is a valid selection
+			if err := utils.ValidateEnumConfig(cmd, config.OutputStyle, output.AvailableStyles); err != nil {
+				return err
+			}
+
+			// Don't allow both --max-concurrency and --sync to be set together
+			if err := utils.CheckMutuallyExclusiveFlags(cmd, maxConcurrencyFlag, syncFlag); err != nil {
+				return err
 			}
 
 			// Allow the `--sync` flag to override max-concurrency to 1
@@ -61,52 +75,40 @@ multiple git repositories, including branch management and pull request creation
 				viper.Set(config.MaxConcurrency, 1)
 			}
 
-			// Allow the `--no-sort` flag to override sorting configuration
-			if noSort, _ := cmd.Flags().GetBool(noSortFlag); noSort {
-				viper.Set(config.SortRepos, false)
+			if err := utils.BindBoolFlags(cmd, config.SkipUnwanted, skipUnwantedFlag, noSkipUnwantedFlag); err != nil {
+				return err
 			}
 
-			// Allow the `--no-skip-unwanted` flag to override label skipping configuration
-			if noSkip, _ := cmd.Flags().GetBool(noSkipUnwantedFlag); noSkip {
-				viper.Set(config.SkipUnwanted, false)
+			if err := utils.BindBoolFlags(cmd, config.SortRepos, sortFlag, noSortFlag); err != nil {
+				return err
 			}
 
-			return nil
+			// Handle wait/no-wait flags with auto-detection for non-interactive environments
+			return setTerminalWait(cmd)
 		},
+		Args:    cobra.NoArgs,
 		Version: config.Version,
 	}
 
 	// Add all subcommands to the root
 	rootCmd.AddCommand(
-		&cobra.Command{
-			Use:   "catalog",
-			Short: "Print information on the cached repository catalog",
-			Run: func(_ *cobra.Command, _ []string) {
-				fmt.Printf("%v\n", catalog.Catalog)
-			},
-		},
+		catalogCmd(),
+		labelsCmd(),
 		exec.Cmd(),
 		git.Cmd(),
-		labels.Cmd(),
 		make.Cmd(),
 		pr.Cmd(),
 	)
 
 	rootCmd.PersistentFlags().StringVar(&config.CfgFile, configFlag, "", "config file (default is batch-tool.yaml)")
-	rootCmd.PersistentFlags().StringP(outputHandlerFlag, "o", output.Native, fmt.Sprintf("output format style: \"%v\"", strings.Join(output.AvailableHandlers, "\", \"")))
-
-	rootCmd.PersistentFlags().Bool(syncFlag, false, "execute commands synchronously (alias for --max-concurrency=1)")
+	rootCmd.PersistentFlags().StringP(styleFlag, "o", output.TUI, fmt.Sprintf("output style: \"%v\"", strings.Join(output.AvailableStyles, "\", \"")))
+	rootCmd.PersistentFlags().BoolP(printFlag, "p", false, "print results to stdout after processing is complete")
 	rootCmd.PersistentFlags().Int(maxConcurrencyFlag, runtime.NumCPU(), "maximum number of concurrent operations")
-	rootCmd.PersistentFlags().Bool(sortFlag, true, "sort the provided repositories")
-	rootCmd.PersistentFlags().Bool(skipUnwantedFlag, true, "skip undesired labels (default: deprecated,poc)")
+	rootCmd.PersistentFlags().Bool(syncFlag, false, "execute commands synchronously (same as --max-concurrency=1)")
 
-	// --no-sort is excluded from usage and help output, and is an alternative to --sort=false
-	rootCmd.PersistentFlags().Bool(noSortFlag, false, "")
-	rootCmd.PersistentFlags().MarkHidden(noSortFlag)
-
-	// --no-skip-unwanted is excluded from usage and help output, and is an alternative to --skip-unwanted=false
-	rootCmd.PersistentFlags().Bool(noSkipUnwantedFlag, false, "")
-	rootCmd.PersistentFlags().MarkHidden(noSkipUnwantedFlag)
+	utils.BuildBoolFlags(rootCmd, waitFlag, "", noWaitFlag, "q", "wait for user to exit after processing is complete")
+	utils.BuildBoolFlags(rootCmd, skipUnwantedFlag, "", noSkipUnwantedFlag, "", "skip configured undesired labels")
+	utils.BuildBoolFlags(rootCmd, sortFlag, "", noSortFlag, "", "sort the provided repositories")
 
 	return rootCmd
 }
@@ -116,11 +118,88 @@ multiple git repositories, including branch management and pull request creation
 func Execute() {
 	ctx := config.Init(context.Background())
 	cobra.OnInitialize(func() {
-		catalog.Init(ctx)
+		catalog.Init(ctx, false)
 	})
 
 	if err := RootCmd().ExecuteContext(ctx); err != nil {
 		fmt.Println(err)
 		os.Exit(1)
 	}
+}
+
+// setTerminalWait handles auto-detection for non-interactive environments.
+func setTerminalWait(cmd *cobra.Command) error {
+	viper := config.Viper(cmd.Context())
+
+	// Bind the wait/no-wait flag pair configuration
+	if err := utils.BindBoolFlags(cmd, config.WaitOnExit, waitFlag, noWaitFlag); err != nil {
+		return err
+	}
+
+	// Explicit --wait or --no-wait takes precedence over auto-detection
+	if cmd.Flags().Changed(waitFlag) || cmd.Flags().Changed(noWaitFlag) {
+		return nil
+	}
+
+	// If printing is requested without explicit wait/no-wait, disable wait by default regardless of terminal state
+	if print, err := cmd.Flags().GetBool(printFlag); err == nil && print {
+		viper.Set(config.WaitOnExit, false)
+	}
+
+	// Auto-detect environment type if neither flag is explicitly set
+	// This prevents hanging in pipes, redirects, and CI/CD environments
+	if !term.IsTerminal(int(os.Stdout.Fd())) {
+		viper.Set(config.WaitOnExit, false)
+	}
+
+	return nil
+}
+
+// labelsCmd configures the labels command
+func labelsCmd() *cobra.Command {
+	labelsCmd := &cobra.Command{
+		Use:               "labels <repository|label>...",
+		Aliases:           []string{"label"},
+		Short:             "Inspect repository labels and test filters",
+		Args:              cobra.ArbitraryArgs,
+		ValidArgsFunction: catalog.CompletionFunc(),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			// Import command(s) from the CLI flag
+			verbose, err := cmd.Flags().GetBool("verbose")
+			if err != nil {
+				return err
+			}
+
+			// Get the appropriate label handler based on configured output style
+			ctx := cmd.Context()
+			output.GetLabelHandler(ctx)(cmd, verbose, args...)
+
+			return nil
+		},
+	}
+
+	labelsCmd.Flags().BoolP("verbose", "v", false, "expand labels referenced in the given filter")
+
+	return labelsCmd
+}
+
+// catalogCmd configures the catalog command
+func catalogCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "catalog",
+		Short: "Print information on the cached repository catalog",
+		Args:  cobra.NoArgs,
+		Run: func(cmd *cobra.Command, _ []string) {
+			if flush, _ := cmd.Flags().GetBool(catalogFlushFlag); flush {
+				// Flush and re-initialize the catalog even if the TTL has not expired
+				catalog.Init(cmd.Context(), true)
+			}
+
+			output.GetCatalogHandler(cmd.Context())(cmd)
+		},
+	}
+
+	cmd.Flags().BoolP(catalogFlushFlag, "f", false, "Force refresh of catalog cache")
+
+	return cmd
 }

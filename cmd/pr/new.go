@@ -20,7 +20,7 @@ const (
 // addNewCmd initializes the pr new command
 func addNewCmd() *cobra.Command {
 	newCmd := &cobra.Command{
-		Use:               "new <repository> ...",
+		Use:               "new <repository>...",
 		Short:             "Submit new pull requests",
 		Args:              cobra.MinimumNArgs(1),
 		ValidArgsFunction: catalog.CompletionFunc(),
@@ -61,7 +61,9 @@ func New(ctx context.Context, name string, ch chan<- string) error {
 		reviewers = reviewers[:1]
 	}
 
-	provider := scm.Get(ctx, viper.GetString(config.GitProvider), viper.GetString(config.GitProject))
+	// Get project from repository metadata in catalog, fall back to default
+	project := catalog.GetProjectForRepo(ctx, name)
+	provider := scm.Get(ctx, viper.GetString(config.GitProvider), project)
 	pr, err := provider.OpenPullRequest(name, branch, viper.GetString(config.PrTitle), viper.GetString(config.PrDescription), reviewers)
 	if err != nil {
 		return err

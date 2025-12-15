@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/ryclarke/batch-tool/config"
+	testhelper "github.com/ryclarke/batch-tool/utils/test"
 )
 
 // TestDo tests the Do function which orchestrates concurrent repository operations
@@ -52,14 +53,14 @@ func TestDo(t *testing.T) {
 			viper.Set(config.ChannelBuffer, tt.channelBuffer)
 
 			// Create repo directories so Do won't try to clone
-			setupDirs(t, ctx, tt.repos)
+			testhelper.SetupDirs(t, ctx, tt.repos)
 
 			var buf bytes.Buffer
 			Do(fakeCmd(t, ctx, &buf), tt.repos, tt.callFunc)
 
 			output := buf.String()
 
-			checkOutputContains(t, output, tt.wantOutput)
+			testhelper.AssertContains(t, output, tt.wantOutput)
 
 			for repo, got := range tt.wantOutput {
 				if !strings.Contains(output, got) {
@@ -167,7 +168,7 @@ func TestDoBatching(t *testing.T) {
 			viper.Set(config.SortRepos, false)
 
 			// Create repo directories so Do won't try to clone
-			setupDirs(t, ctx, tt.repos)
+			testhelper.SetupDirs(t, ctx, tt.repos)
 
 			var activeWorkers int64
 			var maxConcurrentWorkers int64
@@ -180,7 +181,7 @@ func TestDoBatching(t *testing.T) {
 			output := buf.String()
 
 			// Verify all repos were processed
-			checkOutputContains(t, output, tt.repos)
+			testhelper.AssertContains(t, output, tt.repos)
 
 			// Verify processed count
 			if atomic.LoadInt64(&processedCount) != int64(len(tt.repos)) {
@@ -266,7 +267,7 @@ func TestProcessArguments(t *testing.T) {
 			result := processArguments(ctx, tt.args)
 
 			if tt.sortRepos {
-				checkOutput(t, result, tt.want, nil, false)
+				testhelper.AssertOutput(t, result, tt.want, nil, false)
 			} else if len(result) != len(tt.want) {
 				t.Errorf("Expected %d repos, got %d", len(tt.want), len(result))
 			}
@@ -321,7 +322,7 @@ func TestDoVariousModes(t *testing.T) {
 			viper.Set(config.SortRepos, false)
 
 			// Create repo directories so Do won't try to clone
-			setupDirs(t, ctx, tt.repos)
+			testhelper.SetupDirs(t, ctx, tt.repos)
 
 			var activeWorkers int64
 			var maxConcurrentWorkers int64
@@ -336,7 +337,7 @@ func TestDoVariousModes(t *testing.T) {
 			output := buf.String()
 
 			// Verify all repos were processed
-			checkOutputContains(t, output, tt.repos)
+			testhelper.AssertContains(t, output, tt.repos)
 
 			// Check timing if requested
 			if tt.checkTiming && duration > tt.expectedMaxTime {
@@ -357,7 +358,7 @@ func TestDoVariousModes(t *testing.T) {
 // TestDoWithContextCancellation tests that Do handles context cancellation properly
 func TestDoWithContextCancellation(t *testing.T) {
 	ctx := loadFixture(t)
-	setupDirs(t, ctx, []string{"repo1", "repo2", "repo3"})
+	testhelper.SetupDirs(t, ctx, []string{"repo1", "repo2", "repo3"})
 
 	viper := config.Viper(ctx)
 	viper.Set(config.MaxConcurrency, 1) // Only 1 at a time
@@ -390,7 +391,7 @@ func TestDoWithContextCancellation(t *testing.T) {
 	errOutput := errBuf.String()
 
 	// Should see context canceled error
-	checkOutputContains(t, errOutput, []string{"context canceled"})
+	testhelper.AssertContains(t, errOutput, []string{"context canceled"})
 }
 
 // TestRunCallFuncCloning tests the repository cloning path in runCallFunc
@@ -419,7 +420,7 @@ func TestRunCallFuncCloning(t *testing.T) {
 	output := buf.String()
 	errOutput := errBuf.String()
 
-	// Should see cloning message and error from failed clone
-	checkOutputContains(t, output, []string{"Repository not found, cloning"})
-	checkOutputContains(t, errOutput, []string{"ERROR:"})
+	// Should see git clone output and error from failed clone
+	testhelper.AssertContains(t, output, []string{"Cloning into"})
+	testhelper.AssertContains(t, errOutput, []string{"ERROR:"})
 }

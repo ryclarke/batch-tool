@@ -64,7 +64,7 @@ git:
   default-branch: main # fallback for a repo with no default branch
 
 channels:
-  output-style: bubbletea  # Use modern TUI interface
+  output-style: tui  # Modern TUI interface (default); use "native" for scripts
 
 repos:
   sort: true  # sort output alphabetically by repository name
@@ -136,6 +136,44 @@ batch-tool git status '+~myservice' '!~deprecated' # matches all 4 repos
 ```
 
 ⚠️ When using special characters for matching and exclusion, ensure that all arguments are quoted properly to avoid improper shell expansion.
+
+## Interactive Mode
+
+When the `--style=bubbletea` flag is provided, batch-tool launches an interactive terminal user interface (TUI) for command selection and navigation.
+
+### Using Interactive Mode
+
+```bash
+# Launch the interactive command selector
+batch-tool --style=bubbletea
+```
+
+The TUI provides:
+- **Visual command navigation**: Browse through available commands and subcommands
+- **Help information**: View command descriptions at each level
+- **Keyboard navigation**: Use arrow keys, vim-style (hjkl), or Enter to navigate
+- **Breadcrumb trail**: See your current location in the command hierarchy
+
+### Keyboard Controls
+
+- `↑/k` - Move cursor up
+- `↓/j` - Move cursor down
+- `←/h/backspace` - Go back to parent command
+- `→/l/enter` - Select command or enter subcommand
+- `q/ctrl+c` - Quit
+
+### Output Styles
+
+The `--style` flag also controls how command output is displayed:
+
+- `native` (default): Traditional terminal output with streaming updates
+- `bubbletea`: Modern TUI with interactive progress display, real-time updates, and scrollable output
+
+Example with output style:
+```bash
+# Use interactive TUI for output display
+batch-tool git status repo1 repo2 --style=bubbletea
+```
 
 ## Commands
 
@@ -270,7 +308,7 @@ repos:
 
 ```yaml
 channels:
-  output-style: bubbletea    # Output style: "native" (default) or "bubbletea" (modern TUI)
+  output-style: tui          # Output style: "tui" (default) or "native" (fallback)
   buffer-size: 100           # Channel buffer size for console output (default: 100)
   max-concurrency: 8         # Maximum concurrent operations (default: number of logical CPUs)
 ```
@@ -279,21 +317,17 @@ channels:
 
 The `output-style` setting controls how command output is displayed:
 
-- **`native`** (default): Traditional sequential output with repository headers. Output from each repository is batched and displayed after completion.
-  
-- **`bubbletea`**: Modern terminal UI with real-time updates, styled output, and progress indicators. Features include:
+- **`tui`** (default): Modern terminal UI with real-time updates, styled output, and progress indicators. Features include:
   - Live progress tracking with completion status
   - Styled repository names and status indicators
   - Real-time output streaming with full scrolling support
   - Color-coded errors and messages
   - Elapsed time display
-  - Keyboard controls for navigation:
-    - `↑`/`↓` or `j`/`k` - Scroll up/down one line
-    - `PgUp`/`PgDn` or `b`/`f` or `Space` - Scroll by page
-    - `Home`/`End` or `g`/`G` - Jump to top/bottom
-    - `q` or `Ctrl+C` - Quit
+  - Keyboard controls for navigation, including support for Vim keybinds!
 
-**Note**: The bubbletea style provides a better experience for operations with many repositories or long-running commands, while the native style is more suitable for scripting and non-interactive use.
+- **`native`**: Low-complexity fallback with traditional sequential output with repository headers. Suitable for legacy or non-interactive environments, scripts, and CI/CD pipelines.
+
+> **Note**: The TUI style is recommended for interactive use and provides a better experience for operations across many repositories and/or using long-running commands.
 
 #### Concurrency Control
 

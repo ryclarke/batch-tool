@@ -87,13 +87,13 @@ func (g *Github) UpdatePullRequest(repo, branch, title, description string, revi
 	return parsePR(pr), nil
 }
 
-func (g *Github) MergePullRequest(repo, branch string) (*scm.PullRequest, error) {
+func (g *Github) MergePullRequest(repo, branch string, force bool) (*scm.PullRequest, error) {
 	pr, err := g.getPullRequest(context.TODO(), repo, branch)
 	if err != nil {
 		return nil, err
 	}
 
-	if !pr.GetMergeable() {
+	if !force && !pr.GetMergeable() {
 		return nil, fmt.Errorf("pull request %s [%d] for %s is not mergeable: %s", branch, pr.GetNumber(), repo, pr.GetMergeableState())
 	}
 

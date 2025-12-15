@@ -38,11 +38,12 @@ func TestPRIntegrationWithFakeProvider(t *testing.T) {
 
 		// Capture output
 		var output bytes.Buffer
-		cmd.SetOutput(&output)
+		cmd.SetOut(&output)
+		cmd.SetErr(&output)
 
 		// We can't easily test execution without more setup, but we can test command structure
-		if cmd.Use != "new <repository> ..." {
-			t.Errorf("Expected Use to be 'new <repository> ...', got %s", cmd.Use)
+		if cmd.Use != "new <repository>..." {
+			t.Errorf("Expected Use to be 'new <repository>...', got %s", cmd.Use)
 		}
 
 		if cmd.Short == "" {
@@ -54,8 +55,8 @@ func TestPRIntegrationWithFakeProvider(t *testing.T) {
 	t.Run("EditCommand", func(t *testing.T) {
 		cmd := addEditCmd()
 
-		if cmd.Use != "edit <repository> ..." {
-			t.Errorf("Expected Use to be 'edit <repository> ...', got %s", cmd.Use)
+		if cmd.Use != "edit <repository>..." {
+			t.Errorf("Expected Use to be 'edit <repository>...', got %s", cmd.Use)
 		}
 
 		if cmd.Short == "" {
@@ -67,8 +68,8 @@ func TestPRIntegrationWithFakeProvider(t *testing.T) {
 	t.Run("MergeCommand", func(t *testing.T) {
 		cmd := addMergeCmd()
 
-		if cmd.Use != "merge <repository> ..." {
-			t.Errorf("Expected Use to be 'merge <repository> ...', got %s", cmd.Use)
+		if cmd.Use != "merge <repository>..." {
+			t.Errorf("Expected Use to be 'merge <repository>...', got %s", cmd.Use)
 		}
 
 		if cmd.Short == "" {
@@ -201,8 +202,8 @@ func TestPRRootCommand(t *testing.T) {
 
 	cmd := Cmd()
 
-	if cmd.Use != "pr [cmd] <repository> ..." {
-		t.Errorf("Expected Use to be 'pr [cmd] <repository> ...', got %s", cmd.Use)
+	if cmd.Use != "pr [cmd] <repository>..." {
+		t.Errorf("Expected Use to be 'pr [cmd] <repository>...', got %s", cmd.Use)
 	}
 
 	if cmd.Short == "" {
@@ -224,7 +225,7 @@ func TestPRRootCommand(t *testing.T) {
 	}
 
 	for _, expectedCmd := range expectedSubCommands {
-		if !foundCommands[expectedCmd+" <repository> ..."] {
+		if !foundCommands[expectedCmd+" <repository>..."] {
 			t.Errorf("Expected subcommand %s not found", expectedCmd)
 		}
 	}

@@ -13,6 +13,12 @@ import (
 
 	"github.com/ryclarke/batch-tool/config"
 	"github.com/ryclarke/batch-tool/scm"
+	"github.com/ryclarke/batch-tool/utils"
+)
+
+const (
+	defaultCacheFile = ".batch-tool-cache.json"
+	flushTTL         = 5 * time.Second
 )
 
 // Catalog contains a cached set of repositories and their metadata from Bitbucket
@@ -22,11 +28,14 @@ var Catalog = make(map[string]scm.Repository)
 var Labels = make(map[string]mapset.Set[string])
 
 // Init initializes the repository catalog and label mappings, updating the cache if necessary (based on configured TTL).
-func Init(ctx context.Context) {
+func Init(ctx context.Context, flush bool) {
 	viper := config.Viper(ctx)
 
-	if err := initRepositoryCatalog(ctx); err != nil {
-		fmt.Printf("ERROR: Could not load repository metadata: %v", err)
+	// Register catalog lookup function for utils package
+	utils.CatalogLookup = GetProjectForRepo
+
+	if err := initRepositoryCatalog(ctx, flush); err != nil {
+		fmt.Fprintf(os.Stderr, "ERROR: Could not load repository metadata: %v\n", err)
 	}
 
 	// Add locally-configured aliases to the defined labels
@@ -46,13 +55,47 @@ func Init(ctx context.Context) {
 	}
 }
 
-// Flush removes the local cache of repository metadata.
-func Flush(ctx context.Context) error {
-	if err := os.Remove(catalogCachePath(ctx)); err != nil && !os.IsNotExist(err) {
-		return err
+// GetRepository retrieves a repository from the catalog by name.
+// It attempts to find the repository using different lookup strategies:
+// 1. Direct lookup (if repo contains project/name)
+// 2. Lookup with default project prefix
+// 3. Search through all catalog entries for matching name
+func GetRepository(ctx context.Context, repoName string) (*scm.Repository, bool) {
+	viper := config.Viper(ctx)
+
+	// Try direct lookup first (project/name format)
+	if repo, exists := Catalog[repoName]; exists {
+		return &repo, true
 	}
 
-	return nil
+	// Try with default project prefix
+	defaultProject := viper.GetString(config.GitProject)
+	if defaultProject != "" {
+		qualifiedName := defaultProject + "/" + repoName
+		if repo, exists := Catalog[qualifiedName]; exists {
+			return &repo, true
+		}
+	}
+
+	// Search through all catalog entries for a name match (in any project)
+	for key, repo := range Catalog {
+		if repo.Name == repoName || strings.HasSuffix(key, "/"+repoName) {
+			return &repo, true
+		}
+	}
+
+	return nil, false
+}
+
+// GetProjectForRepo returns the project for a given repository name.
+// It checks the catalog first, then falls back to the default project.
+func GetProjectForRepo(ctx context.Context, repoName string) string {
+	if repo, exists := GetRepository(ctx, repoName); exists {
+		return repo.Project
+	}
+
+	// Fallback to default project if not in catalog
+	return config.Viper(ctx).GetString(config.GitProject)
 }
 
 // RepositoryList returns the set of repository names matching the given filters.
@@ -112,14 +155,24 @@ func RepositoryList(ctx context.Context, filters ...string) mapset.Set[string] {
 	return forcedSet.Union(includeSet.Difference(excludeSet))
 }
 
-func initRepositoryCatalog(ctx context.Context) error {
-	if len(Catalog) > 0 {
+func initRepositoryCatalog(ctx context.Context, flush bool) error {
+	// If catalog is already loaded and not flushing, skip subsequent initialization
+	if len(Catalog) > 0 && !flush {
 		return nil
 	}
 
-	if err := loadCatalogCache(ctx); err != nil {
-		fmt.Print(err.Error())
+	ttl := flushTTL // Use short TTL when flushing to force refetch
+	if !flush {
+		ttl = config.Viper(ctx).GetDuration(config.CatalogCacheTTL)
+	}
+
+	if err := loadCatalogCache(ctx, ttl); err != nil {
+		if !flush {
+			// Only log error if not flushing - flush implies we want to refetch
+			fmt.Fprintf(os.Stderr, "%v\n", err)
+		}
 	} else {
+		// Cache loaded successfully, no need to refetch
 		return nil
 	}
 
@@ -131,9 +184,7 @@ type repositoryCache struct {
 	Repositories map[string]scm.Repository `json:"repositories"`
 }
 
-func loadCatalogCache(ctx context.Context) error {
-	viper := config.Viper(ctx)
-
+func loadCatalogCache(ctx context.Context, ttl time.Duration) error {
 	file, err := os.Open(catalogCachePath(ctx))
 	if err != nil {
 		return fmt.Errorf("local cache of repository catalog is missing or invalid - fetching remote info")
@@ -146,18 +197,21 @@ func loadCatalogCache(ctx context.Context) error {
 		return err
 	}
 
-	if time.Since(cached.UpdatedAt) > viper.GetDuration(config.CatalogCacheTTL) {
+	if time.Since(cached.UpdatedAt) > ttl {
 		return fmt.Errorf("local cache of repository catalog is too old - fetching remote info")
 	}
 
 	Catalog = cached.Repositories
 
 	for _, repo := range Catalog {
+		// Use project-qualified name for consistent scoping
+		repoKey := repo.Project + "/" + repo.Name
+
 		for _, label := range repo.Labels {
 			if _, ok := Labels[label]; !ok {
-				Labels[label] = mapset.NewSet(repo.Name)
+				Labels[label] = mapset.NewSet(repoKey)
 			} else {
-				Labels[label].Add(repo.Name)
+				Labels[label].Add(repoKey)
 			}
 		}
 	}
@@ -186,21 +240,33 @@ func saveCatalogCache(ctx context.Context) error {
 func fetchRepositoryData(ctx context.Context) error {
 	viper := config.Viper(ctx)
 
-	provider := scm.Get(ctx, viper.GetString(config.GitProvider), viper.GetString(config.GitProject))
-
-	repos, err := provider.ListRepositories()
-	if err != nil {
-		return fmt.Errorf("failed to fetch repositories from provider: %w", err)
+	// Build set of all projects to fetch
+	projects := mapset.NewSet(viper.GetStringSlice(config.GitProjects)...)
+	if defaultProject := viper.GetString(config.GitProject); defaultProject != "" {
+		projects.Add(defaultProject)
 	}
 
-	for _, repo := range repos {
-		Catalog[repo.Name] = *repo
+	// Fetch repositories from all projects
+	for project := range projects.Iter() {
+		provider := scm.Get(ctx, viper.GetString(config.GitProvider), project)
 
-		for _, label := range repo.Labels {
-			if _, ok := Labels[label]; !ok {
-				Labels[label] = mapset.NewSet(repo.Name)
-			} else {
-				Labels[label].Add(repo.Name)
+		repos, err := provider.ListRepositories()
+		if err != nil {
+			return fmt.Errorf("failed to fetch repositories from project %s: %w", project, err)
+		}
+
+		for _, repo := range repos {
+			// Always store with project-qualified name for consistency
+			repoKey := repo.Project + "/" + repo.Name
+
+			Catalog[repoKey] = *repo
+
+			for _, label := range repo.Labels {
+				if _, ok := Labels[label]; !ok {
+					Labels[label] = mapset.NewSet(repoKey)
+				} else {
+					Labels[label].Add(repoKey)
+				}
 			}
 		}
 	}
@@ -211,9 +277,11 @@ func fetchRepositoryData(ctx context.Context) error {
 func catalogCachePath(ctx context.Context) string {
 	viper := config.Viper(ctx)
 
-	return filepath.Join(viper.GetString(config.GitDirectory),
-		viper.GetString(config.GitHost),
-		viper.GetString(config.GitProject),
-		viper.GetString(config.CatalogCacheFile),
-	)
+	// If a custom path is configured, use it
+	if customPath := viper.GetString(config.CatalogCachePath); customPath != "" {
+		return customPath
+	}
+
+	// Default: store in gitdir/host/.batch-tool-cache.json
+	return filepath.Join(viper.GetString(config.GitDirectory), viper.GetString(config.GitHost), defaultCacheFile)
 }

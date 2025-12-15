@@ -96,14 +96,13 @@ func (f *Fake) GetPullRequest(repo, branch string) (*scm.PullRequest, error) {
 			Branch:      pr.Branch,
 			Repo:        pr.Repo,
 			Reviewers:   make([]string, 0, len(pr.Reviewers)),
+			Mergeable:   pr.Mergeable,
 			ID:          pr.ID,
 			Number:      pr.Number,
 			Version:     pr.Version,
 		}
 
-		for _, rev := range pr.Reviewers {
-			result.Reviewers = append(result.Reviewers, rev)
-		}
+		result.Reviewers = append(result.Reviewers, pr.Reviewers...)
 
 		return result, nil
 	}
@@ -134,6 +133,7 @@ func (f *Fake) OpenPullRequest(repo, branch, title, description string, reviewer
 		Branch:      branch,
 		Repo:        repo,
 		Reviewers:   reviewers,
+		Mergeable:   true, // Default to mergeable
 	}
 
 	f.PullRequests[key] = pr
@@ -185,7 +185,7 @@ func (f *Fake) UpdatePullRequest(repo, branch, title, description string, review
 }
 
 // MergePullRequest merges an existing pull request
-func (f *Fake) MergePullRequest(repo, branch string) (*scm.PullRequest, error) {
+func (f *Fake) MergePullRequest(repo, branch string, force bool) (*scm.PullRequest, error) {
 	if err := f.Errors["MergePullRequest"]; err != nil {
 		return nil, err
 	}
@@ -195,6 +195,11 @@ func (f *Fake) MergePullRequest(repo, branch string) (*scm.PullRequest, error) {
 	pr, exists := f.PullRequests[key]
 	if !exists {
 		return nil, fmt.Errorf("pull request not found for %s:%s", repo, branch)
+	}
+
+	// Check mergeability unless force flag is set
+	if !force && !pr.Mergeable {
+		return nil, fmt.Errorf("pull request for %s:%s is not mergeable (conflicts, required checks failing, etc)", repo, branch)
 	}
 
 	delete(f.PullRequests, key)
@@ -237,6 +242,17 @@ func (f *Fake) ClearError(method string) {
 // ClearAllErrors removes all configured errors
 func (f *Fake) ClearAllErrors() {
 	f.Errors = make(map[string]error)
+}
+
+// SetPRMergeable sets the mergeable status of a pull request for testing
+func (f *Fake) SetPRMergeable(repo, branch string, mergeable bool) error {
+	key := fmt.Sprintf("%s:%s", repo, branch)
+	pr, exists := f.PullRequests[key]
+	if !exists {
+		return fmt.Errorf("pull request not found for %s:%s", repo, branch)
+	}
+	pr.Mergeable = mergeable
+	return nil
 }
 
 // GetRepositoryCount returns the number of repositories in the fake provider
@@ -379,9 +395,7 @@ func copyPR(pr *scm.PullRequest) *scm.PullRequest {
 		Version:     pr.Version,
 	}
 
-	for _, rev := range pr.Reviewers {
-		result.Reviewers = append(result.Reviewers, rev)
-	}
+	result.Reviewers = append(result.Reviewers, pr.Reviewers...)
 
 	return result
 }

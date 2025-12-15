@@ -1,16 +1,18 @@
-package fake
+package fake_test
 
 import (
 	"context"
 	"fmt"
 	"testing"
 
-	"github.com/ryclarke/batch-tool/config"
+	testhelper "github.com/ryclarke/batch-tool/utils/test"
+
 	"github.com/ryclarke/batch-tool/scm"
+	. "github.com/ryclarke/batch-tool/scm/fake"
 )
 
 func loadFixture(t *testing.T) context.Context {
-	return config.LoadFixture(t, "../../config")
+	return testhelper.LoadFixture(t, "../../config")
 }
 
 func TestNew(t *testing.T) {
@@ -257,7 +259,7 @@ func TestMergePullRequest(t *testing.T) {
 	}
 
 	// Merge the PR
-	mergedPR, err := f.MergePullRequest("repo-1", "feature-branch")
+	mergedPR, err := f.MergePullRequest("repo-1", "feature-branch", false)
 	if err != nil {
 		t.Fatalf("Failed to merge pull request: %v", err)
 	}
@@ -277,16 +279,186 @@ func TestMergePullRequestAlreadyMerged(t *testing.T) {
 		t.Fatalf("Failed to open pull request: %v", err)
 	}
 
-	_, err = f.MergePullRequest("repo-1", "feature-branch")
+	_, err = f.MergePullRequest("repo-1", "feature-branch", false)
 	if err != nil {
 		t.Fatalf("Failed to merge pull request: %v", err)
 	}
 
 	// Try to merge again
-	_, err = f.MergePullRequest("repo-1", "feature-branch")
+	_, err = f.MergePullRequest("repo-1", "feature-branch", false)
 	if err == nil {
 		t.Error("Expected error when merging already merged pull request")
 	}
+}
+
+// TestMergePullRequestMergeability tests mergeability checking with force flag
+func TestMergePullRequestMergeability(t *testing.T) {
+	tests := []struct {
+		name        string
+		mergeable   bool
+		force       bool
+		expectError bool
+		errorMsg    string
+	}{
+		{
+			name:        "mergeable PR without force",
+			mergeable:   true,
+			force:       false,
+			expectError: false,
+		},
+		{
+			name:        "mergeable PR with force",
+			mergeable:   true,
+			force:       true,
+			expectError: false,
+		},
+		{
+			name:        "unmergeable PR without force",
+			mergeable:   false,
+			force:       false,
+			expectError: true,
+			errorMsg:    "is not mergeable",
+		},
+		{
+			name:        "unmergeable PR with force (bypass check)",
+			mergeable:   false,
+			force:       true,
+			expectError: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			testRepos := CreateTestRepositories("test-project")
+			f := NewFake("test-project", testRepos)
+
+			// Open a PR
+			pr, err := f.OpenPullRequest("repo-1", "test-branch", "Test PR", "Test description", []string{"reviewer1"})
+			if err != nil {
+				t.Fatalf("Failed to open pull request: %v", err)
+			}
+
+			// Set mergeability
+			err = f.SetPRMergeable("repo-1", "test-branch", tt.mergeable)
+			if err != nil {
+				t.Fatalf("Failed to set PR mergeable status: %v", err)
+			}
+
+			// Verify the mergeable status was set
+			updatedPR, err := f.GetPullRequest("repo-1", "test-branch")
+			if err != nil {
+				t.Fatalf("Failed to get pull request: %v", err)
+			}
+			if updatedPR.Mergeable != tt.mergeable {
+				t.Errorf("Expected mergeable=%v, got %v", tt.mergeable, updatedPR.Mergeable)
+			}
+
+			// Attempt to merge
+			mergedPR, err := f.MergePullRequest("repo-1", "test-branch", tt.force)
+
+			if tt.expectError {
+				if err == nil {
+					t.Error("Expected error but got none")
+				} else if tt.errorMsg != "" && !contains(err.Error(), tt.errorMsg) {
+					t.Errorf("Expected error containing '%s', got: %v", tt.errorMsg, err)
+				}
+				// PR should still exist when merge fails
+				_, stillExists := f.PullRequests["repo-1:test-branch"]
+				if !stillExists {
+					t.Error("Expected PR to still exist after failed merge")
+				}
+			} else {
+				if err != nil {
+					t.Errorf("Unexpected error: %v", err)
+				}
+				if mergedPR == nil {
+					t.Error("Expected merged PR to be returned")
+				}
+				if mergedPR.ID != pr.ID {
+					t.Errorf("Expected merged PR ID %d, got %d", pr.ID, mergedPR.ID)
+				}
+				// PR should be deleted after successful merge
+				_, stillExists := f.PullRequests["repo-1:test-branch"]
+				if stillExists {
+					t.Error("Expected PR to be deleted after successful merge")
+				}
+			}
+		})
+	}
+}
+
+// TestMergePullRequestForceBypassesChecks tests that force flag bypasses false negatives
+func TestMergePullRequestForceBypassesChecks(t *testing.T) {
+	testRepos := CreateTestRepositories("test-project")
+	f := NewFake("test-project", testRepos)
+
+	// Scenario: Provider incorrectly reports PR as unmergeable (false negative)
+	// but we know it's actually fine and want to bypass the check
+	_, err := f.OpenPullRequest("repo-1", "hotfix-branch", "Critical Fix", "Emergency fix", []string{"reviewer1"})
+	if err != nil {
+		t.Fatalf("Failed to open pull request: %v", err)
+	}
+
+	// Simulate false negative - provider says it's not mergeable
+	err = f.SetPRMergeable("repo-1", "hotfix-branch", false)
+	if err != nil {
+		t.Fatalf("Failed to set PR mergeable status: %v", err)
+	}
+
+	// Without force, merge should fail
+	_, err = f.MergePullRequest("repo-1", "hotfix-branch", false)
+	if err == nil {
+		t.Error("Expected merge to fail without force flag")
+	}
+
+	// PR should still exist
+	pr, err := f.GetPullRequest("repo-1", "hotfix-branch")
+	if err != nil {
+		t.Fatalf("Expected PR to still exist: %v", err)
+	}
+
+	// With force, merge should succeed despite unmergeable status
+	mergedPR, err := f.MergePullRequest("repo-1", "hotfix-branch", true)
+	if err != nil {
+		t.Errorf("Expected force merge to succeed: %v", err)
+	}
+
+	if mergedPR.ID != pr.ID {
+		t.Errorf("Expected merged PR ID %d, got %d", pr.ID, mergedPR.ID)
+	}
+
+	// PR should be deleted after forced merge
+	_, err = f.GetPullRequest("repo-1", "hotfix-branch")
+	if err == nil {
+		t.Error("Expected PR to be deleted after forced merge")
+	}
+}
+
+// TestSetPRMergeableNotFound tests error handling when PR doesn't exist
+func TestSetPRMergeableNotFound(t *testing.T) {
+	testRepos := CreateTestRepositories("test-project")
+	f := NewFake("test-project", testRepos)
+
+	err := f.SetPRMergeable("nonexistent-repo", "nonexistent-branch", true)
+	if err == nil {
+		t.Error("Expected error when setting mergeable status for nonexistent PR")
+	}
+	if !contains(err.Error(), "not found") {
+		t.Errorf("Expected 'not found' error, got: %v", err)
+	}
+}
+
+func contains(s, substr string) bool {
+	return len(s) >= len(substr) && (s == substr || len(s) > len(substr) && findSubstring(s, substr))
+}
+
+func findSubstring(s, substr string) bool {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
 }
 
 func TestAddRepository(t *testing.T) {
@@ -412,7 +584,7 @@ func TestErrorHandling(t *testing.T) {
 		{
 			"MergePullRequest",
 			func() error {
-				_, err := f.MergePullRequest("repo-1", "branch-1")
+				_, err := f.MergePullRequest("repo-1", "branch-1", false)
 				return err
 			},
 		},

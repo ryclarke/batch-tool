@@ -1,17 +1,17 @@
 package exec
 
 import (
+	testhelper "github.com/ryclarke/batch-tool/utils/test"
 	"bytes"
 	"context"
 	"io"
 	"strings"
 	"testing"
 
-	"github.com/ryclarke/batch-tool/config"
 )
 
 func loadFixture(t *testing.T) context.Context {
-	return config.LoadFixture(t, "../../config")
+	return testhelper.LoadFixture(t, "../../config")
 }
 
 // mockStdin replaces stdin with a mock for testing
@@ -26,8 +26,8 @@ func TestCmd(t *testing.T) {
 		t.Fatal("Cmd() returned nil")
 	}
 
-	if cmd.Use != "exec <repository> ..." {
-		t.Errorf("Expected Use to be 'exec <repository> ...', got %s", cmd.Use)
+	if cmd.Use != "exec <repository>..." {
+		t.Errorf("Expected Use to be 'exec <repository>...', got %s", cmd.Use)
 	}
 
 	// Test aliases
