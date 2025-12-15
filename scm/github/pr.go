@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/google/go-github/v74/github"
-	"github.com/spf13/viper"
 
 	"github.com/ryclarke/batch-tool/catalog"
 	"github.com/ryclarke/batch-tool/config"
@@ -32,7 +31,7 @@ func (g *Github) OpenPullRequest(repo, branch, title, description string, review
 	// check default branch for the current repo, or use the fallback config
 	defaultBranch := catalog.Catalog[repo].DefaultBranch
 	if defaultBranch == "" {
-		defaultBranch = viper.GetString(config.SourceBranch)
+		defaultBranch = config.Viper(g.ctx).GetString(config.SourceBranch)
 	}
 
 	// if title is not specified, use the branch name
@@ -107,7 +106,7 @@ func (g *Github) MergePullRequest(repo, branch string) (*scm.PullRequest, error)
 
 func (g *Github) getPullRequest(ctx context.Context, repo, branch string) (*github.PullRequest, error) {
 	// acquire read lock (and release it when done)
-	defer readLock()()
+	defer g.readLock()()
 
 	opts := &github.PullRequestListOptions{
 		State: "open",
@@ -140,7 +139,7 @@ func (g *Github) getPullRequest(ctx context.Context, repo, branch string) (*gith
 
 func (g *Github) openPullRequest(ctx context.Context, repo string, req *github.NewPullRequest) (*github.PullRequest, error) {
 	// acquire write lock (and release it when done)
-	defer writeLock()()
+	defer g.writeLock()()
 
 	resp, _, err := g.client.PullRequests.Create(ctx, g.project, repo, req)
 	if err != nil {
@@ -164,7 +163,7 @@ func (g *Github) openPullRequest(ctx context.Context, repo string, req *github.N
 
 func (g *Github) editPullRequest(ctx context.Context, repo string, prNumber int, req *github.PullRequest) (*github.PullRequest, error) {
 	// acquire write lock (and release it when done)
-	defer writeLock()()
+	defer g.writeLock()()
 
 	pr, _, err := g.client.PullRequests.Edit(ctx, g.project, repo, prNumber, req)
 	if err != nil {
@@ -187,7 +186,7 @@ func (g *Github) editPullRequest(ctx context.Context, repo string, prNumber int,
 
 func (g *Github) requestReviewers(ctx context.Context, repo string, prNumber int, req github.ReviewersRequest) (*github.PullRequest, error) {
 	// acquire write lock (and release it when done)
-	defer writeLock()()
+	defer g.writeLock()()
 
 	resp, _, err := g.client.PullRequests.RequestReviewers(ctx, g.project, repo, prNumber, req)
 	if err != nil {
@@ -210,7 +209,7 @@ func (g *Github) requestReviewers(ctx context.Context, repo string, prNumber int
 
 func (g *Github) mergePullRequest(ctx context.Context, repo string, prNumber int) error {
 	// acquire write lock (and release it when done)
-	defer writeLock()()
+	defer g.writeLock()()
 
 	_, _, err := g.client.PullRequests.Merge(ctx, g.project, repo, prNumber, "", nil)
 	if err != nil {

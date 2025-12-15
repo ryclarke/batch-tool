@@ -1,11 +1,17 @@
 package main
 
 import (
+	"context"
 	"os"
 	"testing"
 
 	"github.com/ryclarke/batch-tool/cmd"
+	"github.com/ryclarke/batch-tool/config"
 )
+
+func loadFixture(t *testing.T) context.Context {
+	return config.LoadFixture(t, "config")
+}
 
 func TestMain(t *testing.T) {
 	// Test that main function can be called without panic

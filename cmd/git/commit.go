@@ -1,53 +1,69 @@
 package git
 
 import (
-	"os/exec"
+	"context"
 
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 
 	"github.com/ryclarke/batch-tool/call"
+	"github.com/ryclarke/batch-tool/catalog"
 	"github.com/ryclarke/batch-tool/config"
 	"github.com/ryclarke/batch-tool/utils"
+)
+
+const (
+	messageFlag = "message"
+	amendFlag   = "amend"
+	pushFlag    = "push"
+	noPushFlag  = "no-push"
 )
 
 func addCommitCmd() *cobra.Command {
 	// commitCmd represents the commit command
 	commitCmd := &cobra.Command{
-		Use:   "commit <repository> ...",
-		Short: "Commit code changes across repositories",
-		Args:  cobra.MinimumNArgs(1),
-		PreRunE: func(_ *cobra.Command, _ []string) error {
+		Use:               "commit <repository> ...",
+		Short:             "Commit code changes across repositories",
+		Args:              cobra.MinimumNArgs(1),
+		ValidArgsFunction: catalog.CompletionFunc(),
+		PreRunE: func(cmd *cobra.Command, _ []string) error {
+			viper := config.Viper(cmd.Context())
+
+			viper.BindPFlag(config.CommitMessage, cmd.Flags().Lookup(messageFlag))
+			viper.BindPFlag(config.CommitAmend, cmd.Flags().Lookup(amendFlag))
+			viper.BindPFlag(config.CommitPush, cmd.Flags().Lookup(pushFlag))
+
+			// Allow the `--no-push` flag to override push configuration
+			if noPush, _ := cmd.Flags().GetBool(noPushFlag); noPush {
+				viper.Set(config.CommitPush, false)
+			}
+
 			if viper.GetBool(config.CommitAmend) {
 				return nil // amended commits do not require a message
 			}
 
-			return utils.ValidateRequiredConfig(config.CommitMessage)
+			return utils.ValidateRequiredConfig(cmd.Context(), config.CommitMessage)
 		},
 		Run: func(cmd *cobra.Command, args []string) {
-			call.Do(args, cmd.OutOrStdout(), call.Wrap(utils.ValidateBranch, gitCommit))
+			call.Do(cmd, args, call.Wrap(utils.ValidateBranch, Commit))
 		},
 	}
 
-	commitCmd.Flags().BoolP("amend", "a", false, "amend the latest existing commit")
-	viper.BindPFlag(config.CommitAmend, commitCmd.Flags().Lookup("amend"))
+	commitCmd.Flags().BoolP(amendFlag, "a", false, "amend the latest existing commit")
+	commitCmd.Flags().StringP(messageFlag, "m", "", "commit message (required for new commits)")
+	commitCmd.Flags().BoolP(pushFlag, "u", true, "push the commit to the remote repository")
 
-	commitCmd.Flags().StringP("message", "m", "", "commit message (required for new commits)")
-	viper.BindPFlag(config.CommitMessage, commitCmd.Flags().Lookup("message"))
+	// --no-push is excluded from usage and help output, and is an alternative to --push=false
+	commitCmd.PersistentFlags().Bool(noPushFlag, false, "")
+	commitCmd.PersistentFlags().MarkHidden(noPushFlag)
 
 	return commitCmd
 }
 
-func gitCommit(name string, ch chan<- string) error {
-	branch, err := utils.LookupBranch(name)
-	if err != nil {
-		return err
-	}
+// Commit stages all changes, creates a commit, and pushes it to the remote repository.
+func Commit(ctx context.Context, name string, ch chan<- string) error {
+	viper := config.Viper(ctx)
 
-	cmd := exec.Command("git", "add", ".")
-	cmd.Dir = utils.RepoPath(name)
-
-	if _, err = cmd.Output(); err != nil {
+	if err := call.Exec("git", "add", ".")(ctx, name, ch); err != nil {
 		return err
 	}
 
@@ -65,30 +81,14 @@ func gitCommit(name string, ch chan<- string) error {
 		}
 	}
 
-	cmd = exec.Command("git", args...)
-	cmd.Dir = utils.RepoPath(name)
-
-	output, err := cmd.Output()
-	if err != nil {
+	if err := call.Exec("git", args...)(ctx, name, ch); err != nil {
 		return err
 	}
 
-	ch <- string(output)
-
-	args = []string{"push", "-u", "origin", branch}
-	if viper.GetBool(config.CommitAmend) {
-		args = append(args, "-f")
+	// skip pushing the commit if --no-push is set or --push is false
+	if !viper.GetBool(config.CommitPush) {
+		return nil
 	}
 
-	cmd = exec.Command("git", args...)
-	cmd.Dir = utils.RepoPath(name)
-
-	output, err = cmd.Output()
-	if err != nil {
-		return err
-	}
-
-	ch <- string(output)
-
-	return nil
+	return Push(ctx, name, ch)
 }

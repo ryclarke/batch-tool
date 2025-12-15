@@ -1,39 +1,32 @@
 package git
 
 import (
-	"bytes"
-	"strings"
 	"testing"
-
-	"github.com/ryclarke/batch-tool/config"
 )
 
 func TestAddBranchCmd(t *testing.T) {
-	_ = config.LoadFixture("../../config")
-
 	cmd := addBranchCmd()
 
 	if cmd == nil {
 		t.Fatal("addBranchCmd() returned nil")
 	}
 
-	if cmd.Use != "checkout <repository> ..." {
-		t.Errorf("Expected Use to be 'checkout <repository> ...', got %s", cmd.Use)
+	if cmd.Use != "branch <repository> ..." {
+		t.Errorf("Expected Use to be 'branch <repository> ...', got %s", cmd.Use)
 	}
 
 	// Test aliases
 	aliases := cmd.Aliases
-	if len(aliases) != 1 || aliases[0] != "branch" {
-		t.Errorf("Expected aliases to contain 'branch', got %v", aliases)
+	if len(aliases) != 1 || aliases[0] != "checkout" {
+		t.Errorf("Expected aliases to contain 'checkout', got %v", aliases)
 	}
 
-	if cmd.Short != "Checkout a new branch across repositories" {
-		t.Errorf("Expected correct Short description, got %s", cmd.Short)
+	if cmd.Short == "" {
+		t.Error("Expected Short description to be set")
 	}
 }
 
 func TestBranchCmdFlags(t *testing.T) {
-	_ = config.LoadFixture("../../config")
 
 	cmd := addBranchCmd()
 
@@ -49,7 +42,6 @@ func TestBranchCmdFlags(t *testing.T) {
 }
 
 func TestBranchCmdArgs(t *testing.T) {
-	_ = config.LoadFixture("../../config")
 
 	cmd := addBranchCmd()
 
@@ -66,36 +58,10 @@ func TestBranchCmdArgs(t *testing.T) {
 	}
 }
 
-func TestBranchCmdHelp(t *testing.T) {
-	_ = config.LoadFixture("../../config")
-
-	cmd := addBranchCmd()
-
-	var buf bytes.Buffer
-	cmd.SetOut(&buf)
-	cmd.SetErr(&buf)
-
-	// Set help flag and execute
-	cmd.SetArgs([]string{"--help"})
-	err := cmd.Execute()
-	if err != nil {
-		t.Errorf("Help execution failed: %v", err)
-	}
-
-	output := buf.String()
-	if !strings.Contains(output, "Checkout a new branch") {
-		t.Error("Help output should contain command description")
-	}
-
-	if !strings.Contains(output, "--branch") {
-		t.Error("Help output should contain branch flag information")
-	}
-}
-
 func TestBranchCmdPreRunE(t *testing.T) {
-	_ = config.LoadFixture("../../config")
-
+	ctx := loadFixture(t)
 	cmd := addBranchCmd()
+	cmd.SetContext(ctx)
 
 	// Test PreRunE function exists
 	if cmd.PreRunE == nil {

@@ -1,15 +1,22 @@
 package bitbucket
 
 import (
+	"context"
 	"encoding/json"
 	"net/url"
 	"testing"
 
+	"github.com/ryclarke/batch-tool/config"
 	"github.com/ryclarke/batch-tool/scm"
 )
 
+func loadFixture(t *testing.T) context.Context {
+	return config.LoadFixture(t, "../../config")
+}
+
 func TestNew(t *testing.T) {
-	provider := New("test-project")
+	ctx := loadFixture(t)
+	provider := New(ctx, "test-project")
 
 	if provider == nil {
 		t.Fatal("Expected non-nil provider")
@@ -30,7 +37,8 @@ func TestBitbucketProviderCreation(t *testing.T) {
 
 	for _, projectName := range testCases {
 		t.Run("Project_"+projectName, func(t *testing.T) {
-			provider := New(projectName)
+			ctx := loadFixture(t)
+			provider := New(ctx, projectName)
 
 			if provider == nil {
 				t.Errorf("Expected non-nil provider for project %s", projectName)
@@ -49,8 +57,9 @@ func TestBitbucketProviderCreation(t *testing.T) {
 	}
 }
 
-func TestBitbucketProviderInterface(t *testing.T) {
-	provider := New("test-project")
+func TestBitbucketProviderMethods(t *testing.T) {
+	ctx := loadFixture(t)
+	provider := New(ctx, "test-project")
 
 	// Test that all interface methods exist
 	// Note: These will likely fail without proper authentication/network setup
@@ -93,8 +102,9 @@ func TestBitbucketProviderInterface(t *testing.T) {
 }
 
 func TestBitbucketProviderRegistration(t *testing.T) {
+	ctx := loadFixture(t)
 	// Test that the Bitbucket provider is registered during init
-	provider := scm.Get("bitbucket", "test-project")
+	provider := scm.Get(ctx, "bitbucket", "test-project")
 
 	if provider == nil {
 		t.Fatal("Expected Bitbucket provider to be registered")

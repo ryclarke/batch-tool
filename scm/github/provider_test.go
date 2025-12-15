@@ -1,13 +1,20 @@
 package github
 
 import (
+	"context"
 	"testing"
 
+	"github.com/ryclarke/batch-tool/config"
 	"github.com/ryclarke/batch-tool/scm"
 )
 
+func loadFixture(t *testing.T) context.Context {
+	return config.LoadFixture(t, "../../config")
+}
+
 func TestNew(t *testing.T) {
-	provider := New("test-project")
+	ctx := loadFixture(t)
+	provider := New(ctx, "test-project")
 
 	if provider == nil {
 		t.Fatal("Expected non-nil provider")
@@ -28,7 +35,8 @@ func TestGithubProviderCreation(t *testing.T) {
 
 	for _, projectName := range testCases {
 		t.Run("Project_"+projectName, func(t *testing.T) {
-			provider := New(projectName)
+			ctx := loadFixture(t)
+			provider := New(ctx, projectName)
 
 			if provider == nil {
 				t.Errorf("Expected non-nil provider for project %s", projectName)
@@ -47,8 +55,9 @@ func TestGithubProviderCreation(t *testing.T) {
 	}
 }
 
-func TestGithubProviderInterface(t *testing.T) {
-	provider := New("test-project")
+func TestGithubProviderMethods(t *testing.T) {
+	ctx := loadFixture(t)
+	provider := New(ctx, "test-project")
 
 	// Test that all interface methods exist
 	// Note: These will likely fail without proper authentication/network setup
@@ -91,8 +100,9 @@ func TestGithubProviderInterface(t *testing.T) {
 }
 
 func TestGithubProviderRegistration(t *testing.T) {
+	ctx := loadFixture(t)
 	// Test that the GitHub provider is registered during init
-	provider := scm.Get("github", "test-project")
+	provider := scm.Get(ctx, "github", "test-project")
 
 	if provider == nil {
 		t.Fatal("Expected GitHub provider to be registered")

@@ -1,0 +1,6 @@
+git:
+  provider: fake
+  directory: ./tmp
+
+channels:
+  buffer-size: 10

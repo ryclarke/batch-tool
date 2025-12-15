@@ -2,224 +2,424 @@ package call
 
 import (
 	"bytes"
+	"context"
+	"runtime"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/ryclarke/batch-tool/config"
-	"github.com/spf13/viper"
 )
 
+// TestDo tests the Do function which orchestrates concurrent repository operations
 func TestDo(t *testing.T) {
-	_ = config.LoadFixture("../config")
-
-	// Set up test configuration
-	viper.Set(config.ChannelBuffer, 10)
-	viper.Set(config.SortRepos, false)
-
-	// Create a test wrapper that sends test data
-	testWrapper := func(repo string, ch chan<- string) {
-		defer close(ch)
-		ch <- "test output for " + repo
+	tests := []struct {
+		name          string
+		repos         []string
+		callFunc      CallFunc
+		channelBuffer int
+		wantOutput    map[string]string // repo -> expected output
+		wantError     bool
+	}{
+		{
+			name:          "basic two repos",
+			repos:         []string{"repo1", "repo2"},
+			callFunc:      Wrap(fakeCallFunc(t, false, "test output for %s")),
+			channelBuffer: 10,
+			wantOutput: map[string]string{
+				"repo1": "test output for repo1",
+				"repo2": "test output for repo2",
+			},
+		},
+		{
+			name:          "single repo with buffering",
+			repos:         []string{"repo1"},
+			callFunc:      Wrap(fakeCallFunc(t, false, "test output for %s")),
+			channelBuffer: 1,
+			wantOutput: map[string]string{
+				"repo1": "test output for repo1",
+			},
+		},
 	}
 
-	var buf bytes.Buffer
-	repos := []string{"repo1", "repo2"}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := loadFixture(t)
+			viper := config.Viper(ctx)
 
-	Do(repos, &buf, testWrapper)
+			viper.Set(config.ChannelBuffer, tt.channelBuffer)
 
-	output := buf.String()
-	if !strings.Contains(output, "test output for repo1") {
-		t.Error("Expected output for repo1")
-	}
-	if !strings.Contains(output, "test output for repo2") {
-		t.Error("Expected output for repo2")
+			// Create repo directories so Do won't try to clone
+			setupDirs(t, ctx, tt.repos)
+
+			var buf bytes.Buffer
+			Do(fakeCmd(t, ctx, &buf), tt.repos, tt.callFunc)
+
+			output := buf.String()
+
+			checkOutputContains(t, output, tt.wantOutput)
+
+			for repo, got := range tt.wantOutput {
+				if !strings.Contains(output, got) {
+					t.Errorf("Expected output for %s to contain '%s'", repo, got)
+				}
+			}
+		})
 	}
 }
 
+// TestDoConcurrency tests the concurrency configuration of Do
+func TestDoConcurrency(t *testing.T) {
+	tests := []struct {
+		name             string
+		maxConcurrency   int
+		expectedBehavior string
+		fallbackToCPU    bool
+	}{
+		{
+			name:             "CPU-based default concurrency",
+			maxConcurrency:   0,
+			expectedBehavior: "should fallback to CPU count",
+			fallbackToCPU:    true,
+		},
+		{
+			name:             "configured concurrency",
+			maxConcurrency:   5,
+			expectedBehavior: "should use configured value",
+			fallbackToCPU:    false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := loadFixture(t)
+			viper := config.Viper(ctx)
+
+			viper.Set(config.MaxConcurrency, tt.maxConcurrency)
+
+			maxConcurrency := viper.GetInt(config.MaxConcurrency)
+			if maxConcurrency <= 0 {
+				maxConcurrency = runtime.NumCPU()
+			}
+
+			if tt.fallbackToCPU {
+				expectedCPUs := runtime.NumCPU()
+				if maxConcurrency != expectedCPUs {
+					t.Errorf("Expected default concurrency to be %d (CPU count), got %d", expectedCPUs, maxConcurrency)
+				}
+			} else {
+				if maxConcurrency != tt.maxConcurrency {
+					t.Errorf("Expected configured concurrency to be %d, got %d", tt.maxConcurrency, maxConcurrency)
+				}
+			}
+		})
+	}
+}
+
+// TestDoBatching tests the batching behavior of Do with various concurrency limits
+func TestDoBatching(t *testing.T) {
+	tests := []struct {
+		name               string
+		maxConcurrency     int
+		repos              []string
+		expectedMaxWorkers int64
+		workDuration       time.Duration
+	}{
+		{
+			name:               "low concurrency limit",
+			maxConcurrency:     2,
+			repos:              []string{"repo1", "repo2", "repo3", "repo4", "repo5"},
+			expectedMaxWorkers: 2,
+			workDuration:       50 * time.Millisecond,
+		},
+		{
+			name:               "high concurrency",
+			maxConcurrency:     10,
+			repos:              []string{"repo1", "repo2", "repo3"},
+			expectedMaxWorkers: 10,
+			workDuration:       10 * time.Millisecond,
+		},
+		{
+			name:               "zero concurrency fallback",
+			maxConcurrency:     0,
+			repos:              []string{"repo1"},
+			expectedMaxWorkers: 0, // Will fallback to CPU count
+			workDuration:       10 * time.Millisecond,
+		},
+		{
+			name:               "sync mode (concurrency=1)",
+			maxConcurrency:     1,
+			repos:              []string{"repo1", "repo2"},
+			expectedMaxWorkers: 1,
+			workDuration:       10 * time.Millisecond,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := loadFixture(t)
+			viper := config.Viper(ctx)
+
+			viper.Set(config.MaxConcurrency, tt.maxConcurrency)
+			viper.Set(config.ChannelBuffer, 10)
+			viper.Set(config.SortRepos, false)
+
+			// Create repo directories so Do won't try to clone
+			setupDirs(t, ctx, tt.repos)
+
+			var activeWorkers int64
+			var maxConcurrentWorkers int64
+			var mutex sync.Mutex
+			var processedCount int64
+
+			var buf bytes.Buffer
+			Do(fakeCmd(t, ctx, &buf), tt.repos, fakeCallFuncConcurrent(t, &activeWorkers, &maxConcurrentWorkers, &processedCount, &mutex, tt.workDuration))
+
+			output := buf.String()
+
+			// Verify all repos were processed
+			checkOutputContains(t, output, tt.repos)
+
+			// Verify processed count
+			if atomic.LoadInt64(&processedCount) != int64(len(tt.repos)) {
+				t.Errorf("Expected %d repos to be processed, got %d", len(tt.repos), processedCount)
+			}
+
+			// Verify concurrency was limited appropriately
+			if tt.expectedMaxWorkers > 0 && maxConcurrentWorkers > tt.expectedMaxWorkers {
+				t.Errorf("Expected max concurrent workers to be %d, got %d", tt.expectedMaxWorkers, maxConcurrentWorkers)
+			}
+
+			if maxConcurrentWorkers == 0 && len(tt.repos) > 0 {
+				t.Error("Expected at least one worker to be active")
+			}
+		})
+	}
+}
+
+// TestProcessArguments tests the processArguments function which expands and sorts repos
 func TestProcessArguments(t *testing.T) {
-	_ = config.LoadFixture("../config")
+	tests := []struct {
+		name        string
+		sortRepos   bool
+		args        []string
+		want        []string
+		wantBackoff time.Duration
+		gitProvider string
+	}{
+		{
+			name:        "basic processing without sorting",
+			sortRepos:   false,
+			args:        []string{"zebra", "alpha", "beta"},
+			want:        []string{"zebra", "alpha", "beta"},
+			wantBackoff: 1 * time.Second,
+		},
+		{
+			name:        "sorting enabled",
+			sortRepos:   true,
+			args:        []string{"zebra", "alpha", "beta"},
+			want:        []string{"alpha", "beta", "zebra"},
+			wantBackoff: 1 * time.Second,
+		},
+		{
+			name:        "github small backoff for few repos",
+			sortRepos:   true,
+			args:        []string{"repo1", "repo2"},
+			want:        []string{"repo1", "repo2"},
+			gitProvider: "github",
+			wantBackoff: 2 * time.Second,
+		},
+		{
+			name:        "github large backoff for many repos",
+			sortRepos:   true,
+			args:        []string{"repo01", "repo02", "repo03", "repo04", "repo05", "repo06", "repo07", "repo08", "repo09", "repo10", "repo11"},
+			want:        []string{"repo01", "repo02", "repo03", "repo04", "repo05", "repo06", "repo07", "repo08", "repo09", "repo10", "repo11"},
+			gitProvider: "github",
+			wantBackoff: 8 * time.Second,
+		},
+		{
+			name:        "default backoff for many repos (non-github)",
+			sortRepos:   true,
+			args:        []string{"repo01", "repo02", "repo03", "repo04", "repo05", "repo06", "repo07", "repo08", "repo09", "repo10", "repo11"},
+			want:        []string{"repo01", "repo02", "repo03", "repo04", "repo05", "repo06", "repo07", "repo08", "repo09", "repo10", "repo11"},
+			gitProvider: "bitbucket",
+			wantBackoff: 1 * time.Second,
+		},
+	}
 
-	// Set up test configuration
-	viper.Set(config.SortRepos, true)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := loadFixture(t)
+			viper := config.Viper(ctx)
 
-	// Test basic processing (this will depend on catalog being initialized)
-	args := []string{"repo3", "repo1", "repo2"}
-	result := processArguments(args)
+			viper.Set(config.SortRepos, tt.sortRepos)
 
-	// Since we don't have a real catalog, the function should return the input
-	// but potentially sorted
-	if len(result) == 0 {
-		t.Error("Expected non-empty result from processArguments")
+			// Set up provider-specific backoff config validation
+			viper.Set(config.GitProvider, tt.gitProvider)
+			viper.Set(config.GithubHourlyWriteLimit, 10)
+			viper.Set(config.WriteBackoff, "1s")
+			viper.Set(config.GithubBackoffSmall, "2s")
+			viper.Set(config.GithubBackoffLarge, "8s")
+
+			result := processArguments(ctx, tt.args)
+
+			if tt.sortRepos {
+				checkOutput(t, result, tt.want, nil, false)
+			} else if len(result) != len(tt.want) {
+				t.Errorf("Expected %d repos, got %d", len(tt.want), len(result))
+			}
+
+			if backoff := viper.GetDuration(config.WriteBackoff); backoff != tt.wantBackoff {
+				t.Errorf("Expected backoff %v, got %v", tt.wantBackoff.String(), backoff.String())
+			}
+		})
 	}
 }
 
-func TestProcessArgumentsSorting(t *testing.T) {
-	_ = config.LoadFixture("../config")
+// TestDoVariousModes tests various execution modes of Do
+func TestDoVariousModes(t *testing.T) {
+	tests := []struct {
+		name             string
+		maxConcurrency   int
+		repos            []string
+		workDuration     time.Duration
+		expectMaxWorkers int64
+		checkTiming      bool
+		expectedMaxTime  time.Duration
+	}{
+		{
+			name:           "with nil writer (discard)",
+			maxConcurrency: 5,
+			repos:          []string{"repo1"},
+		},
+		{
+			name:            "async with slow wrapper",
+			maxConcurrency:  10,
+			repos:           []string{"repo1", "repo2"},
+			workDuration:    10 * time.Millisecond,
+			checkTiming:     true,
+			expectedMaxTime: 50 * time.Millisecond,
+		},
+		{
+			name:             "sync flag behavior (concurrency=1)",
+			maxConcurrency:   1,
+			repos:            []string{"repo3", "repo1", "repo2"},
+			workDuration:     50 * time.Millisecond,
+			expectMaxWorkers: 1,
+		},
+	}
 
-	// Test with sorting enabled
-	viper.Set(config.SortRepos, true)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := loadFixture(t)
+			viper := config.Viper(ctx)
 
-	// Mock a simple scenario where catalog returns the input
-	args := []string{"zebra", "alpha", "beta"}
-	result := processArguments(args)
+			viper.Set(config.MaxConcurrency, tt.maxConcurrency)
+			viper.Set(config.ChannelBuffer, 10)
+			viper.Set(config.SortRepos, false)
 
-	// The actual behavior depends on the catalog implementation
-	// This test verifies the function doesn't crash
-	if len(result) == 0 {
-		t.Error("Expected non-empty result from processArguments")
+			// Create repo directories so Do won't try to clone
+			setupDirs(t, ctx, tt.repos)
+
+			var activeWorkers int64
+			var maxConcurrentWorkers int64
+			var mutex sync.Mutex
+			var processedCount int64
+
+			var buf bytes.Buffer
+			start := time.Now()
+			Do(fakeCmd(t, ctx, &buf), tt.repos, fakeCallFuncConcurrent(t, &activeWorkers, &maxConcurrentWorkers, &processedCount, &mutex, tt.workDuration))
+			duration := time.Since(start)
+
+			output := buf.String()
+
+			// Verify all repos were processed
+			checkOutputContains(t, output, tt.repos)
+
+			// Check timing if requested
+			if tt.checkTiming && duration > tt.expectedMaxTime {
+				t.Logf("Execution took %v, may not be truly async (expected < %v)", duration, tt.expectedMaxTime)
+			}
+
+			// Check max workers if specified
+			if tt.expectMaxWorkers > 0 {
+				actualMax := atomic.LoadInt64(&maxConcurrentWorkers)
+				if actualMax != tt.expectMaxWorkers {
+					t.Errorf("Expected max concurrent workers to be %d, got %d", tt.expectMaxWorkers, actualMax)
+				}
+			}
+		})
 	}
 }
 
-func TestProcessArgumentsNoSorting(t *testing.T) {
-	_ = config.LoadFixture("../config")
+// TestDoWithContextCancellation tests that Do handles context cancellation properly
+func TestDoWithContextCancellation(t *testing.T) {
+	ctx := loadFixture(t)
+	setupDirs(t, ctx, []string{"repo1", "repo2", "repo3"})
 
-	// Test with sorting disabled
-	viper.Set(config.SortRepos, false)
-
-	args := []string{"zebra", "alpha", "beta"}
-	result := processArguments(args)
-
-	// The actual behavior depends on the catalog implementation
-	// This test verifies the function doesn't crash
-	if len(result) == 0 {
-		t.Error("Expected non-empty result from processArguments")
-	}
-}
-
-func TestDoWithChannelBuffer(t *testing.T) {
-	_ = config.LoadFixture("../config")
-
-	// Test with different channel buffer sizes
-	viper.Set(config.ChannelBuffer, 1)
-	viper.Set(config.SortRepos, false)
-
-	testWrapper := func(repo string, ch chan<- string) {
-		defer close(ch)
-		// Send multiple messages to test buffering
-		for i := 0; i < 5; i++ {
-			ch <- "message " + string(rune('0'+i)) + " for " + repo
-		}
-	}
-
-	var buf bytes.Buffer
-	repos := []string{"repo1"}
-
-	Do(repos, &buf, testWrapper)
-
-	output := buf.String()
-	if !strings.Contains(output, "message 0 for repo1") {
-		t.Error("Expected first message in output")
-	}
-	if !strings.Contains(output, "message 4 for repo1") {
-		t.Error("Expected last message in output")
-	}
-}
-
-func TestDoWithNilWriter(t *testing.T) {
-	_ = config.LoadFixture("../config")
-
-	// Test that Do handles different scenarios gracefully
+	viper := config.Viper(ctx)
+	viper.Set(config.MaxConcurrency, 1) // Only 1 at a time
 	viper.Set(config.ChannelBuffer, 10)
 	viper.Set(config.SortRepos, false)
 
-	testWrapper := func(repo string, ch chan<- string) {
-		defer close(ch)
-		ch <- "test"
-	}
+	// Create a cancellable context
+	cancelCtx, cancel := context.WithCancel(ctx)
 
-	// Test with a discard writer instead of nil to avoid panic
-	var buf bytes.Buffer
-	Do([]string{"repo1"}, &buf, testWrapper)
-
-	// Just verify it doesn't crash
-	output := buf.String()
-	if !strings.Contains(output, "test") {
-		t.Error("Expected test output in buffer")
-	}
-}
-
-func TestDoWithSlowWrapper(t *testing.T) {
-	_ = config.LoadFixture("../config")
-
-	// Test async behavior with slow wrapper
-	viper.Set(config.ChannelBuffer, 10)
-	viper.Set(config.SortRepos, false)
-
-	slowWrapper := func(repo string, ch chan<- string) {
-		defer close(ch)
-		time.Sleep(10 * time.Millisecond) // Small delay
-		ch <- "slow output for " + repo
-	}
-
-	var buf bytes.Buffer
-	repos := []string{"repo1", "repo2"}
-
-	start := time.Now()
-	Do(repos, &buf, slowWrapper)
-	duration := time.Since(start)
-
-	// Async execution should be faster than sequential
-	if duration > 50*time.Millisecond {
-		t.Logf("Execution took %v, may not be truly async", duration)
-	}
-
-	output := buf.String()
-	if !strings.Contains(output, "slow output for repo1") {
-		t.Error("Expected output for repo1")
-	}
-	if !strings.Contains(output, "slow output for repo2") {
-		t.Error("Expected output for repo2")
-	}
-}
-
-func TestSyncFlagBehavior(t *testing.T) {
-	_ = config.LoadFixture("../config")
-
-	// Test that setting MaxConcurrency to 1 enforces sequential execution
-	viper.Set(config.MaxConcurrency, 1) // Simulate --sync flag behavior
-	viper.Set(config.ChannelBuffer, 10)
-	viper.Set(config.SortRepos, false)
-
-	var activeWorkers int64
-	var maxConcurrentWorkers int64
-
-	testWrapper := func(repo string, ch chan<- string) {
-		defer close(ch)
-
-		// Track concurrent workers
-		current := atomic.AddInt64(&activeWorkers, 1)
-		defer atomic.AddInt64(&activeWorkers, -1)
-
-		// Update maximum concurrent workers seen
-		if current > maxConcurrentWorkers {
-			maxConcurrentWorkers = current
-		}
-
-		// Simulate some work
-		time.Sleep(50 * time.Millisecond)
-
-		ch <- "processed " + repo
-	}
-
-	var buf bytes.Buffer
-	repos := []string{"repo1", "repo2", "repo3"}
-
-	Do(repos, &buf, testWrapper)
-
-	output := buf.String()
-
-	// Verify all repos were processed
-	for _, repo := range repos {
-		expected := "processed " + repo
-		if !strings.Contains(output, expected) {
-			t.Errorf("Expected output to contain '%s'", expected)
+	// CallFunc that takes time and allows cancellation
+	slowFunc := func(ctx context.Context, repo string, ch chan<- string) error {
+		select {
+		case <-time.After(100 * time.Millisecond):
+			ch <- "completed " + repo
+			return nil
+		case <-ctx.Done():
+			return ctx.Err()
 		}
 	}
 
-	// Verify only 1 worker was active at a time (sequential execution)
-	if maxConcurrentWorkers != 1 {
-		t.Errorf("Expected max concurrent workers to be 1 (sync mode), got %d", maxConcurrentWorkers)
+	// Cancel context immediately after starting
+	cancel()
+
+	var buf, errBuf bytes.Buffer
+	cmd := fakeCmd(t, cancelCtx, &buf)
+	cmd.SetErr(&errBuf)
+
+	Do(cmd, []string{"repo1", "repo2", "repo3"}, slowFunc)
+
+	errOutput := errBuf.String()
+
+	// Should see context canceled error
+	checkOutputContains(t, errOutput, []string{"context canceled"})
+}
+
+// TestRunCallFuncCloning tests the repository cloning path in runCallFunc
+func TestRunCallFuncCloning(t *testing.T) {
+	ctx := loadFixture(t)
+
+	viper := config.Viper(ctx)
+	viper.Set(config.MaxConcurrency, 1)
+	viper.Set(config.ChannelBuffer, 10)
+	viper.Set(config.SortRepos, false)
+
+	// Use a repo that doesn't exist - will attempt to clone
+	missingRepo := "nonexistent-test-repo"
+
+	testFunc := func(_ context.Context, repo string, ch chan<- string) error {
+		ch <- "executed for " + repo
+		return nil
 	}
+
+	var buf, errBuf bytes.Buffer
+	cmd := fakeCmd(t, ctx, &buf)
+	cmd.SetErr(&errBuf)
+
+	Do(cmd, []string{missingRepo}, testFunc)
+
+	output := buf.String()
+	errOutput := errBuf.String()
+
+	// Should see cloning message and error from failed clone
+	checkOutputContains(t, output, []string{"Repository not found, cloning"})
+	checkOutputContains(t, errOutput, []string{"ERROR:"})
 }

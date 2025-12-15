@@ -1,12 +1,13 @@
 package pr
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 
 	"github.com/ryclarke/batch-tool/call"
+	"github.com/ryclarke/batch-tool/catalog"
 	"github.com/ryclarke/batch-tool/config"
 	"github.com/ryclarke/batch-tool/scm"
 	"github.com/ryclarke/batch-tool/utils"
@@ -15,21 +16,25 @@ import (
 // addMergeCmd initializes the pr merge command
 func addMergeCmd() *cobra.Command {
 	mergeCmd := &cobra.Command{
-		Use:   "merge <repository> ...",
-		Short: "Merge accepted pull requests",
-		Args:  cobra.MinimumNArgs(1),
+		Use:               "merge <repository> ...",
+		Short:             "Merge accepted pull requests",
+		Args:              cobra.MinimumNArgs(1),
+		ValidArgsFunction: catalog.CompletionFunc(),
 		Run: func(cmd *cobra.Command, args []string) {
-			call.Do(args, cmd.OutOrStdout(), call.Wrap(utils.ValidateBranch, mergePR))
+			call.Do(cmd, args, call.Wrap(utils.ValidateBranch, Merge))
 		},
 	}
 
 	return mergeCmd
 }
 
-func mergePR(name string, ch chan<- string) error {
-	provider := scm.Get(viper.GetString(config.GitProvider), viper.GetString(config.GitProject))
+// Merge merges the pull request for the given repository.
+func Merge(ctx context.Context, name string, ch chan<- string) error {
+	viper := config.Viper(ctx)
 
-	branch, err := utils.LookupBranch(name)
+	provider := scm.Get(ctx, viper.GetString(config.GitProvider), viper.GetString(config.GitProject))
+
+	branch, err := utils.LookupBranch(ctx, name)
 	if err != nil {
 		return err
 	}

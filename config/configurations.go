@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"testing"
 	"time"
 
 	"github.com/spf13/viper"
@@ -43,11 +44,7 @@ const (
 	CatalogCacheFile = "repos.cache.filename"
 	CatalogCacheTTL  = "repos.cache.ttl"
 
-	CommitAmend   = "commit.amend"
-	CommitMessage = "commit.message"
-
 	Branch    = "branch"
-	Reviewers = "reviewers"
 	AuthToken = "auth-token"
 
 	TokenLabel  = "repos.tokens.label"
@@ -61,100 +58,129 @@ const (
 	GithubHourlyWriteLimit = "github.hourly-write-limit"
 	GithubBackoffSmall     = "github.write-backoff-small"
 	GithubBackoffLarge     = "github.write-backoff-large"
+
+	// == COMMAND FLAGS == //
+
+	// git
+	CommitMessage = "git.args.commit.message"
+	CommitAmend   = "git.args.commit.amend"
+	CommitPush    = "git.args.commit.push"
+
+	// pr
+	PrTitle          = "pr.args.title"
+	PrDescription    = "pr.args.description"
+	PrReviewers      = "pr.args.reviewers"
+	PrResetReviewers = "pr.args.reset-reviewers"
+	PrAllReviewers   = "pr.args.all-reviewers"
+
+	// make
+	MakeTargets = "make.args.targets"
 )
 
 // Init reads in config file and ENV variables if set.
-func Init() {
-	initialize()
-
-	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_", "-", "_"))
-	viper.AutomaticEnv() // read in environment variables that match
+func Init(ctx context.Context) context.Context {
+	v := newViper()
 
 	if CfgFile != "" {
 		// Use config file from the flag.
-		viper.SetConfigFile(CfgFile)
+		v.SetConfigFile(CfgFile)
 	} else {
-		viper.SetConfigName("batch-tool")
+		v.SetConfigName("batch-tool")
 
 		// Search in the working directory
-		viper.AddConfigPath(".")
+		v.AddConfigPath(".")
 
 		// Search in the user's config directory
 		if usrConfig, err := os.UserConfigDir(); err == nil {
-			viper.AddConfigPath(usrConfig)
+			v.AddConfigPath(usrConfig)
 		}
 
 		// On Darwin, os.UserConfigDir() returns ~/Library/Application Support.  As this is to be used from
 		// the command line, it's more likely that the user will want to use XDG_CONFIG_HOME instead.
 		if xdgConfigHome := os.Getenv("XDG_CONFIG_HOME"); xdgConfigHome != "" {
-			viper.AddConfigPath(xdgConfigHome)
+			v.AddConfigPath(xdgConfigHome)
 		} else if homeDir, err := os.UserHomeDir(); err == nil {
-			viper.AddConfigPath(filepath.Join(homeDir, ".config"))
+			v.AddConfigPath(filepath.Join(homeDir, ".config"))
 		}
 
 		// Search in the executable's directory
 		if ex, err := os.Executable(); err == nil {
-			viper.AddConfigPath(filepath.Dir(ex))
+			v.AddConfigPath(filepath.Dir(ex))
 		}
 	}
 
 	// If a config file is found, read it in.
-	if err := viper.ReadInConfig(); err == nil {
-		fmt.Printf("Using config file: %v\n\n", viper.ConfigFileUsed())
+	if err := v.ReadInConfig(); err == nil {
+		fmt.Printf("Using config file: %v\n\n", v.ConfigFileUsed())
 	}
+
+	return SetViper(ctx, v)
 }
 
-func initialize() {
+func newViper() *viper.Viper {
+	v := viper.NewWithOptions(viper.EnvKeyReplacer(strings.NewReplacer(".", "_", "-", "_")))
+	v.AutomaticEnv() // read in environment variables that match
+	setDefaults(v)
+
+	return v
+}
+
+func setDefaults(v *viper.Viper) {
 	// Default user for SSH clone.
-	viper.SetDefault(GitUser, "git")
+	v.SetDefault(GitUser, "git")
 
-	viper.SetDefault(GitHost, "github.com")
-	viper.SetDefault(GitProvider, "github")
-	viper.SetDefault(SourceBranch, "main")
-	viper.SetDefault(SortRepos, true)
+	v.SetDefault(GitHost, "github.com")
+	v.SetDefault(GitProvider, "github")
+	v.SetDefault(SourceBranch, "main")
+	v.SetDefault(SortRepos, true)
 
-	viper.SetDefault(SkipUnwanted, true)
-	viper.SetDefault(UnwantedLabels, []string{"deprecated", "poc"})
-	viper.SetDefault(SuperSetLabel, "all")
+	v.SetDefault(SkipUnwanted, true)
+	v.SetDefault(UnwantedLabels, []string{"deprecated", "poc"})
+	v.SetDefault(SuperSetLabel, "all")
 
-	viper.SetDefault(CatalogCacheFile, ".catalog")
-	viper.SetDefault(CatalogCacheTTL, "24h")
-
-	viper.SetDefault(ChannelBuffer, 100)
-	viper.SetDefault(MaxConcurrency, runtime.NumCPU()) // Default to number of logical CPUs
-	viper.SetDefault(WriteBackoff, "1s")
+	v.SetDefault(CatalogCacheFile, ".catalog")
+	v.SetDefault(CatalogCacheTTL, "24h")
+	v.SetDefault(ChannelBuffer, 100)
+	v.SetDefault(MaxConcurrency, runtime.NumCPU()) // Default to number of logical CPUs
+	v.SetDefault(WriteBackoff, "1s")
 
 	// GitHub's secondary rate limit is 80 requests per minute, or 500 requests per hour
 	// 1s keeps us safely under the per-minute limit
 	// 8s keeps us safely under the per-hour limit when working with many repositories
-	viper.SetDefault(GithubHourlyWriteLimit, 500)
-	viper.SetDefault(GithubBackoffSmall, "1s")
-	viper.SetDefault(GithubBackoffLarge, "8s")
+	v.SetDefault(GithubHourlyWriteLimit, 500)
+	v.SetDefault(GithubBackoffSmall, "1s")
+	v.SetDefault(GithubBackoffLarge, "8s")
 
 	// default reviewers in the form `repo: [reviewers...]`
-	viper.SetDefault(DefaultReviewers, map[string][]string{})
+	v.SetDefault(DefaultReviewers, map[string][]string{})
 
 	// aliases in the form `alias: [repos...]`
-	viper.SetDefault(RepoAliases, map[string][]string{})
+	v.SetDefault(RepoAliases, map[string][]string{})
 
 	// default git directory is $GOPATH/src if GOPATH is set, or current working directory otherwise
-	viper.SetDefault(GitDirectory, defaultGitdir())
+	v.SetDefault(GitDirectory, defaultGitdir())
 
 	// defaults for token identifiers
-	viper.SetDefault(TokenLabel, "~")
-	viper.SetDefault(TokenSkip, "!")
-	viper.SetDefault(TokenForced, "+")
+	v.SetDefault(TokenLabel, "~")
+	v.SetDefault(TokenSkip, "!")
+	v.SetDefault(TokenForced, "+")
 }
 
 // LoadFixture will load example configuration; for testing only!
-func LoadFixture(dir string) error {
-	viper.Reset()
-	initialize()
+func LoadFixture(t *testing.T, dir string) context.Context {
+	t.Helper()
 
-	viper.SetConfigName("example-config")
-	viper.AddConfigPath(dir)
+	v := newViper()
+	ctx := SetViper(context.Background(), v)
 
-	return viper.ReadInConfig()
+	v.SetConfigName("fixture")
+	v.AddConfigPath(dir)
+
+	if err := v.ReadInConfig(); err != nil {
+		t.Fatalf("Failed to load fixture config: %v", err)
+	}
+
+	return ctx
 }
 
 func defaultGitdir() string {

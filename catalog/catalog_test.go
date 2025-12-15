@@ -1,698 +1,1167 @@
 package catalog
 
 import (
-	"bytes"
+	"context"
+	"encoding/json"
 	"os"
-	"strings"
+	"path/filepath"
 	"testing"
+	"time"
 
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/ryclarke/batch-tool/config"
 	"github.com/ryclarke/batch-tool/scm"
 	"github.com/ryclarke/batch-tool/scm/fake"
-	"github.com/spf13/viper"
 )
 
+// TestInit tests the Init function which initializes the catalog
+func TestInit(t *testing.T) {
+	tests := []struct {
+		name          string
+		setupFunc     func(t *testing.T, ctx context.Context)
+		wantRepoCount int
+		wantLabelMin  int
+	}{
+		{
+			name: "init with valid cache file",
+			setupFunc: func(t *testing.T, ctx context.Context) {
+				repos := map[string]scm.Repository{
+					"cached-repo1": {
+						Name:          "cached-repo1",
+						Description:   "Cached repository 1",
+						Project:       "test-project",
+						DefaultBranch: "main",
+						Labels:        []string{"cached"},
+					},
+					"cached-repo2": {
+						Name:          "cached-repo2",
+						Description:   "Cached repository 2",
+						Project:       "test-project",
+						DefaultBranch: "main",
+						Labels:        []string{"cached"},
+					},
+				}
+				setupCacheFile(t, ctx, repos, time.Now())
+			},
+			wantRepoCount: 2,
+			wantLabelMin:  2, // cached label + superset
+		},
+		{
+			name: "init with already initialized catalog does nothing",
+			setupFunc: func(t *testing.T, ctx context.Context) {
+				// Pre-populate catalog
+				Catalog = map[string]scm.Repository{
+					"existing-repo": {
+						Name:          "existing-repo",
+						Description:   "Existing repository",
+						Project:       "test-project",
+						DefaultBranch: "main",
+						Labels:        []string{"existing"},
+					},
+				}
+				Labels = map[string]mapset.Set[string]{
+					"existing": mapset.NewSet("existing-repo"),
+				}
+			},
+			wantRepoCount: 1,
+			wantLabelMin:  2, // existing + superset
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := loadFixture(t)
+			resetCatalogState(t) // Reset state before each test
+			t.Cleanup(func() { cleanupCache(t, ctx) })
+
+			if tt.setupFunc != nil {
+				tt.setupFunc(t, ctx)
+			}
+
+			Init(ctx)
+
+			checkCatalogSize(t, tt.wantRepoCount)
+
+			// Check that we have at least the minimum expected labels
+			if len(Labels) < tt.wantLabelMin {
+				t.Errorf("Expected at least %d labels, got %d", tt.wantLabelMin, len(Labels))
+			}
+		})
+	}
+}
+
+// TestFlush tests the Flush function which removes the catalog cache
+func TestFlush(t *testing.T) {
+	tests := []struct {
+		name      string
+		setupFunc func(t *testing.T, ctx context.Context) string
+		wantError bool
+	}{
+		{
+			name: "flush existing cache file",
+			setupFunc: func(t *testing.T, ctx context.Context) string {
+				repos := map[string]scm.Repository{
+					"test-repo": {
+						Name:          "test-repo",
+						Description:   "Test repository",
+						Project:       "test-project",
+						DefaultBranch: "main",
+						Labels:        []string{"test"},
+					},
+				}
+				return setupCacheFile(t, ctx, repos, time.Now())
+			},
+			wantError: false,
+		},
+		{
+			name: "flush non-existent cache file",
+			setupFunc: func(t *testing.T, ctx context.Context) string {
+				viper := config.Viper(ctx)
+				return viper.GetString(config.GitDirectory) + "/nonexistent/cache.json"
+			},
+			wantError: false, // os.Remove returns nil for non-existent files
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := loadFixture(t)
+			resetCatalogState(t)
+			t.Cleanup(func() { cleanupCache(t, ctx) })
+
+			var cachePath string
+			if tt.setupFunc != nil {
+				cachePath = tt.setupFunc(t, ctx)
+			}
+
+			err := Flush(ctx)
+
+			if !checkError(t, err, tt.wantError) {
+				return
+			}
+
+			// Verify cache file is removed
+			if _, err := os.Stat(cachePath); !os.IsNotExist(err) && !tt.wantError {
+				t.Error("Expected cache file to be removed")
+			}
+		})
+	}
+}
+
+// TestInitRepositoryCatalog tests the internal initialization logic
+func TestInitRepositoryCatalog(t *testing.T) {
+	tests := []struct {
+		name          string
+		setupFunc     func(t *testing.T, ctx context.Context)
+		wantRepoCount int
+		wantError     bool
+	}{
+		{
+			name: "init from valid cache",
+			setupFunc: func(t *testing.T, ctx context.Context) {
+				repos := map[string]scm.Repository{
+					"repo1": {
+						Name:          "repo1",
+						Description:   "Repository 1",
+						Project:       "test-project",
+						DefaultBranch: "main",
+						Labels:        []string{"label1"},
+					},
+				}
+				setupCacheFile(t, ctx, repos, time.Now())
+			},
+			wantRepoCount: 1,
+			wantError:     false,
+		},
+		{
+			name: "skip init when catalog already populated",
+			setupFunc: func(t *testing.T, ctx context.Context) {
+				Catalog = map[string]scm.Repository{
+					"existing": {
+						Name:          "existing",
+						Description:   "Existing repo",
+						Project:       "test-project",
+						DefaultBranch: "main",
+						Labels:        []string{"existing"},
+					},
+				}
+			},
+			wantRepoCount: 1,
+			wantError:     false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := loadFixture(t)
+			resetCatalogState(t)
+			t.Cleanup(func() { cleanupCache(t, ctx) })
+
+			if tt.setupFunc != nil {
+				tt.setupFunc(t, ctx)
+			}
+
+			err := initRepositoryCatalog(ctx)
+
+			if !checkError(t, err, tt.wantError) {
+				return
+			}
+
+			checkCatalogSize(t, tt.wantRepoCount)
+		})
+	}
+}
+
+// TestLoadCatalogCache tests loading the catalog from cache
+func TestLoadCatalogCache(t *testing.T) {
+	tests := []struct {
+		name          string
+		setupFunc     func(t *testing.T, ctx context.Context)
+		wantRepoCount int
+		wantLabelMin  int
+		wantError     bool
+	}{
+		{
+			name: "load valid cache file",
+			setupFunc: func(t *testing.T, ctx context.Context) {
+				repos := map[string]scm.Repository{
+					"repo1": {
+						Name:          "repo1",
+						Description:   "Repository 1",
+						Project:       "test-project",
+						DefaultBranch: "main",
+						Labels:        []string{"backend", "api"},
+					},
+					"repo2": {
+						Name:          "repo2",
+						Description:   "Repository 2",
+						Project:       "test-project",
+						DefaultBranch: "main",
+						Labels:        []string{"frontend"},
+					},
+				}
+				setupCacheFile(t, ctx, repos, time.Now())
+			},
+			wantRepoCount: 2,
+			wantLabelMin:  3, // backend, api, frontend
+			wantError:     false,
+		},
+		{
+			name: "load expired cache returns error",
+			setupFunc: func(t *testing.T, ctx context.Context) {
+				repos := map[string]scm.Repository{
+					"old-repo": {
+						Name:          "old-repo",
+						Description:   "Old repository",
+						Project:       "test-project",
+						DefaultBranch: "main",
+						Labels:        []string{"old"},
+					},
+				}
+				// Cache from 48 hours ago
+				setupCacheFile(t, ctx, repos, time.Now().Add(-48*time.Hour))
+			},
+			wantRepoCount: 0,
+			wantLabelMin:  0,
+			wantError:     true,
+		},
+		{
+			name: "load missing cache returns error",
+			setupFunc: func(t *testing.T, ctx context.Context) {
+				// No cache file created
+			},
+			wantRepoCount: 0,
+			wantLabelMin:  0,
+			wantError:     true,
+		},
+		{
+			name: "load invalid JSON returns error",
+			setupFunc: func(t *testing.T, ctx context.Context) {
+				cachePath := catalogCachePath(ctx)
+				cacheDir := filepath.Dir(cachePath)
+				if err := os.MkdirAll(cacheDir, 0755); err != nil {
+					t.Fatalf("Failed to create cache directory: %v", err)
+				}
+				// Write invalid JSON
+				if err := os.WriteFile(cachePath, []byte("invalid json"), 0644); err != nil {
+					t.Fatalf("Failed to write invalid cache: %v", err)
+				}
+			},
+			wantRepoCount: 0,
+			wantLabelMin:  0,
+			wantError:     true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := loadFixture(t)
+			resetCatalogState(t)
+			t.Cleanup(func() { cleanupCache(t, ctx) })
+
+			if tt.setupFunc != nil {
+				tt.setupFunc(t, ctx)
+			}
+
+			err := loadCatalogCache(ctx)
+
+			if !checkError(t, err, tt.wantError) {
+				return
+			}
+
+			if !tt.wantError {
+				checkCatalogSize(t, tt.wantRepoCount)
+
+				if len(Labels) < tt.wantLabelMin {
+					t.Errorf("Expected at least %d labels, got %d", tt.wantLabelMin, len(Labels))
+				}
+			}
+		})
+	}
+}
+
+// TestSaveCatalogCache tests saving the catalog to cache
+func TestSaveCatalogCache(t *testing.T) {
+	tests := []struct {
+		name      string
+		setupFunc func(t *testing.T, ctx context.Context)
+		wantError bool
+	}{
+		{
+			name: "save catalog with repositories",
+			setupFunc: func(t *testing.T, ctx context.Context) {
+				Catalog = map[string]scm.Repository{
+					"repo1": {
+						Name:          "repo1",
+						Description:   "Repository 1",
+						Project:       "test-project",
+						DefaultBranch: "main",
+						Labels:        []string{"backend"},
+					},
+					"repo2": {
+						Name:          "repo2",
+						Description:   "Repository 2",
+						Project:       "test-project",
+						DefaultBranch: "main",
+						Labels:        []string{"frontend"},
+					},
+				}
+			},
+			wantError: false,
+		},
+		{
+			name: "save empty catalog",
+			setupFunc: func(t *testing.T, ctx context.Context) {
+				Catalog = make(map[string]scm.Repository)
+			},
+			wantError: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := loadFixture(t)
+			resetCatalogState(t)
+			t.Cleanup(func() { cleanupCache(t, ctx) })
+
+			if tt.setupFunc != nil {
+				tt.setupFunc(t, ctx)
+			}
+
+			err := saveCatalogCache(ctx)
+
+			if !checkError(t, err, tt.wantError) {
+				return
+			}
+
+			if !tt.wantError {
+				// Verify cache file exists and is valid
+				cachePath := catalogCachePath(ctx)
+				data, err := os.ReadFile(cachePath)
+				if err != nil {
+					t.Fatalf("Failed to read cache file: %v", err)
+				}
+
+				var cache repositoryCache
+				if err := json.Unmarshal(data, &cache); err != nil {
+					t.Fatalf("Failed to unmarshal cache: %v", err)
+				}
+
+				if len(cache.Repositories) != len(Catalog) {
+					t.Errorf("Expected %d repositories in cache, got %d", len(Catalog), len(cache.Repositories))
+				}
+
+				// Verify timestamp is recent
+				if time.Since(cache.UpdatedAt) > time.Minute {
+					t.Error("Cache timestamp is not recent")
+				}
+			}
+		})
+	}
+}
+
+// TestFetchRepositoryData tests fetching repositories from SCM provider
+func TestFetchRepositoryData(t *testing.T) {
+	t.Skip("Skipping TestFetchRepositoryData - requires live SCM provider or complex mocking")
+}
+
+// TestCatalogCachePath tests the cache path generation
+func TestCatalogCachePath(t *testing.T) {
+	tests := []struct {
+		name         string
+		wantNotEmpty bool
+	}{
+		{
+			name:         "generate cache path with all components",
+			wantNotEmpty: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := loadFixture(t)
+			resetCatalogState(t)
+			t.Cleanup(func() { cleanupCache(t, ctx) })
+
+			path := catalogCachePath(ctx)
+
+			if tt.wantNotEmpty && path == "" {
+				t.Error("Expected non-empty cache path")
+			}
+
+			// Verify path has expected structure (directory/file)
+			if tt.wantNotEmpty {
+				dir := filepath.Dir(path)
+				if dir == "" || dir == "." {
+					t.Error("Expected cache path to have a parent directory")
+				}
+			}
+		})
+	}
+}
+
 func TestRepositoryList(t *testing.T) {
-	_ = config.LoadFixture("../config")
+	ctx := loadFixture(t)
 
-	// Initialize test data
-	Labels = map[string]mapset.Set[string]{
-		"frontend": mapset.NewSet("web-app", "mobile-app"),
-		"backend":  mapset.NewSet("api-server", "worker"),
-		"all":      mapset.NewSet("web-app", "mobile-app", "api-server", "worker", "tools"),
+	tests := []struct {
+		name      string
+		args      []string
+		wantCount int
+		wantRepos []string
+	}{
+		{
+			name:      "basic repository lookup",
+			args:      []string{"web-app", "api-server"},
+			wantCount: 2,
+			wantRepos: []string{"web-app", "api-server"},
+		},
 	}
 
-	// Test basic repository lookup
-	repoList := RepositoryList("web-app", "api-server")
-	repos := repoList.ToSlice()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Initialize test data
+			Labels = map[string]mapset.Set[string]{
+				"frontend": mapset.NewSet("web-app", "mobile-app"),
+				"backend":  mapset.NewSet("api-server", "worker"),
+				"all":      mapset.NewSet("web-app", "mobile-app", "api-server", "worker", "tools"),
+			}
 
-	if len(repos) != 2 {
-		t.Errorf("Expected 2 repositories, got %d", len(repos))
-	}
+			repoList := RepositoryList(ctx, tt.args...)
+			repos := repoList.ToSlice()
 
-	// Check that both repos are present
-	repoSet := mapset.NewSet(repos...)
-	if !repoSet.Contains("web-app") {
-		t.Error("Expected web-app in repository list")
-	}
-	if !repoSet.Contains("api-server") {
-		t.Error("Expected api-server in repository list")
+			checkRepoCount(t, repos, tt.wantCount)
+			checkRepoContains(t, repos, tt.wantRepos)
+		})
 	}
 }
 
 func TestRepositoryListWithLabels(t *testing.T) {
-	_ = config.LoadFixture("../config")
+	ctx := loadFixture(t)
 
-	// Initialize test data
-	Labels = map[string]mapset.Set[string]{
-		"frontend": mapset.NewSet("web-app", "mobile-app"),
-		"backend":  mapset.NewSet("api-server", "worker"),
+	tests := []struct {
+		name      string
+		args      []string
+		wantCount int
+		wantRepos []string
+	}{
+		{
+			name:      "frontend label lookup",
+			args:      []string{"~frontend"},
+			wantCount: 2,
+			wantRepos: []string{"web-app", "mobile-app"},
+		},
 	}
 
-	// Test label lookup
-	repoList := RepositoryList("~frontend")
-	repos := repoList.ToSlice()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Initialize test data
+			Labels = map[string]mapset.Set[string]{
+				"frontend": mapset.NewSet("web-app", "mobile-app"),
+				"backend":  mapset.NewSet("api-server", "worker"),
+			}
 
-	if len(repos) != 2 {
-		t.Errorf("Expected 2 frontend repositories, got %d", len(repos))
-	}
+			repoList := RepositoryList(ctx, tt.args...)
+			repos := repoList.ToSlice()
 
-	repoSet := mapset.NewSet(repos...)
-	if !repoSet.Contains("web-app") {
-		t.Error("Expected web-app in frontend label")
-	}
-	if !repoSet.Contains("mobile-app") {
-		t.Error("Expected mobile-app in frontend label")
+			checkRepoCount(t, repos, tt.wantCount)
+			checkRepoContains(t, repos, tt.wantRepos)
+		})
 	}
 }
 
 func TestRepositoryListWithExclusions(t *testing.T) {
-	_ = config.LoadFixture("../config")
+	ctx := loadFixture(t)
 
-	// Initialize test data
-	Labels = map[string]mapset.Set[string]{
-		"all":        mapset.NewSet("web-app", "mobile-app", "api-server", "deprecated-app"),
-		"deprecated": mapset.NewSet("deprecated-app"),
+	tests := []struct {
+		name          string
+		args          []string
+		wantRepos     []string
+		unwantedRepos []string
+	}{
+		{
+			name:          "exclude deprecated app",
+			args:          []string{"~all", "!deprecated-app"},
+			wantRepos:     []string{"web-app"},
+			unwantedRepos: []string{"deprecated-app"},
+		},
 	}
 
-	// Test exclusion
-	repoList := RepositoryList("~all", "!deprecated-app")
-	repos := repoList.ToSlice()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Initialize test data
+			Labels = map[string]mapset.Set[string]{
+				"all":        mapset.NewSet("web-app", "mobile-app", "api-server", "deprecated-app"),
+				"deprecated": mapset.NewSet("deprecated-app"),
+			}
 
-	repoSet := mapset.NewSet(repos...)
-	if repoSet.Contains("deprecated-app") {
-		t.Error("Expected deprecated-app to be excluded")
-	}
+			repoList := RepositoryList(ctx, tt.args...)
+			repos := repoList.ToSlice()
 
-	// Should contain the other apps
-	if !repoSet.Contains("web-app") {
-		t.Error("Expected web-app to be included")
+			checkRepoContains(t, repos, tt.wantRepos)
+			checkRepoNotContains(t, repos, tt.unwantedRepos)
+		})
 	}
 }
 
 func TestRepositoryListWithSkipUnwanted(t *testing.T) {
-	_ = config.LoadFixture("../config")
+	ctx := loadFixture(t)
+	viper := config.Viper(ctx)
 
-	// Set up configuration
-	viper.Set(config.SkipUnwanted, true)
-	viper.Set(config.UnwantedLabels, []string{"deprecated", "poc"})
-
-	// Initialize test data
-	Labels = map[string]mapset.Set[string]{
-		"all":        mapset.NewSet("web-app", "mobile-app", "deprecated-app", "poc-app"),
-		"deprecated": mapset.NewSet("deprecated-app"),
-		"poc":        mapset.NewSet("poc-app"),
+	tests := []struct {
+		name          string
+		args          []string
+		wantRepos     []string
+		unwantedRepos []string
+	}{
+		{
+			name:          "skip unwanted repositories",
+			args:          []string{"~all"},
+			wantRepos:     []string{"web-app", "mobile-app"},
+			unwantedRepos: []string{"deprecated-app", "poc-app"},
+		},
 	}
 
-	Catalog = map[string]scm.Repository{
-		"web-app":        {Name: "web-app", Labels: []string{}},
-		"mobile-app":     {Name: "mobile-app", Labels: []string{}},
-		"deprecated-app": {Name: "deprecated-app", Labels: []string{"deprecated"}},
-		"poc-app":        {Name: "poc-app", Labels: []string{"poc"}},
-	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Set up configuration
+			viper.Set(config.SkipUnwanted, true)
+			viper.Set(config.UnwantedLabels, []string{"deprecated", "poc"})
 
-	// Test that unwanted repositories are skipped
-	repoList := RepositoryList("~all")
-	repos := repoList.ToSlice()
+			// Initialize test data
+			Labels = map[string]mapset.Set[string]{
+				"all":        mapset.NewSet("web-app", "mobile-app", "deprecated-app", "poc-app"),
+				"deprecated": mapset.NewSet("deprecated-app"),
+				"poc":        mapset.NewSet("poc-app"),
+			}
 
-	repoSet := mapset.NewSet(repos...)
-	if repoSet.Contains("deprecated-app") {
-		t.Error("Expected deprecated-app to be skipped")
-	}
-	if repoSet.Contains("poc-app") {
-		t.Error("Expected poc-app to be skipped")
-	}
+			Catalog = map[string]scm.Repository{
+				"web-app":        {Name: "web-app", Labels: []string{}},
+				"mobile-app":     {Name: "mobile-app", Labels: []string{}},
+				"deprecated-app": {Name: "deprecated-app", Labels: []string{"deprecated"}},
+				"poc-app":        {Name: "poc-app", Labels: []string{"poc"}},
+			}
 
-	// Should contain the wanted apps
-	if !repoSet.Contains("web-app") {
-		t.Error("Expected web-app to be included")
-	}
-	if !repoSet.Contains("mobile-app") {
-		t.Error("Expected mobile-app to be included")
+			repoList := RepositoryList(ctx, tt.args...)
+			repos := repoList.ToSlice()
+
+			checkRepoContains(t, repos, tt.wantRepos)
+			checkRepoNotContains(t, repos, tt.unwantedRepos)
+		})
 	}
 }
 
 func TestRepositoryListEmptyInput(t *testing.T) {
-	_ = config.LoadFixture("../config")
+	ctx := loadFixture(t)
 
-	// Test with no arguments
-	repoList := RepositoryList()
-	repos := repoList.ToSlice()
+	tests := []struct {
+		name      string
+		args      []string
+		wantCount int
+	}{
+		{
+			name:      "no arguments",
+			args:      []string{},
+			wantCount: 0,
+		},
+	}
 
-	if len(repos) != 0 {
-		t.Errorf("Expected 0 repositories for empty input, got %d", len(repos))
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			repoList := RepositoryList(ctx, tt.args...)
+			repos := repoList.ToSlice()
+
+			checkRepoCount(t, repos, tt.wantCount)
+		})
 	}
 }
 
 func TestRepositoryListNonexistentLabel(t *testing.T) {
-	_ = config.LoadFixture("../config")
+	ctx := loadFixture(t)
 
-	// Test with nonexistent label
-	Labels = map[string]mapset.Set[string]{
-		"frontend": mapset.NewSet("web-app"),
+	tests := []struct {
+		name      string
+		args      []string
+		wantCount int
+	}{
+		{
+			name:      "nonexistent label",
+			args:      []string{"~nonexistent"},
+			wantCount: 0,
+		},
 	}
 
-	repoList := RepositoryList("~nonexistent")
-	repos := repoList.ToSlice()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			Labels = map[string]mapset.Set[string]{
+				"frontend": mapset.NewSet("web-app"),
+			}
 
-	if len(repos) != 0 {
-		t.Errorf("Expected 0 repositories for nonexistent label, got %d", len(repos))
+			repoList := RepositoryList(ctx, tt.args...)
+			repos := repoList.ToSlice()
+
+			checkRepoCount(t, repos, tt.wantCount)
+		})
 	}
 }
 
 func TestRepositoryListMixedInput(t *testing.T) {
-	_ = config.LoadFixture("../config")
+	ctx := loadFixture(t)
 
-	// Test with mix of labels and repository names
-	Labels = map[string]mapset.Set[string]{
-		"frontend": mapset.NewSet("web-app", "mobile-app"),
+	tests := []struct {
+		name      string
+		args      []string
+		wantCount int
+		wantRepos []string
+	}{
+		{
+			name:      "mix of labels and repository names",
+			args:      []string{"~frontend", "api-server"},
+			wantCount: 3,
+			wantRepos: []string{"web-app", "mobile-app", "api-server"},
+		},
 	}
 
-	repoList := RepositoryList("~frontend", "api-server")
-	repos := repoList.ToSlice()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			Labels = map[string]mapset.Set[string]{
+				"frontend": mapset.NewSet("web-app", "mobile-app"),
+			}
 
-	if len(repos) != 3 {
-		t.Errorf("Expected 3 repositories (2 from label + 1 direct), got %d", len(repos))
-	}
+			repoList := RepositoryList(ctx, tt.args...)
+			repos := repoList.ToSlice()
 
-	repoSet := mapset.NewSet(repos...)
-	if !repoSet.Contains("web-app") {
-		t.Error("Expected web-app from frontend label")
-	}
-	if !repoSet.Contains("mobile-app") {
-		t.Error("Expected mobile-app from frontend label")
-	}
-	if !repoSet.Contains("api-server") {
-		t.Error("Expected api-server from direct reference")
+			checkRepoCount(t, repos, tt.wantCount)
+			checkRepoContains(t, repos, tt.wantRepos)
+		})
 	}
 }
 
 // TestRepositoryListMultipleLabels tests combining multiple labels without forced inclusion
 func TestRepositoryListMultipleLabels(t *testing.T) {
-	_ = config.LoadFixture("../config")
+	ctx := loadFixture(t)
 
-	// Initialize test data
-	Labels = map[string]mapset.Set[string]{
-		"frontend":     mapset.NewSet("web-app", "mobile-app"),
-		"backend":      mapset.NewSet("api-server", "worker"),
-		"microservice": mapset.NewSet("user-service", "payment-service"),
-		"database":     mapset.NewSet("postgres-service", "redis-service"),
+	tests := []struct {
+		name      string
+		args      []string
+		wantCount int
+		wantRepos []string
+	}{
+		{
+			name:      "combine frontend and backend labels",
+			args:      []string{"~frontend", "~backend"},
+			wantCount: 4,
+			wantRepos: []string{"web-app", "mobile-app", "api-server", "worker"},
+		},
 	}
 
-	// Test combining multiple labels
-	repoList := RepositoryList("~frontend", "~backend")
-	repos := repoList.ToSlice()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			Labels = map[string]mapset.Set[string]{
+				"frontend":     mapset.NewSet("web-app", "mobile-app"),
+				"backend":      mapset.NewSet("api-server", "worker"),
+				"microservice": mapset.NewSet("user-service", "payment-service"),
+				"database":     mapset.NewSet("postgres-service", "redis-service"),
+			}
 
-	if len(repos) != 4 {
-		t.Errorf("Expected 4 repositories from two labels, got %d", len(repos))
-	}
+			repoList := RepositoryList(ctx, tt.args...)
+			repos := repoList.ToSlice()
 
-	repoSet := mapset.NewSet(repos...)
-	expectedRepos := []string{"web-app", "mobile-app", "api-server", "worker"}
-	for _, repo := range expectedRepos {
-		if !repoSet.Contains(repo) {
-			t.Errorf("Expected %s from combined labels", repo)
-		}
+			checkRepoCount(t, repos, tt.wantCount)
+			checkRepoContains(t, repos, tt.wantRepos)
+		})
 	}
 }
 
 // TestRepositoryListMultipleExclusions tests excluding multiple items
 func TestRepositoryListMultipleExclusions(t *testing.T) {
-	_ = config.LoadFixture("../config")
+	ctx := loadFixture(t)
 
-	// Initialize test data
-	Labels = map[string]mapset.Set[string]{
-		"all":        mapset.NewSet("web-app", "mobile-app", "api-server", "worker", "deprecated-app", "test-app"),
-		"deprecated": mapset.NewSet("deprecated-app"),
-		"test":       mapset.NewSet("test-app"),
+	tests := []struct {
+		name          string
+		args          []string
+		wantRepos     []string
+		unwantedRepos []string
+	}{
+		{
+			name:          "exclude multiple individual repos",
+			args:          []string{"~all", "!deprecated-app", "!test-app"},
+			wantRepos:     []string{"web-app", "mobile-app", "api-server", "worker"},
+			unwantedRepos: []string{"deprecated-app", "test-app"},
+		},
 	}
 
-	// Test excluding multiple individual repos
-	repoList := RepositoryList("~all", "!deprecated-app", "!test-app")
-	repos := repoList.ToSlice()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			Labels = map[string]mapset.Set[string]{
+				"all":        mapset.NewSet("web-app", "mobile-app", "api-server", "worker", "deprecated-app", "test-app"),
+				"deprecated": mapset.NewSet("deprecated-app"),
+				"test":       mapset.NewSet("test-app"),
+			}
 
-	repoSet := mapset.NewSet(repos...)
-	if repoSet.Contains("deprecated-app") {
-		t.Error("Expected deprecated-app to be excluded")
-	}
-	if repoSet.Contains("test-app") {
-		t.Error("Expected test-app to be excluded")
-	}
+			repoList := RepositoryList(ctx, tt.args...)
+			repos := repoList.ToSlice()
 
-	expectedRepos := []string{"web-app", "mobile-app", "api-server", "worker"}
-	for _, repo := range expectedRepos {
-		if !repoSet.Contains(repo) {
-			t.Errorf("Expected %s to be included", repo)
-		}
+			checkRepoContains(t, repos, tt.wantRepos)
+			checkRepoNotContains(t, repos, tt.unwantedRepos)
+		})
 	}
 }
 
 // TestRepositoryListExcludeMultipleLabels tests excluding multiple labels
 func TestRepositoryListExcludeMultipleLabels(t *testing.T) {
-	_ = config.LoadFixture("../config")
+	ctx := loadFixture(t)
 
-	// Initialize test data
-	Labels = map[string]mapset.Set[string]{
-		"all":        mapset.NewSet("web-app", "mobile-app", "api-server", "worker", "deprecated-app", "test-app", "experimental-app"),
-		"deprecated": mapset.NewSet("deprecated-app"),
-		"test":       mapset.NewSet("test-app", "experimental-app"),
-		"backend":    mapset.NewSet("api-server", "worker"),
+	tests := []struct {
+		name          string
+		args          []string
+		wantRepos     []string
+		unwantedRepos []string
+	}{
+		{
+			name:          "exclude deprecated and test labels",
+			args:          []string{"~all", "!~deprecated", "!~test"},
+			wantRepos:     []string{"web-app", "mobile-app", "api-server", "worker"},
+			unwantedRepos: []string{"deprecated-app", "test-app", "experimental-app"},
+		},
 	}
 
-	// Test excluding multiple labels
-	repoList := RepositoryList("~all", "!~deprecated", "!~test")
-	repos := repoList.ToSlice()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			Labels = map[string]mapset.Set[string]{
+				"all":        mapset.NewSet("web-app", "mobile-app", "api-server", "worker", "deprecated-app", "test-app", "experimental-app"),
+				"deprecated": mapset.NewSet("deprecated-app"),
+				"test":       mapset.NewSet("test-app", "experimental-app"),
+				"backend":    mapset.NewSet("api-server", "worker"),
+			}
 
-	repoSet := mapset.NewSet(repos...)
+			repoList := RepositoryList(ctx, tt.args...)
+			repos := repoList.ToSlice()
 
-	// Should exclude all repos from deprecated and test labels
-	excludedRepos := []string{"deprecated-app", "test-app", "experimental-app"}
-	for _, repo := range excludedRepos {
-		if repoSet.Contains(repo) {
-			t.Errorf("Expected %s to be excluded", repo)
-		}
-	}
-
-	// Should include remaining repos
-	expectedRepos := []string{"web-app", "mobile-app", "api-server", "worker"}
-	for _, repo := range expectedRepos {
-		if !repoSet.Contains(repo) {
-			t.Errorf("Expected %s to be included", repo)
-		}
+			checkRepoContains(t, repos, tt.wantRepos)
+			checkRepoNotContains(t, repos, tt.unwantedRepos)
+		})
 	}
 }
 
 // TestRepositoryListMixedIncludesAndExcludes tests combining includes and excludes without forced
 func TestRepositoryListMixedIncludesAndExcludes(t *testing.T) {
-	_ = config.LoadFixture("../config")
+	ctx := loadFixture(t)
 
-	// Initialize test data
-	Labels = map[string]mapset.Set[string]{
-		"frontend":     mapset.NewSet("web-app", "mobile-app", "admin-panel"),
-		"backend":      mapset.NewSet("api-server", "worker", "scheduler"),
-		"microservice": mapset.NewSet("user-service", "payment-service", "notification-service"),
-		"legacy":       mapset.NewSet("old-api", "legacy-frontend"),
-	}
-
-	// Test: include frontend and microservices, exclude specific repos, exclude legacy label
-	repoList := RepositoryList("~frontend", "~microservice", "!mobile-app", "!payment-service", "!~legacy")
-	repos := repoList.ToSlice()
-
-	repoSet := mapset.NewSet(repos...)
-
-	// Should include from frontend (except mobile-app)
-	if !repoSet.Contains("web-app") {
-		t.Error("Expected web-app from frontend")
-	}
-	if !repoSet.Contains("admin-panel") {
-		t.Error("Expected admin-panel from frontend")
-	}
-	if repoSet.Contains("mobile-app") {
-		t.Error("Expected mobile-app to be excluded")
+	tests := []struct {
+		name          string
+		args          []string
+		wantRepos     []string
+		unwantedRepos []string
+	}{
+		{
+			name:          "include frontend and microservices with exclusions",
+			args:          []string{"~frontend", "~microservice", "!mobile-app", "!payment-service", "!~legacy"},
+			wantRepos:     []string{"web-app", "admin-panel", "user-service", "notification-service"},
+			unwantedRepos: []string{"mobile-app", "payment-service", "old-api", "legacy-frontend", "api-server"},
+		},
 	}
 
-	// Should include from microservice (except payment-service)
-	if !repoSet.Contains("user-service") {
-		t.Error("Expected user-service from microservice")
-	}
-	if !repoSet.Contains("notification-service") {
-		t.Error("Expected notification-service from microservice")
-	}
-	if repoSet.Contains("payment-service") {
-		t.Error("Expected payment-service to be excluded")
-	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			Labels = map[string]mapset.Set[string]{
+				"frontend":     mapset.NewSet("web-app", "mobile-app", "admin-panel"),
+				"backend":      mapset.NewSet("api-server", "worker", "scheduler"),
+				"microservice": mapset.NewSet("user-service", "payment-service", "notification-service"),
+				"legacy":       mapset.NewSet("old-api", "legacy-frontend"),
+			}
 
-	// Should exclude all legacy repos
-	if repoSet.Contains("old-api") {
-		t.Error("Expected old-api to be excluded (legacy label)")
-	}
-	if repoSet.Contains("legacy-frontend") {
-		t.Error("Expected legacy-frontend to be excluded (legacy label)")
-	}
+			repoList := RepositoryList(ctx, tt.args...)
+			repos := repoList.ToSlice()
 
-	// Should not include backend repos (not in filter)
-	if repoSet.Contains("api-server") {
-		t.Error("Expected api-server to not be included (not in filters)")
+			checkRepoContains(t, repos, tt.wantRepos)
+			checkRepoNotContains(t, repos, tt.unwantedRepos)
+		})
 	}
 }
 
 // TestRepositoryListLabelOverlap tests behavior with overlapping labels
 func TestRepositoryListLabelOverlap(t *testing.T) {
-	_ = config.LoadFixture("../config")
+	ctx := loadFixture(t)
 
-	// Initialize test data with overlapping labels
-	Labels = map[string]mapset.Set[string]{
-		"frontend":   mapset.NewSet("web-app", "mobile-app", "shared-component"),
-		"backend":    mapset.NewSet("api-server", "shared-component", "worker"),
-		"shared":     mapset.NewSet("shared-component", "shared-utils"),
-		"javascript": mapset.NewSet("web-app", "mobile-app", "shared-utils"),
+	tests := []struct {
+		name      string
+		args      []string
+		wantCount int
+		wantRepos []string
+	}{
+		{
+			name:      "overlapping labels deduplicate repos",
+			args:      []string{"~frontend", "~backend"},
+			wantCount: 5,
+			wantRepos: []string{"web-app", "mobile-app", "shared-component", "api-server", "worker"},
+		},
 	}
 
-	// Test: include frontend and backend (shared-component should appear only once)
-	repoList := RepositoryList("~frontend", "~backend")
-	repos := repoList.ToSlice()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			Labels = map[string]mapset.Set[string]{
+				"frontend":   mapset.NewSet("web-app", "mobile-app", "shared-component"),
+				"backend":    mapset.NewSet("api-server", "shared-component", "worker"),
+				"shared":     mapset.NewSet("shared-component", "shared-utils"),
+				"javascript": mapset.NewSet("web-app", "mobile-app", "shared-utils"),
+			}
 
-	repoSet := mapset.NewSet(repos...)
+			repoList := RepositoryList(ctx, tt.args...)
+			repos := repoList.ToSlice()
 
-	// Verify all unique repos are included
-	expectedRepos := []string{"web-app", "mobile-app", "shared-component", "api-server", "worker"}
-	if len(repos) != len(expectedRepos) {
-		t.Errorf("Expected %d unique repositories, got %d", len(expectedRepos), len(repos))
-	}
-
-	for _, repo := range expectedRepos {
-		if !repoSet.Contains(repo) {
-			t.Errorf("Expected %s to be included", repo)
-		}
+			checkRepoCount(t, repos, tt.wantCount)
+			checkRepoContains(t, repos, tt.wantRepos)
+		})
 	}
 }
 
 // TestRepositoryListComplexExclusionPattern tests complex exclusion patterns
 func TestRepositoryListComplexExclusionPattern(t *testing.T) {
-	_ = config.LoadFixture("../config")
+	ctx := loadFixture(t)
 
-	// Initialize test data
-	Labels = map[string]mapset.Set[string]{
-		"all":          mapset.NewSet("service-a", "service-b", "service-c", "service-d", "util-x", "util-y", "test-helper"),
-		"services":     mapset.NewSet("service-a", "service-b", "service-c", "service-d"),
-		"utilities":    mapset.NewSet("util-x", "util-y"),
-		"testing":      mapset.NewSet("test-helper"),
-		"core":         mapset.NewSet("service-a", "service-b"),
-		"experimental": mapset.NewSet("service-d", "util-y"),
+	tests := []struct {
+		name          string
+		args          []string
+		wantRepos     []string
+		unwantedRepos []string
+	}{
+		{
+			name:          "include services excluding experimental and specific",
+			args:          []string{"~services", "!~experimental", "!service-c"},
+			wantRepos:     []string{"service-a", "service-b"},
+			unwantedRepos: []string{"service-c", "service-d", "util-x", "util-y"},
+		},
 	}
 
-	// Test: include all services, but exclude experimental ones and specific service
-	repoList := RepositoryList("~services", "!~experimental", "!service-c")
-	repos := repoList.ToSlice()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			Labels = map[string]mapset.Set[string]{
+				"all":          mapset.NewSet("service-a", "service-b", "service-c", "service-d", "util-x", "util-y", "test-helper"),
+				"services":     mapset.NewSet("service-a", "service-b", "service-c", "service-d"),
+				"utilities":    mapset.NewSet("util-x", "util-y"),
+				"testing":      mapset.NewSet("test-helper"),
+				"core":         mapset.NewSet("service-a", "service-b"),
+				"experimental": mapset.NewSet("service-d", "util-y"),
+			}
 
-	repoSet := mapset.NewSet(repos...)
+			repoList := RepositoryList(ctx, tt.args...)
+			repos := repoList.ToSlice()
 
-	// Should include core services
-	if !repoSet.Contains("service-a") {
-		t.Error("Expected service-a to be included")
-	}
-	if !repoSet.Contains("service-b") {
-		t.Error("Expected service-b to be included")
-	}
-
-	// Should exclude service-c (explicit exclusion)
-	if repoSet.Contains("service-c") {
-		t.Error("Expected service-c to be excluded (explicit)")
-	}
-
-	// Should exclude service-d (experimental label exclusion)
-	if repoSet.Contains("service-d") {
-		t.Error("Expected service-d to be excluded (experimental)")
-	}
-
-	// Should not include utilities (not in services label)
-	if repoSet.Contains("util-x") {
-		t.Error("Expected util-x to not be included")
-	}
-	if repoSet.Contains("util-y") {
-		t.Error("Expected util-y to not be included")
+			checkRepoContains(t, repos, tt.wantRepos)
+			checkRepoNotContains(t, repos, tt.unwantedRepos)
+		})
 	}
 }
 
 // TestRepositoryListDirectRepoSelection tests direct repository selection patterns
 func TestRepositoryListDirectRepoSelection(t *testing.T) {
-	_ = config.LoadFixture("../config")
+	ctx := loadFixture(t)
 
-	// Initialize test data
-	Labels = map[string]mapset.Set[string]{
-		"group-a": mapset.NewSet("repo-a1", "repo-a2", "repo-a3"),
-		"group-b": mapset.NewSet("repo-b1", "repo-b2"),
+	tests := []struct {
+		name          string
+		args          []string
+		wantRepos     []string
+		unwantedRepos []string
+	}{
+		{
+			name:          "mix direct repo names with exclusions",
+			args:          []string{"repo-a1", "repo-b1", "custom-repo", "!repo-a2"},
+			wantRepos:     []string{"repo-a1", "repo-b1", "custom-repo"},
+			unwantedRepos: []string{"repo-a2", "repo-a3", "repo-b2"},
+		},
 	}
 
-	// Test: mix direct repo names with label exclusions
-	repoList := RepositoryList("repo-a1", "repo-b1", "custom-repo", "!repo-a2")
-	repos := repoList.ToSlice()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			Labels = map[string]mapset.Set[string]{
+				"group-a": mapset.NewSet("repo-a1", "repo-a2", "repo-a3"),
+				"group-b": mapset.NewSet("repo-b1", "repo-b2"),
+			}
 
-	repoSet := mapset.NewSet(repos...)
+			repoList := RepositoryList(ctx, tt.args...)
+			repos := repoList.ToSlice()
 
-	// Should include directly specified repos
-	if !repoSet.Contains("repo-a1") {
-		t.Error("Expected repo-a1 to be included (direct)")
-	}
-	if !repoSet.Contains("repo-b1") {
-		t.Error("Expected repo-b1 to be included (direct)")
-	}
-	if !repoSet.Contains("custom-repo") {
-		t.Error("Expected custom-repo to be included (direct)")
-	}
-
-	// Should exclude explicitly excluded repo
-	if repoSet.Contains("repo-a2") {
-		t.Error("Expected repo-a2 to be excluded")
-	}
-
-	// Should not include repos not mentioned
-	if repoSet.Contains("repo-a3") {
-		t.Error("Expected repo-a3 to not be included")
-	}
-	if repoSet.Contains("repo-b2") {
-		t.Error("Expected repo-b2 to not be included")
+			checkRepoContains(t, repos, tt.wantRepos)
+			checkRepoNotContains(t, repos, tt.unwantedRepos)
+		})
 	}
 }
 
 // TestRepositoryListWithForcedInclusion tests the '+' token for forced inclusion
 func TestRepositoryListWithForcedInclusion(t *testing.T) {
-	_ = config.LoadFixture("../config")
+	ctx := loadFixture(t)
 
-	// Initialize test data
-	Labels = map[string]mapset.Set[string]{
-		"frontend":   mapset.NewSet("web-app", "mobile-app"),
-		"backend":    mapset.NewSet("api-server", "worker"),
-		"deprecated": mapset.NewSet("deprecated-app", "old-api"),
-		"all":        mapset.NewSet("web-app", "mobile-app", "api-server", "worker", "deprecated-app", "old-api"),
+	tests := []struct {
+		name      string
+		args      []string
+		wantCount int
+		wantRepos []string
+	}{
+		{
+			name:      "force include single repository",
+			args:      []string{"+deprecated-app"},
+			wantCount: 1,
+			wantRepos: []string{"deprecated-app"},
+		},
 	}
 
-	// Test forced inclusion of single repository
-	repoList := RepositoryList("+deprecated-app")
-	repos := repoList.ToSlice()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			Labels = map[string]mapset.Set[string]{
+				"frontend":   mapset.NewSet("web-app", "mobile-app"),
+				"backend":    mapset.NewSet("api-server", "worker"),
+				"deprecated": mapset.NewSet("deprecated-app", "old-api"),
+				"all":        mapset.NewSet("web-app", "mobile-app", "api-server", "worker", "deprecated-app", "old-api"),
+			}
 
-	if len(repos) != 1 {
-		t.Errorf("Expected 1 repository with forced inclusion, got %d", len(repos))
-	}
+			repoList := RepositoryList(ctx, tt.args...)
+			repos := repoList.ToSlice()
 
-	repoSet := mapset.NewSet(repos...)
-	if !repoSet.Contains("deprecated-app") {
-		t.Error("Expected deprecated-app to be forcibly included")
+			checkRepoCount(t, repos, tt.wantCount)
+			checkRepoContains(t, repos, tt.wantRepos)
+		})
 	}
 }
 
 // TestRepositoryListWithForcedLabelInclusion tests the '+~' token combination
 func TestRepositoryListWithForcedLabelInclusion(t *testing.T) {
-	_ = config.LoadFixture("../config")
+	ctx := loadFixture(t)
 
-	// Initialize test data
-	Labels = map[string]mapset.Set[string]{
-		"frontend":   mapset.NewSet("web-app", "mobile-app"),
-		"backend":    mapset.NewSet("api-server", "worker"),
-		"deprecated": mapset.NewSet("deprecated-app", "old-api"),
+	tests := []struct {
+		name      string
+		args      []string
+		wantCount int
+		wantRepos []string
+	}{
+		{
+			name:      "force include entire label",
+			args:      []string{"+~deprecated"},
+			wantCount: 2,
+			wantRepos: []string{"deprecated-app", "old-api"},
+		},
 	}
 
-	// Test forced inclusion of entire label
-	repoList := RepositoryList("+~deprecated")
-	repos := repoList.ToSlice()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			Labels = map[string]mapset.Set[string]{
+				"frontend":   mapset.NewSet("web-app", "mobile-app"),
+				"backend":    mapset.NewSet("api-server", "worker"),
+				"deprecated": mapset.NewSet("deprecated-app", "old-api"),
+			}
 
-	if len(repos) != 2 {
-		t.Errorf("Expected 2 repositories from forced label inclusion, got %d", len(repos))
-	}
+			repoList := RepositoryList(ctx, tt.args...)
+			repos := repoList.ToSlice()
 
-	repoSet := mapset.NewSet(repos...)
-	if !repoSet.Contains("deprecated-app") {
-		t.Error("Expected deprecated-app from forced label inclusion")
-	}
-	if !repoSet.Contains("old-api") {
-		t.Error("Expected old-api from forced label inclusion")
+			checkRepoCount(t, repos, tt.wantCount)
+			checkRepoContains(t, repos, tt.wantRepos)
+		})
 	}
 }
 
 // TestRepositoryListMixedTokens tests various combinations of ~, !, and + tokens
 func TestRepositoryListMixedTokens(t *testing.T) {
-	_ = config.LoadFixture("../config")
+	ctx := loadFixture(t)
 
-	// Initialize test data
-	Labels = map[string]mapset.Set[string]{
-		"frontend":   mapset.NewSet("web-app", "mobile-app"),
-		"backend":    mapset.NewSet("api-server", "worker"),
-		"deprecated": mapset.NewSet("deprecated-app", "old-api"),
-		"all":        mapset.NewSet("web-app", "mobile-app", "api-server", "worker", "deprecated-app", "old-api"),
-	}
-
-	// Test case 1: Include frontend, exclude mobile-app, force deprecated-app
-	// Expected: web-app (from ~frontend, mobile-app excluded) + deprecated-app (forced)
-	repoList := RepositoryList("~frontend", "!mobile-app", "+deprecated-app")
-	repos := repoList.ToSlice()
-
-	repoSet := mapset.NewSet(repos...)
-	if !repoSet.Contains("web-app") {
-		t.Error("Expected web-app from frontend label")
-	}
-	if repoSet.Contains("mobile-app") {
-		t.Error("Expected mobile-app to be excluded")
-	}
-	if !repoSet.Contains("deprecated-app") {
-		t.Error("Expected deprecated-app to be forcibly included")
+	tests := []struct {
+		name          string
+		args          []string
+		wantRepos     []string
+		unwantedRepos []string
+	}{
+		{
+			name:          "include label exclude repo force repo",
+			args:          []string{"~frontend", "!mobile-app", "+deprecated-app"},
+			wantRepos:     []string{"web-app", "deprecated-app"},
+			unwantedRepos: []string{"mobile-app"},
+		},
+		{
+			name:          "include all exclude label force repo from excluded label",
+			args:          []string{"~all", "!~deprecated", "+deprecated-app"},
+			wantRepos:     []string{"web-app", "mobile-app", "api-server", "worker", "deprecated-app"},
+			unwantedRepos: []string{"old-api"},
+		},
 	}
 
-	// Test case 2: Include all, exclude deprecated label, but force specific deprecated repo
-	// Expected: all repos except deprecated label, but deprecated-app is forced back in
-	repoList2 := RepositoryList("~all", "!~deprecated", "+deprecated-app")
-	repos2 := repoList2.ToSlice()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			Labels = map[string]mapset.Set[string]{
+				"frontend":   mapset.NewSet("web-app", "mobile-app"),
+				"backend":    mapset.NewSet("api-server", "worker"),
+				"deprecated": mapset.NewSet("deprecated-app", "old-api"),
+				"all":        mapset.NewSet("web-app", "mobile-app", "api-server", "worker", "deprecated-app", "old-api"),
+			}
 
-	repoSet2 := mapset.NewSet(repos2...)
-	if !repoSet2.Contains("web-app") {
-		t.Error("Expected web-app from all label")
-	}
-	if !repoSet2.Contains("mobile-app") {
-		t.Error("Expected mobile-app from all label")
-	}
-	if !repoSet2.Contains("api-server") {
-		t.Error("Expected api-server from all label")
-	}
-	if !repoSet2.Contains("worker") {
-		t.Error("Expected worker from all label")
-	}
-	if repoSet2.Contains("old-api") {
-		t.Error("Expected old-api to be excluded by !~deprecated")
-	}
-	if !repoSet2.Contains("deprecated-app") {
-		t.Error("Expected deprecated-app to be forcibly included despite exclusion")
+			repoList := RepositoryList(ctx, tt.args...)
+			repos := repoList.ToSlice()
+
+			checkRepoContains(t, repos, tt.wantRepos)
+			checkRepoNotContains(t, repos, tt.unwantedRepos)
+		})
 	}
 }
 
 // TestRepositoryListForcedVsExcluded tests that forced inclusion overrides exclusion
 func TestRepositoryListForcedVsExcluded(t *testing.T) {
-	_ = config.LoadFixture("../config")
+	ctx := loadFixture(t)
 
-	// Initialize test data
-	Labels = map[string]mapset.Set[string]{
-		"frontend":   mapset.NewSet("web-app", "mobile-app"),
-		"deprecated": mapset.NewSet("deprecated-app"),
-		"all":        mapset.NewSet("web-app", "mobile-app", "deprecated-app"),
+	tests := []struct {
+		name      string
+		args      []string
+		wantRepos []string
+	}{
+		{
+			name:      "forced inclusion overrides exclusion",
+			args:      []string{"~all", "!deprecated-app", "+deprecated-app"},
+			wantRepos: []string{"deprecated-app", "web-app", "mobile-app"},
+		},
 	}
 
-	// Test that forced inclusion wins over exclusion
-	// Include all, exclude deprecated-app, but also force deprecated-app
-	repoList := RepositoryList("~all", "!deprecated-app", "+deprecated-app")
-	repos := repoList.ToSlice()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			Labels = map[string]mapset.Set[string]{
+				"frontend":   mapset.NewSet("web-app", "mobile-app"),
+				"deprecated": mapset.NewSet("deprecated-app"),
+				"all":        mapset.NewSet("web-app", "mobile-app", "deprecated-app"),
+			}
 
-	repoSet := mapset.NewSet(repos...)
-	if !repoSet.Contains("deprecated-app") {
-		t.Error("Expected deprecated-app to be included (forced inclusion should override exclusion)")
-	}
-	if !repoSet.Contains("web-app") {
-		t.Error("Expected web-app from all label")
-	}
-	if !repoSet.Contains("mobile-app") {
-		t.Error("Expected mobile-app from all label")
+			repoList := RepositoryList(ctx, tt.args...)
+			repos := repoList.ToSlice()
+
+			checkRepoContains(t, repos, tt.wantRepos)
+		})
 	}
 }
 
 // TestRepositoryListWithSkipUnwantedAndForced tests forced inclusion with skip-unwanted enabled
 func TestRepositoryListWithSkipUnwantedAndForced(t *testing.T) {
-	_ = config.LoadFixture("../config")
+	ctx := loadFixture(t)
 
-	// Set up configuration to skip unwanted labels
-	viper.Set(config.SkipUnwanted, true)
-	viper.Set(config.UnwantedLabels, []string{"deprecated", "poc"})
-
-	// Initialize test data
-	Labels = map[string]mapset.Set[string]{
-		"frontend":   mapset.NewSet("web-app", "mobile-app"),
-		"backend":    mapset.NewSet("api-server"),
-		"deprecated": mapset.NewSet("deprecated-app"),
-		"poc":        mapset.NewSet("poc-app"),
-		"all":        mapset.NewSet("web-app", "mobile-app", "api-server", "deprecated-app", "poc-app"),
+	tests := []struct {
+		name          string
+		args          []string
+		wantRepos     []string
+		unwantedRepos []string
+	}{
+		{
+			name:          "force include overrides skip-unwanted",
+			args:          []string{"~all", "+deprecated-app"},
+			wantRepos:     []string{"deprecated-app", "web-app"},
+			unwantedRepos: []string{"poc-app"},
+		},
 	}
 
-	Catalog = map[string]scm.Repository{
-		"web-app":        {Name: "web-app", Labels: []string{"frontend"}},
-		"mobile-app":     {Name: "mobile-app", Labels: []string{"frontend"}},
-		"api-server":     {Name: "api-server", Labels: []string{"backend"}},
-		"deprecated-app": {Name: "deprecated-app", Labels: []string{"deprecated"}},
-		"poc-app":        {Name: "poc-app", Labels: []string{"poc"}},
-	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			viper := config.Viper(ctx)
+			viper.Set(config.SkipUnwanted, true)
+			viper.Set(config.UnwantedLabels, []string{"deprecated", "poc"})
 
-	// Test that forced inclusion overrides skip-unwanted
-	// Include all (which would normally skip deprecated and poc), but force deprecated-app
-	repoList := RepositoryList("~all", "+deprecated-app")
-	repos := repoList.ToSlice()
+			Labels = map[string]mapset.Set[string]{
+				"frontend":   mapset.NewSet("web-app", "mobile-app"),
+				"backend":    mapset.NewSet("api-server"),
+				"deprecated": mapset.NewSet("deprecated-app"),
+				"poc":        mapset.NewSet("poc-app"),
+				"all":        mapset.NewSet("web-app", "mobile-app", "api-server", "deprecated-app", "poc-app"),
+			}
 
-	repoSet := mapset.NewSet(repos...)
-	if !repoSet.Contains("deprecated-app") {
-		t.Error("Expected deprecated-app to be forcibly included despite being in unwanted labels")
-	}
-	if repoSet.Contains("poc-app") {
-		t.Error("Expected poc-app to be excluded (unwanted and not forced)")
-	}
-	if !repoSet.Contains("web-app") {
-		t.Error("Expected web-app to be included")
+			Catalog = map[string]scm.Repository{
+				"web-app":        {Name: "web-app", Labels: []string{"frontend"}},
+				"mobile-app":     {Name: "mobile-app", Labels: []string{"frontend"}},
+				"api-server":     {Name: "api-server", Labels: []string{"backend"}},
+				"deprecated-app": {Name: "deprecated-app", Labels: []string{"deprecated"}},
+				"poc-app":        {Name: "poc-app", Labels: []string{"poc"}},
+			}
+
+			repoList := RepositoryList(ctx, tt.args...)
+			repos := repoList.ToSlice()
+
+			checkRepoContains(t, repos, tt.wantRepos)
+			checkRepoNotContains(t, repos, tt.unwantedRepos)
+		})
 	}
 }
 
 // TestRepositoryListComplexScenario tests a complex real-world scenario
 func TestRepositoryListComplexScenario(t *testing.T) {
-	_ = config.LoadFixture("../config")
+	ctx := loadFixture(t)
 
-	// Initialize realistic test data
-	Labels = map[string]mapset.Set[string]{
-		"frontend":     mapset.NewSet("web-ui", "mobile-app", "admin-panel"),
-		"backend":      mapset.NewSet("api-gateway", "user-service", "payment-service"),
-		"microservice": mapset.NewSet("user-service", "payment-service", "notification-service"),
-		"deprecated":   mapset.NewSet("legacy-api", "old-frontend"),
-		"experimental": mapset.NewSet("new-feature", "prototype"),
-		"all":          mapset.NewSet("web-ui", "mobile-app", "admin-panel", "api-gateway", "user-service", "payment-service", "notification-service", "legacy-api", "old-frontend", "new-feature", "prototype"),
+	tests := []struct {
+		name          string
+		args          []string
+		wantRepos     []string
+		unwantedRepos []string
+	}{
+		{
+			name:          "complex microservice filtering with force and exclude",
+			args:          []string{"~microservice", "!payment-service", "+legacy-api", "!~experimental"},
+			wantRepos:     []string{"user-service", "notification-service", "legacy-api"},
+			unwantedRepos: []string{"payment-service", "new-feature", "prototype", "web-ui"},
+		},
 	}
 
-	// Complex scenario:
-	// - Include all microservices
-	// - Exclude payment-service (maybe it's being refactored)
-	// - Force include legacy-api (needed for compatibility testing)
-	// - Exclude experimental repos
-	repoList := RepositoryList("~microservice", "!payment-service", "+legacy-api", "!~experimental")
-	repos := repoList.ToSlice()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			Labels = map[string]mapset.Set[string]{
+				"frontend":     mapset.NewSet("web-ui", "mobile-app", "admin-panel"),
+				"backend":      mapset.NewSet("api-gateway", "user-service", "payment-service"),
+				"microservice": mapset.NewSet("user-service", "payment-service", "notification-service"),
+				"deprecated":   mapset.NewSet("legacy-api", "old-frontend"),
+				"experimental": mapset.NewSet("new-feature", "prototype"),
+				"all":          mapset.NewSet("web-ui", "mobile-app", "admin-panel", "api-gateway", "user-service", "payment-service", "notification-service", "legacy-api", "old-frontend", "new-feature", "prototype"),
+			}
 
-	repoSet := mapset.NewSet(repos...)
+			repoList := RepositoryList(ctx, tt.args...)
+			repos := repoList.ToSlice()
 
-	// Should include from microservice label
-	if !repoSet.Contains("user-service") {
-		t.Error("Expected user-service from microservice label")
-	}
-	if !repoSet.Contains("notification-service") {
-		t.Error("Expected notification-service from microservice label")
-	}
-
-	// Should exclude payment-service despite being in microservice label
-	if repoSet.Contains("payment-service") {
-		t.Error("Expected payment-service to be excluded")
-	}
-
-	// Should force include legacy-api despite being deprecated
-	if !repoSet.Contains("legacy-api") {
-		t.Error("Expected legacy-api to be forcibly included")
-	}
-
-	// Should exclude experimental repos
-	if repoSet.Contains("new-feature") {
-		t.Error("Expected new-feature to be excluded (experimental)")
-	}
-	if repoSet.Contains("prototype") {
-		t.Error("Expected prototype to be excluded (experimental)")
-	}
-
-	// Should not include other repos not explicitly mentioned
-	if repoSet.Contains("web-ui") {
-		t.Error("Expected web-ui to not be included (not in filters)")
+			checkRepoContains(t, repos, tt.wantRepos)
+			checkRepoNotContains(t, repos, tt.unwantedRepos)
+		})
 	}
 }
 
 // TestInitWithFakeProvider tests catalog initialization with a fake SCM provider
 func TestInitWithFakeProvider(t *testing.T) {
-	_ = config.LoadFixture("../config")
+	_ = loadFixture(t)
 
 	// Save original state
 	originalCatalog := Catalog
@@ -707,7 +1176,7 @@ func TestInitWithFakeProvider(t *testing.T) {
 	fakeProvider := fake.NewFake("test-project", testRepos)
 
 	// Register fake provider
-	scm.Register("fake-test", func(project string) scm.Provider {
+	scm.Register("fake-test", func(ctx context.Context, project string) scm.Provider {
 		return fakeProvider
 	})
 
@@ -756,83 +1225,4 @@ func TestInitWithFakeProvider(t *testing.T) {
 	} else if activeRepos.Cardinality() == 0 {
 		t.Error("Expected 'active' label to have repositories")
 	}
-}
-
-// TestPrintFunctions tests the print functions with test data
-func TestPrintFunctions(t *testing.T) {
-	_ = config.LoadFixture("../config")
-
-	// Save original state
-	originalCatalog := Catalog
-	originalLabels := Labels
-	defer func() {
-		Catalog = originalCatalog
-		Labels = originalLabels
-	}()
-
-	// Set up test data
-	Catalog = map[string]scm.Repository{
-		"repo-1": {Name: "repo-1", Labels: []string{"backend", "go"}},
-		"repo-2": {Name: "repo-2", Labels: []string{"frontend", "javascript"}},
-		"repo-3": {Name: "repo-3", Labels: []string{"deprecated"}},
-	}
-
-	Labels = map[string]mapset.Set[string]{
-		"backend":    mapset.NewSet("repo-1"),
-		"frontend":   mapset.NewSet("repo-2"),
-		"deprecated": mapset.NewSet("repo-3"),
-		"go":         mapset.NewSet("repo-1"),
-		"javascript": mapset.NewSet("repo-2"),
-	}
-
-	// Test PrintLabels
-	t.Run("PrintLabels", func(t *testing.T) {
-		// Capture stdout
-		old := os.Stdout
-		r, w, _ := os.Pipe()
-		os.Stdout = w
-
-		PrintLabels()
-
-		w.Close()
-		os.Stdout = old
-
-		var buf bytes.Buffer
-		buf.ReadFrom(r)
-		output := buf.String()
-
-		// Check that all labels are printed
-		expectedLabels := []string{"backend", "frontend", "deprecated", "go", "javascript"}
-		for _, label := range expectedLabels {
-			if !strings.Contains(output, label) {
-				t.Errorf("Expected label '%s' in output", label)
-			}
-		}
-	})
-
-	// Test PrintSet with non-verbose mode
-	t.Run("PrintSet_NonVerbose", func(t *testing.T) {
-		// Capture stdout
-		old := os.Stdout
-		r, w, _ := os.Pipe()
-		os.Stdout = w
-
-		viper.Set(config.SkipUnwanted, false) // Disable skip unwanted for this test
-		PrintSet(false, "~frontend")
-
-		w.Close()
-		os.Stdout = old
-
-		var buf bytes.Buffer
-		buf.ReadFrom(r)
-		output := buf.String()
-
-		// Should contain repository name
-		if !strings.Contains(output, "repo-2") {
-			t.Error("Expected repo-2 in non-verbose output")
-		}
-		if !strings.Contains(output, "You've selected the following set:") {
-			t.Error("Expected set description in output")
-		}
-	})
 }

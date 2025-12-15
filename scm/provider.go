@@ -1,6 +1,7 @@
 package scm
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -9,7 +10,7 @@ import (
 
 var providerFactories = make(map[string]ProviderFactory)
 
-type ProviderFactory func(project string) Provider
+type ProviderFactory func(ctx context.Context, project string) Provider
 
 // Provider defines the interface for SCM providers.
 type Provider interface {
@@ -28,9 +29,9 @@ type Provider interface {
 
 // Get retrieves a registered SCM provider by name.
 // If the provider is not registered, it panics.
-func Get(name, project string) Provider {
+func Get(ctx context.Context, name, project string) Provider {
 	if factory, exists := providerFactories[name]; exists {
-		return factory(project)
+		return factory(ctx, project)
 	}
 
 	panic(fmt.Sprintf("SCM provider %s not registered", name))
