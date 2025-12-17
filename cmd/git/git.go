@@ -1,6 +1,14 @@
 package git
 
 import (
+	"context"
+	"fmt"
+	"os/exec"
+	"strings"
+
+	"github.com/ryclarke/batch-tool/config"
+	"github.com/ryclarke/batch-tool/output"
+	"github.com/ryclarke/batch-tool/utils"
 	"github.com/spf13/cobra"
 )
 
@@ -24,4 +32,22 @@ func Cmd() *cobra.Command {
 	)
 
 	return gitCmd
+}
+
+// ValidateBranch returns an error if the current git branch is the source branch
+func ValidateBranch(ctx context.Context, ch output.Channel) error {
+	viper := config.Viper(ctx)
+
+	cmd := exec.Command("git", "rev-parse", "--abbrev-ref", "HEAD")
+	cmd.Dir = utils.RepoPath(ctx, ch.Name())
+	output, err := cmd.Output()
+	if err != nil {
+		return err
+	}
+
+	if strings.TrimSpace(string(output)) == strings.TrimSpace(viper.GetString(config.SourceBranch)) {
+		return fmt.Errorf("skipping operation - %s is the source branch", output)
+	}
+
+	return nil
 }

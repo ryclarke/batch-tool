@@ -8,6 +8,7 @@ import (
 	"github.com/ryclarke/batch-tool/call"
 	"github.com/ryclarke/batch-tool/catalog"
 	"github.com/ryclarke/batch-tool/config"
+	"github.com/ryclarke/batch-tool/output"
 )
 
 const (
@@ -43,8 +44,8 @@ make targets currently MUST be run synchronously using the '--sync' command line
 }
 
 // Make runs the specified make targets in the given repository.
-func Make(ctx context.Context, repo string, ch chan<- string) error {
+func Make(ctx context.Context, ch output.Channel) error {
 	targets := config.Viper(ctx).GetStringSlice(config.MakeTargets)
 
-	return call.Exec("make", targets...)(ctx, repo, ch)
+	return call.Exec("make", targets...)(ctx, ch)
 }

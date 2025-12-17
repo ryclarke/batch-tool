@@ -31,16 +31,21 @@ type testChannel struct {
 	err    chan error
 }
 
-func (tc *testChannel) Name() string        { return tc.name }
-func (tc *testChannel) Out() <-chan string  { return tc.output }
-func (tc *testChannel) Err() <-chan error   { return tc.err }
-func (tc *testChannel) WOut() chan<- string { return tc.output }
-func (tc *testChannel) WErr() chan<- error  { return tc.err }
-func (tc *testChannel) Start(weight int64) (func(), error) {
-	return func() {
-		close(tc.output)
-		close(tc.err)
-	}, nil
+func (tc *testChannel) Name() string       { return tc.name }
+func (tc *testChannel) Out() <-chan string { return tc.output }
+func (tc *testChannel) Err() <-chan error  { return tc.err }
+func (tc *testChannel) WriteString(s string) (n int, _ error) {
+	tc.output <- s
+	return len(s), nil
+}
+func (tc *testChannel) WriteError(err error) {
+	tc.err <- err
+}
+func (tc *testChannel) Start(weight int64) error { return nil }
+func (tc *testChannel) Close() error {
+	close(tc.output)
+	close(tc.err)
+	return nil
 }
 
 // makeTestChannels creates test channels for the given repo names.

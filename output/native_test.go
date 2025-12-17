@@ -26,9 +26,9 @@ func TestNativeHandler(t *testing.T) {
 	viper.Set(config.SortRepos, false)
 
 	// CallFunc that returns an error
-	errorFunc := func(_ context.Context, repo string, ch chan<- string) error {
-		ch <- "some output before error"
-		return errors.New("test error for " + repo)
+	errorFunc := func(_ context.Context, ch output.Channel) error {
+		ch.WriteString("some output before error")
+		return errors.New("test error for " + ch.Name())
 	}
 
 	var buf, errBuf bytes.Buffer

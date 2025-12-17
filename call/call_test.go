@@ -4,7 +4,8 @@ import (
 	"os"
 	"testing"
 
-	"github.com/ryclarke/batch-tool/config"
+	"github.com/ryclarke/batch-tool/output"
+	"github.com/ryclarke/batch-tool/utils"
 	testhelper "github.com/ryclarke/batch-tool/utils/test"
 )
 
@@ -83,17 +84,17 @@ func TestWrap(t *testing.T) {
 				t.Fatal("Wrap returned nil")
 			}
 
-			ch := make(chan string, 10)
-			err := wrapper(ctx, tt.repo, ch)
-			close(ch)
+			ch := output.NewChannel(ctx, tt.repo, nil, nil)
+			err := wrapper(ctx, ch)
+			ch.Close()
 
 			// Collect output
-			var output []string
-			for msg := range ch {
-				output = append(output, msg)
+			var res []string
+			for msg := range ch.Out() {
+				res = append(res, msg)
 			}
 
-			testhelper.AssertOutput(t, output, tt.wantOutput, err, tt.wantError)
+			testhelper.AssertOutput(t, res, tt.wantOutput, err, tt.wantError)
 		})
 	}
 }
@@ -151,13 +152,13 @@ func TestExec(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Create directory for commands to run in
-			gitDir := config.Viper(ctx).GetString(config.GitDirectory)
-			if err := os.MkdirAll(gitDir, 0755); err != nil {
-				t.Fatalf("Failed to create git directory: %v", err)
+			// Create repository directory for commands to run in
+			repoPath := utils.RepoPath(ctx, "test-repo")
+			if err := os.MkdirAll(repoPath, 0755); err != nil {
+				t.Fatalf("Failed to create repo directory: %v", err)
 			}
 			t.Cleanup(func() {
-				os.RemoveAll(gitDir)
+				os.RemoveAll(repoPath)
 			})
 
 			execFunc := Exec(tt.command, tt.args...)
@@ -165,13 +166,13 @@ func TestExec(t *testing.T) {
 				t.Fatal("Exec returned nil")
 			}
 
-			ch := make(chan string, 10)
-			err := execFunc(ctx, "", ch)
-			close(ch)
+			ch := output.NewChannel(ctx, "test-repo", nil, nil)
+			err := execFunc(ctx, ch)
+			ch.Close()
 
 			// Collect output
 			var output []string
-			for msg := range ch {
+			for msg := range ch.Out() {
 				output = append(output, msg)
 			}
 

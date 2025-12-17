@@ -1,11 +1,13 @@
 package make
 
 import (
-	testhelper "github.com/ryclarke/batch-tool/utils/test"
 	"bytes"
 	"context"
 	"io"
 	"testing"
+
+	"github.com/ryclarke/batch-tool/output"
+	testhelper "github.com/ryclarke/batch-tool/utils/test"
 
 	"github.com/ryclarke/batch-tool/config"
 	"github.com/spf13/cobra"
@@ -249,9 +251,9 @@ func TestMake(t *testing.T) {
 			// Set up targets in viper
 			viper.Set(config.MakeTargets, tt.targets)
 
-			ch := make(chan string, 10)
-			err := Make(ctx, tt.repo, ch)
-			close(ch)
+			ch := output.NewChannel(ctx, tt.repo, nil, nil)
+			err := Make(ctx, ch)
+			ch.Close()
 
 			// In tests, we expect errors since repos don't exist
 			if (err != nil) != tt.wantErr {
@@ -260,7 +262,7 @@ func TestMake(t *testing.T) {
 
 			// Collect output messages
 			var messages []string
-			for msg := range ch {
+			for msg := range ch.Out() {
 				messages = append(messages, msg)
 			}
 
@@ -279,9 +281,9 @@ func TestMakeWithEmptyTargets(t *testing.T) {
 	// Set empty targets
 	viper.Set(config.MakeTargets, []string{})
 
-	ch := make(chan string, 10)
-	err := Make(ctx, "test-repo", ch)
-	close(ch)
+	ch := output.NewChannel(ctx, "test-repo", nil, nil)
+	err := Make(ctx, ch)
+	ch.Close()
 
 	// Should still attempt to run make (even without targets)
 	// This will fail because repo doesn't exist

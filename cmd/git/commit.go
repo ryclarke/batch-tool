@@ -8,6 +8,7 @@ import (
 	"github.com/ryclarke/batch-tool/call"
 	"github.com/ryclarke/batch-tool/catalog"
 	"github.com/ryclarke/batch-tool/config"
+	"github.com/ryclarke/batch-tool/output"
 	"github.com/ryclarke/batch-tool/utils"
 )
 
@@ -44,7 +45,7 @@ func addCommitCmd() *cobra.Command {
 			return utils.ValidateRequiredConfig(cmd.Context(), config.CommitMessage)
 		},
 		Run: func(cmd *cobra.Command, args []string) {
-			call.Do(cmd, args, call.Wrap(utils.ValidateBranch, Commit))
+			call.Do(cmd, args, call.Wrap(ValidateBranch, Commit))
 		},
 	}
 
@@ -60,10 +61,10 @@ func addCommitCmd() *cobra.Command {
 }
 
 // Commit stages all changes, creates a commit, and pushes it to the remote repository.
-func Commit(ctx context.Context, name string, ch chan<- string) error {
+func Commit(ctx context.Context, ch output.Channel) error {
 	viper := config.Viper(ctx)
 
-	if err := call.Exec("git", "add", ".")(ctx, name, ch); err != nil {
+	if err := call.Exec("git", "add", ".")(ctx, ch); err != nil {
 		return err
 	}
 
@@ -81,7 +82,7 @@ func Commit(ctx context.Context, name string, ch chan<- string) error {
 		}
 	}
 
-	if err := call.Exec("git", args...)(ctx, name, ch); err != nil {
+	if err := call.Exec("git", args...)(ctx, ch); err != nil {
 		return err
 	}
 
@@ -90,5 +91,5 @@ func Commit(ctx context.Context, name string, ch chan<- string) error {
 		return nil
 	}
 
-	return Push(ctx, name, ch)
+	return Push(ctx, ch)
 }

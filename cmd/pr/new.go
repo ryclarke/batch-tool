@@ -8,7 +8,9 @@ import (
 
 	"github.com/ryclarke/batch-tool/call"
 	"github.com/ryclarke/batch-tool/catalog"
+	"github.com/ryclarke/batch-tool/cmd/git"
 	"github.com/ryclarke/batch-tool/config"
+	"github.com/ryclarke/batch-tool/output"
 	"github.com/ryclarke/batch-tool/scm"
 	"github.com/ryclarke/batch-tool/utils"
 )
@@ -32,7 +34,7 @@ func addNewCmd() *cobra.Command {
 			return nil
 		},
 		Run: func(cmd *cobra.Command, args []string) {
-			call.Do(cmd, args, call.Wrap(utils.ValidateBranch, New))
+			call.Do(cmd, args, call.Wrap(git.ValidateBranch, New))
 		},
 	}
 
@@ -42,15 +44,15 @@ func addNewCmd() *cobra.Command {
 }
 
 // New creates a new pull request for the given repository.
-func New(ctx context.Context, name string, ch chan<- string) error {
+func New(ctx context.Context, ch output.Channel) error {
 	viper := config.Viper(ctx)
 
-	branch, err := utils.LookupBranch(ctx, name)
+	branch, err := utils.LookupBranch(ctx, ch.Name())
 	if err != nil {
 		return err
 	}
 
-	reviewers := lookupReviewers(ctx, name)
+	reviewers := lookupReviewers(ctx, ch.Name())
 	if len(reviewers) == 0 {
 		// append placeholder to prevent NPE below
 		reviewers = append(reviewers, "")
@@ -62,14 +64,14 @@ func New(ctx context.Context, name string, ch chan<- string) error {
 	}
 
 	// Get project from repository metadata in catalog, fall back to default
-	project := catalog.GetProjectForRepo(ctx, name)
+	project := catalog.GetProjectForRepo(ctx, ch.Name())
 	provider := scm.Get(ctx, viper.GetString(config.GitProvider), project)
-	pr, err := provider.OpenPullRequest(name, branch, viper.GetString(config.PrTitle), viper.GetString(config.PrDescription), reviewers)
+	pr, err := provider.OpenPullRequest(ch.Name(), branch, viper.GetString(config.PrTitle), viper.GetString(config.PrDescription), reviewers)
 	if err != nil {
 		return err
 	}
 
-	ch <- fmt.Sprintf("New pull request (#%d) %s %v\n", pr.Number, pr.Branch, pr.Reviewers)
+	ch.WriteString(fmt.Sprintf("New pull request (#%d) %s %v\n", pr.Number, pr.Branch, pr.Reviewers))
 
 	return nil
 }

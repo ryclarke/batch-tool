@@ -27,20 +27,21 @@ import (
 	"context"
 	"os/exec"
 
+	"github.com/ryclarke/batch-tool/output"
 	"github.com/ryclarke/batch-tool/utils"
 )
 
 // CallFunc defines an atomic unit of work on a repository. Output should
 // be sent to the channel, which must remain open. Closing a channel from
 // within the context of a CallFunc will result in a panic.
-type CallFunc func(ctx context.Context, repo string, ch chan<- string) error
+type CallFunc func(ctx context.Context, ch output.Channel) error
 
 // Wrap each provided CallFunc into a new one that executes them order before terminating.
 func Wrap(calls ...CallFunc) CallFunc {
-	return func(ctx context.Context, repo string, ch chan<- string) error {
+	return func(ctx context.Context, ch output.Channel) error {
 		// execute each CallFunc, stopping if an error is encountered
 		for _, call := range calls {
-			if err := call(ctx, repo, ch); err != nil {
+			if err := call(ctx, ch); err != nil {
 				return err
 			}
 		}
@@ -52,9 +53,10 @@ func Wrap(calls ...CallFunc) CallFunc {
 // Exec creates a new CallFunc to execute the given command and arguments,
 // streaming Stdout and Stderr to the channel and returning error status.
 func Exec(command string, arguments ...string) CallFunc {
-	return func(ctx context.Context, repo string, ch chan<- string) error {
+	return func(ctx context.Context, ch output.Channel) error {
 		cmd := exec.CommandContext(ctx, command, arguments...)
-		cmd.Dir = utils.RepoPath(ctx, repo)
+		cmd.Dir = utils.RepoPath(ctx, ch.Name())
+		cmd.Env = utils.ExecEnv(ctx, ch.Name())
 
 		// Configure the pipe for stdout
 		pipe, err := cmd.StdoutPipe()
@@ -72,7 +74,7 @@ func Exec(command string, arguments ...string) CallFunc {
 		// stream output to the channel as it becomes available
 		scanner := bufio.NewScanner(pipe)
 		for scanner.Scan() {
-			ch <- scanner.Text()
+			ch.WriteString(scanner.Text())
 		}
 
 		if err := scanner.Err(); err != nil {

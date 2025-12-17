@@ -2,6 +2,7 @@ package output
 
 import (
 	"context"
+	"io"
 	"sync"
 
 	"github.com/ryclarke/batch-tool/config"
@@ -17,16 +18,17 @@ type Channel interface {
 	// Err returns the error channel for reading.
 	Err() <-chan error
 
-	// WOut returns the output channel for writing.
-	WOut() chan<- string
-	// WErr returns the error channel for writing.
-	WErr() chan<- error
+	// WriteString writes a string to the output channel.
+	io.StringWriter
+
+	// WriteError writes an error to the error channel.
+	WriteError(err error)
 
 	// Start begins processing with the specified weight for semaphore acquisition.
-	// The returned function should be called when processing is complete to release
-	// the semaphore and clean up channels. If a waitgroup is provided, it will be
-	// decremented when the returned function is called.
-	Start(weight int64) (done func(), err error)
+	Start(weight int64) error
+	// Close the channels and release any acquired semaphore. If a wait group is
+	// provided it will be decremented.
+	io.Closer
 }
 
 func NewChannel(ctx context.Context, name string, sem *semaphore.Weighted, wg *sync.WaitGroup) Channel {
@@ -50,7 +52,7 @@ type channel struct {
 	sem *semaphore.Weighted
 	wg  *sync.WaitGroup
 
-	release bool
+	release int64 // weight to release (for semaphore)
 }
 
 func (c *channel) Name() string {
@@ -65,47 +67,51 @@ func (c *channel) Err() <-chan error {
 	return c.err
 }
 
-func (c *channel) WOut() chan<- string {
-	return c.output
+// WriteString writes a string to the output channel and always returns a nil error.
+func (c *channel) WriteString(s string) (n int, _ error) {
+	c.output <- s
+	return len(s), nil
 }
 
-func (c *channel) WErr() chan<- error {
-	return c.err
+// WriteError writes an error to the error channel.
+func (c *channel) WriteError(err error) {
+	c.err <- err
 }
 
-func (c *channel) Start(weight int64) (func(), error) {
+func (c *channel) Start(weight int64) error {
 	if weight <= 0 {
 		weight = 1 // valid default weight
 	}
 
-	done := func() {
-		// close channels and signal worker completion
-		close(c.output)
-		close(c.err)
-
-		// Release semaphore if it was previously acquired
-		if c.sem != nil && c.release {
-			c.sem.Release(weight)
-		}
-
-		// Decrement waitgroup if provided
-		if c.wg != nil {
-			c.wg.Done()
-		}
-	}
-
 	if c.sem == nil {
-		// No semaphore to acquire, return done function directly
-		return done, nil
+		// No semaphore to acquire, return immediately
+		return nil
 	}
 
 	if err := c.sem.Acquire(c.ctx, weight); err != nil {
-		// Context cancelled, return the error and abort further processing
-		return done, err
+		return err
 	}
 
-	c.release = true
+	// Acquired semaphore successfully, set release weight
+	c.release = weight
 
-	// Acquire semaphore
-	return done, nil
+	return nil
+}
+
+func (c *channel) Close() error {
+	// close channels and signal worker completion
+	close(c.output)
+	close(c.err)
+
+	// Release semaphore if it was previously acquired
+	if c.sem != nil && c.release > 0 {
+		c.sem.Release(c.release)
+	}
+
+	// Decrement waitgroup if provided
+	if c.wg != nil {
+		c.wg.Done()
+	}
+
+	return nil
 }

@@ -1,7 +1,12 @@
 package git
 
 import (
+	"strings"
 	"testing"
+
+	"github.com/ryclarke/batch-tool/config"
+	"github.com/ryclarke/batch-tool/output"
+	testhelper "github.com/ryclarke/batch-tool/utils/test"
 )
 
 func TestGitCmd(t *testing.T) {
@@ -40,5 +45,28 @@ func TestGitCmdSubcommands(t *testing.T) {
 		if !commandNames[expectedCmd] {
 			t.Errorf("Expected subcommand %s not found", expectedCmd)
 		}
+	}
+}
+
+func TestValidateBranchSourceBranchMatch(t *testing.T) {
+	ctx := loadFixture(t)
+
+	// Set up a temporary git repo for testing
+	reposPath := testhelper.SetupRepos(t, []string{"test-repo"})
+
+	// Update context to use the temp repos path
+	viper := config.Viper(ctx)
+	viper.Set(config.GitDirectory, reposPath)
+	viper.Set(config.GitHost, "example.com")
+	viper.Set(config.GitProject, "test-project")
+
+	ch := output.NewChannel(ctx, "test-repo", nil, nil)
+	err := ValidateBranch(ctx, ch)
+	ch.Close()
+
+	if err == nil {
+		t.Error("Expected error when current branch matches source branch")
+	} else if !strings.Contains(err.Error(), "source branch") {
+		t.Errorf("Error should mention source branch, got: %v", err)
 	}
 }

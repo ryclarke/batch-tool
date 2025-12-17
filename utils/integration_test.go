@@ -155,39 +155,6 @@ func TestSCMIntegrationWithUtils(t *testing.T) {
 	})
 }
 
-func TestValidateBranchIntegration(t *testing.T) {
-	ctx := loadFixture(t)
-
-	tests := []struct {
-		name      string
-		repo      string
-		wantError bool
-	}{
-		{
-			name:      "non-existent repository returns error",
-			repo:      "nonexistent-repo",
-			wantError: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			viper := config.Viper(ctx)
-			originalSourceBranch := viper.GetString(config.SourceBranch)
-			defer viper.Set(config.SourceBranch, originalSourceBranch)
-
-			viper.Set(config.SourceBranch, "main")
-			viper.Set(config.GitDirectory, "/tmp/test-gitdir")
-
-			ch := make(chan string, 1)
-			defer close(ch)
-
-			err := utils.ValidateBranch(ctx, tt.repo, ch)
-			testhelper.AssertError(t, err, tt.wantError)
-		})
-	}
-}
-
 func TestLookupBranchIntegration(t *testing.T) {
 	ctx := loadFixture(t)
 

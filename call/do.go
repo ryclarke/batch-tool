@@ -62,37 +62,36 @@ func Do(cmd *cobra.Command, repos []string, callFunc CallFunc, handler ...output
 // runCallFunc executes the provided CallFunc for a single repository, managing concurrency via the provided semaphore and wait group.
 // Output channels are closed after execution, and the repository is cloned first if it does not exist locally.
 func runCallFunc(ctx context.Context, ch output.Channel, callFunc CallFunc) {
-	done, err := ch.Start(1)
-	defer done()
+	defer ch.Close()
 
-	if err != nil {
-		ch.WErr() <- err
+	if err := ch.Start(1); err != nil {
+		ch.WriteError(err)
 		return
 	}
 
 	// Initial empty line to signal start of CallFunc execution
-	ch.WOut() <- ""
+	ch.WriteString("")
 
 	// If the repository is missing, attempt to clone it first
 	repoDir := utils.RepoPath(ctx, ch.Name())
 	if _, err := os.Stat(repoDir); os.IsNotExist(err) {
 		// Create the directory if it doesn't exist yet
 		if err := os.MkdirAll(repoDir, 0755); err != nil {
-			ch.WErr() <- err
+			ch.WriteError(err)
 			return
 		}
 
 		// Execute git clone into the target directory
-		if err := Exec("git", "clone", utils.RepoURL(ctx, ch.Name()), repoDir)(ctx, ch.Name(), ch.WOut()); err != nil {
+		if err := Exec("git", "clone", utils.RepoURL(ctx, ch.Name()), repoDir)(ctx, ch); err != nil {
 			// Clone failed, return the error and abort further processing
-			ch.WErr() <- err
+			ch.WriteError(err)
 			return
 		}
 	}
 
 	// Execute the provided CallFunc for the repository
-	if err := callFunc(ctx, ch.Name(), ch.WOut()); err != nil {
-		ch.WErr() <- err
+	if err := callFunc(ctx, ch); err != nil {
+		ch.WriteError(err)
 	}
 }
 
@@ -119,13 +118,4 @@ func processArguments(ctx context.Context, args []string) []string {
 	}
 
 	return repos
-}
-
-// readOnlyChan converts a slice of bidirectional channels to a slice of read-only channels.
-func readOnlyChan[T any](chans []chan T) []<-chan T {
-	roCh := make([]<-chan T, len(chans))
-	for i, ch := range chans {
-		roCh[i] = ch
-	}
-	return roCh
 }
