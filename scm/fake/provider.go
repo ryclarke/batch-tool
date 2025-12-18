@@ -25,7 +25,7 @@ type Fake struct {
 }
 
 // New creates a new fake SCM provider with the specified project
-func New(ctx context.Context, project string) scm.Provider {
+func New(_ context.Context, project string) scm.Provider {
 	return &Fake{
 		Project:      project,
 		Repositories: make([]*scm.Repository, 0),
@@ -54,6 +54,7 @@ func NewFake(project string, repos []*scm.Repository) *Fake {
 	return f
 }
 
+// SeedErrors configures the provider to return specific errors for testing
 func (f *Fake) SeedErrors(errors map[string]error) {
 	// Deep copy errors to avoid mutations affecting tests
 	maps.Copy(f.Errors, errors)

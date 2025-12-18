@@ -7,6 +7,7 @@ import (
 
 	"github.com/ryclarke/batch-tool/call"
 	"github.com/ryclarke/batch-tool/catalog"
+	"github.com/ryclarke/batch-tool/output"
 )
 
 func addStatusCmd() *cobra.Command {
@@ -25,6 +26,6 @@ func addStatusCmd() *cobra.Command {
 }
 
 // Status shows the git status for the given repository.
-func Status(ctx context.Context, repo string, ch chan<- string) error {
-	return call.Exec("git", "-c", "color.status=always", "status", "-sb")(ctx, repo, ch)
+func Status(ctx context.Context, ch output.Channel) error {
+	return call.Exec("git", "-c", "color.status=always", "status", "-sb")(ctx, ch)
 }

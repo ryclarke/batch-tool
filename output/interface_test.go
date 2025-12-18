@@ -5,10 +5,11 @@ import (
 	"io"
 	"testing"
 
+	"github.com/spf13/cobra"
+
 	"github.com/ryclarke/batch-tool/config"
 	"github.com/ryclarke/batch-tool/output"
-	testhelper "github.com/ryclarke/batch-tool/utils/test"
-	"github.com/spf13/cobra"
+	testhelper "github.com/ryclarke/batch-tool/utils/testing"
 )
 
 func loadFixture(t *testing.T) context.Context {

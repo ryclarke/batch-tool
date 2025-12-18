@@ -1,3 +1,4 @@
+// Package exec provides the shell command execution functionality for batch-tool.
 package exec
 
 import (

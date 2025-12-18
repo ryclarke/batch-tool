@@ -1,13 +1,11 @@
 package utils_test
 
 import (
-	"os/exec"
-	"strings"
 	"testing"
 
 	"github.com/ryclarke/batch-tool/config"
 	"github.com/ryclarke/batch-tool/utils"
-	testhelper "github.com/ryclarke/batch-tool/utils/test"
+	testhelper "github.com/ryclarke/batch-tool/utils/testing"
 )
 
 func TestParseRepo(t *testing.T) {
@@ -169,67 +167,4 @@ func TestLookupBranchWithConfigSet(t *testing.T) {
 	if branch != "feature-branch" {
 		t.Errorf("LookupBranch() = %q, want \"feature-branch\"", branch)
 	}
-}
-
-func TestValidateBranchSourceBranchMatch(t *testing.T) {
-	ctx := loadFixture(t)
-
-	// Set up a temporary git repo for testing
-	reposPath := testhelper.SetupRepos(t, []string{"test-repo"})
-
-	// Update context to use the temp repos path
-	viper := config.Viper(ctx)
-	viper.Set(config.GitDirectory, reposPath)
-	viper.Set(config.GitHost, "example.com")
-	viper.Set(config.GitProject, "test-project")
-
-	ch := make(chan string, 1)
-	err := utils.ValidateBranch(ctx, "test-repo", ch)
-
-	if err == nil {
-		t.Error("Expected error when current branch matches source branch")
-	} else if !strings.Contains(err.Error(), "source branch") {
-		t.Errorf("Error should mention source branch, got: %v", err)
-	}
-}
-
-// setupTestGitRepo creates a minimal git repository for testing
-func setupTestGitRepo(path, branch string) error {
-	// Create directory structure
-	if err := exec.Command("mkdir", "-p", path).Run(); err != nil {
-		return err
-	}
-
-	// Initialize git repo
-	if err := exec.Command("git", "-C", path, "init").Run(); err != nil {
-		return err
-	}
-
-	// Configure git user for commits
-	if err := exec.Command("git", "-C", path, "config", "user.email", "test@example.com").Run(); err != nil {
-		return err
-	}
-	if err := exec.Command("git", "-C", path, "config", "user.name", "Test User").Run(); err != nil {
-		return err
-	}
-
-	// Create initial commit
-	if err := exec.Command("sh", "-c", "echo 'test' > "+path+"/README.md").Run(); err != nil {
-		return err
-	}
-	if err := exec.Command("git", "-C", path, "add", ".").Run(); err != nil {
-		return err
-	}
-	if err := exec.Command("git", "-C", path, "commit", "-m", "Initial commit").Run(); err != nil {
-		return err
-	}
-
-	// Rename branch if not already the target
-	if branch != "" && branch != "master" {
-		if err := exec.Command("git", "-C", path, "branch", "-M", branch).Run(); err != nil {
-			return err
-		}
-	}
-
-	return nil
 }

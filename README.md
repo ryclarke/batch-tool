@@ -414,3 +414,72 @@ For more detailed help on any command, use:
 ```bash
 batch-tool [command] --help
 ```
+## Development
+
+### Prerequisites
+
+- Go 1.25 or later
+- Make
+
+### Setup
+
+1. Clone the repository:
+```bash
+git clone git@github.com:ryclarke/batch-tool.git
+cd batch-tool
+```
+
+2. Install development tools:
+```bash
+make deps
+```
+
+This installs:
+- `gotestsum` - Enhanced test output
+- `goreleaser` - Release automation
+- `golangci-lint` - Code quality and style enforcement
+
+### Building
+
+Build for your current platform:
+```bash
+make build
+```
+
+### Testing
+
+Run tests:
+```bash
+make test
+```
+
+Run tests with coverage:
+```bash
+make cover
+```
+
+### Linting
+
+Run linters to check code quality:
+```bash
+make lint
+```
+
+Auto-fix linting issues where possible:
+```bash
+make lint-fix
+```
+
+### Code Style
+
+This project uses `golangci-lint` to enforce consistent code style. Key requirements:
+
+- **Import Grouping**: Imports must be grouped in order:
+  1. Standard library packages
+  2. Third-party dependencies  
+  3. Internal project packages (github.com/ryclarke/batch-tool/*)
+
+- **Error Handling**: All errors must be checked (use `_ =` to explicitly ignore)
+- **Code Quality**: Follow standard Go idioms and best practices
+
+The CI pipeline runs linting automatically on all pull requests.

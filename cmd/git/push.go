@@ -8,6 +8,7 @@ import (
 	"github.com/ryclarke/batch-tool/call"
 	"github.com/ryclarke/batch-tool/catalog"
 	"github.com/ryclarke/batch-tool/config"
+	"github.com/ryclarke/batch-tool/output"
 	"github.com/ryclarke/batch-tool/utils"
 )
 
@@ -27,7 +28,7 @@ func addPushCmd() *cobra.Command {
 			viper.BindPFlag(config.CommitAmend, cmd.Flags().Lookup(forceFlag))
 		},
 		Run: func(cmd *cobra.Command, args []string) {
-			call.Do(cmd, args, call.Wrap(utils.ValidateBranch, Push))
+			call.Do(cmd, args, call.Wrap(ValidateBranch, Push))
 		},
 	}
 
@@ -37,9 +38,9 @@ func addPushCmd() *cobra.Command {
 }
 
 // Push committed changes to the remote repository.
-func Push(ctx context.Context, name string, ch chan<- string) error {
+func Push(ctx context.Context, ch output.Channel) error {
 	viper := config.Viper(ctx)
-	branch, err := utils.LookupBranch(ctx, name)
+	branch, err := utils.LookupBranch(ctx, ch.Name())
 	if err != nil {
 		return err
 	}
@@ -49,5 +50,5 @@ func Push(ctx context.Context, name string, ch chan<- string) error {
 		args = append(args, "-f")
 	}
 
-	return call.Exec("git", args...)(ctx, name, ch)
+	return call.Exec("git", args...)(ctx, ch)
 }

@@ -7,6 +7,7 @@ import (
 
 var providerFactories = make(map[string]ProviderFactory)
 
+// ProviderFactory is a function that creates a new Provider instance.
 type ProviderFactory func(ctx context.Context, project string) Provider
 
 // Provider defines the interface for SCM providers.

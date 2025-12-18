@@ -2,13 +2,13 @@ package fake_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"testing"
 
-	testhelper "github.com/ryclarke/batch-tool/utils/test"
-
 	"github.com/ryclarke/batch-tool/scm"
 	. "github.com/ryclarke/batch-tool/scm/fake"
+	testhelper "github.com/ryclarke/batch-tool/utils/testing"
 )
 
 func loadFixture(t *testing.T) context.Context {
@@ -97,7 +97,7 @@ func TestListRepositoriesWithError(t *testing.T) {
 	f.SetError("ListRepositories", expectedErr)
 
 	repos, err := f.ListRepositories()
-	if err != expectedErr {
+	if !errors.Is(err, expectedErr) {
 		t.Errorf("Expected error %v, got %v", expectedErr, err)
 	}
 
@@ -373,8 +373,7 @@ func TestMergePullRequestMergeability(t *testing.T) {
 				}
 				if mergedPR == nil {
 					t.Error("Expected merged PR to be returned")
-				}
-				if mergedPR.ID != pr.ID {
+				} else if mergedPR.ID != pr.ID {
 					t.Errorf("Expected merged PR ID %d, got %d", pr.ID, mergedPR.ID)
 				}
 				// PR should be deleted after successful merge
@@ -596,7 +595,7 @@ func TestErrorHandling(t *testing.T) {
 			f.SetError(test.method, expectedErr)
 
 			err := test.testFunc()
-			if err != expectedErr {
+			if !errors.Is(err, expectedErr) {
 				t.Errorf("Expected error %v, got %v", expectedErr, err)
 			}
 
@@ -605,7 +604,7 @@ func TestErrorHandling(t *testing.T) {
 			// Error should be cleared now
 			err = test.testFunc()
 			// Some methods will still fail (like getting nonexistent PR), but not with our configured error
-			if err == expectedErr {
+			if errors.Is(err, expectedErr) {
 				t.Error("Expected error to be cleared")
 			}
 		})

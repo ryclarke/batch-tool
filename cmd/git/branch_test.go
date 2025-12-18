@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/ryclarke/batch-tool/config"
-	testhelper "github.com/ryclarke/batch-tool/utils/test"
+	testhelper "github.com/ryclarke/batch-tool/utils/testing"
 )
 
 func TestAddBranchCmd(t *testing.T) {
@@ -31,7 +31,6 @@ func TestAddBranchCmd(t *testing.T) {
 }
 
 func TestBranchCmdFlags(t *testing.T) {
-
 	cmd := addBranchCmd()
 
 	// Test branch flag
@@ -46,7 +45,6 @@ func TestBranchCmdFlags(t *testing.T) {
 }
 
 func TestBranchCmdArgs(t *testing.T) {
-
 	cmd := addBranchCmd()
 
 	// Test that command requires minimum arguments

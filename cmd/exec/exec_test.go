@@ -1,13 +1,14 @@
 package exec
 
 import (
-	testhelper "github.com/ryclarke/batch-tool/utils/test"
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"strings"
 	"testing"
 
+	testhelper "github.com/ryclarke/batch-tool/utils/testing"
 )
 
 func loadFixture(t *testing.T) context.Context {
@@ -413,7 +414,7 @@ func TestConfirmExecutionEOF(t *testing.T) {
 
 	var buf bytes.Buffer
 	_, err := confirmExecution(mockStdin(""), &buf, exec, args)
-	if err != io.EOF {
+	if !errors.Is(err, io.EOF) {
 		t.Errorf("Expected EOF error, got: %v", err)
 	}
 }

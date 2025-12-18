@@ -1,4 +1,4 @@
-package test
+package testing
 
 import (
 	"context"
@@ -6,17 +6,18 @@ import (
 	"testing"
 
 	mapset "github.com/deckarep/golang-set/v2"
+
 	"github.com/ryclarke/batch-tool/config"
 	"github.com/ryclarke/batch-tool/scm"
 	"github.com/ryclarke/batch-tool/scm/fake"
 )
 
 // SetupFakeProvider creates and registers a fake SCM provider with test data
-func SetupFakeProvider(t *testing.T, ctx context.Context, providerName string, project string) scm.Provider {
+func SetupFakeProvider(t *testing.T, _ context.Context, providerName string, project string) scm.Provider {
 	t.Helper()
 
 	provider := fake.NewFake(project, fake.CreateTestRepositories(project))
-	scm.Register(providerName, func(ctx context.Context, proj string) scm.Provider {
+	scm.Register(providerName, func(_ context.Context, _ string) scm.Provider {
 		return provider
 	})
 
@@ -24,11 +25,11 @@ func SetupFakeProvider(t *testing.T, ctx context.Context, providerName string, p
 }
 
 // SetupFakeProviderWithRepos creates a fake provider with custom repositories
-func SetupFakeProviderWithRepos(t *testing.T, ctx context.Context, providerName string, project string, repos []*scm.Repository) scm.Provider {
+func SetupFakeProviderWithRepos(t *testing.T, _ context.Context, providerName string, project string, repos []*scm.Repository) scm.Provider {
 	t.Helper()
 
 	provider := fake.NewFake(project, repos)
-	scm.Register(providerName, func(ctx context.Context, proj string) scm.Provider {
+	scm.Register(providerName, func(_ context.Context, _ string) scm.Provider {
 		return provider
 	})
 
@@ -36,7 +37,7 @@ func SetupFakeProviderWithRepos(t *testing.T, ctx context.Context, providerName 
 }
 
 // SetupMultipleFakeProviders creates fake providers for multiple projects
-func SetupMultipleFakeProviders(t *testing.T, ctx context.Context, projects []string) map[string]scm.Provider {
+func SetupMultipleFakeProviders(t *testing.T, _ context.Context, projects []string) map[string]scm.Provider {
 	t.Helper()
 
 	providers := make(map[string]scm.Provider)
@@ -47,7 +48,7 @@ func SetupMultipleFakeProviders(t *testing.T, ctx context.Context, projects []st
 
 		// Capture the provider in closure properly
 		p := provider
-		scm.Register(providerName, func(ctx context.Context, proj string) scm.Provider {
+		scm.Register(providerName, func(_ context.Context, _ string) scm.Provider {
 			return p
 		})
 

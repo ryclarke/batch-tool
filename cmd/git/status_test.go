@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"testing"
 
-	testhelper "github.com/ryclarke/batch-tool/utils/test"
+	testhelper "github.com/ryclarke/batch-tool/utils/testing"
 )
 
 func TestAddStatusCmd(t *testing.T) {

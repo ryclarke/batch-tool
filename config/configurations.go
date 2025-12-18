@@ -1,3 +1,4 @@
+// Package config provides configuration management for batch-tool.
 package config
 
 import (
@@ -14,6 +15,7 @@ import (
 )
 
 var (
+	// CfgFile specifies the configuration file path
 	CfgFile string
 
 	// Version is dynamically set at build time using the -X linker flag.
@@ -32,7 +34,7 @@ const (
 	GitDirectory = "git.directory"
 	SourceBranch = "git.default-branch"
 
-	// User, Host, Project, Repo
+	// CloneSSHURLTmpl is the SSH URL template with placeholders: User, Host, Project, Repo
 	CloneSSHURLTmpl = "ssh://%s@%s/%s/%s.git"
 
 	SortRepos        = "repos.sort"

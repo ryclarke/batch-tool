@@ -101,16 +101,16 @@ func TestHandleRepoOutput(t *testing.T) {
 	m := initialModel(cmd, channels, testCancelFunc)
 	m.viewport = viewport.New(80, 24)
 
-	msg := repoOutputMsg{index: 0, msg: "test output"}
+	msg := repoOutputMsg{index: 0, data: []byte("test output")}
 	newModel, _ := m.handleRepoOutput(msg)
 	m = newModel.(model)
 
-	if len(m.repos[0].output) != 1 {
-		t.Errorf("Expected 1 output line, got %d", len(m.repos[0].output))
+	if len(m.repos[0].output) != 11 {
+		t.Errorf("Expected 11 output bytes, got %d", len(m.repos[0].output))
 	}
 
-	if m.repos[0].output[0] != "test output" {
-		t.Errorf("Expected 'test output', got %s", m.repos[0].output[0])
+	if string(m.repos[0].output) != "test output" {
+		t.Errorf("Expected 'test output', got %q", string(m.repos[0].output))
 	}
 
 	// After first output, repo should transition from inactive to active
@@ -479,9 +479,9 @@ func TestBuildContent(t *testing.T) {
 	m.viewport = viewport.New(80, 24)
 
 	// Add some output and errors
-	m.repos[0].output = []string{"line 1", "line 2"}
+	m.repos[0].output = []byte("line 1\nline 2")
 	m.repos[0].errors = []error{errors.New("error 1")}
-	m.repos[1].output = []string{"line 3"}
+	m.repos[1].output = []byte("line 3")
 
 	content := m.buildContent()
 
@@ -511,25 +511,29 @@ func TestBuildContent(t *testing.T) {
 
 // TestWaitForOutput tests the output channel waiting function
 func TestWaitForOutput(t *testing.T) {
-	ch := make(chan string, 1)
-	ch <- "test message"
+	ctx := loadFixture(t)
+
+	ch := NewChannel(ctx, "test", nil, nil)
+	ch.WriteString("test message")
 
 	cmd := waitForOutput(0, ch)
 	msg := cmd()
 
+	t.Logf("msg type: %T", msg)
 	if outputMsg, ok := msg.(repoOutputMsg); ok {
+		t.Logf("outputMsg.data: %q", string(outputMsg.data))
 		if outputMsg.index != 0 {
 			t.Errorf("Expected index 0, got %d", outputMsg.index)
 		}
-		if outputMsg.msg != "test message" {
-			t.Errorf("Expected 'test message', got %s", outputMsg.msg)
+		if string(outputMsg.data) != "test message\n" {
+			t.Errorf("Expected 'test message\\n', got %q", string(outputMsg.data))
 		}
 	} else {
 		t.Errorf("Expected repoOutputMsg, got %T", msg)
 	}
 
 	// Test channel close
-	close(ch)
+	ch.Close()
 	cmd = waitForOutput(0, ch)
 	msg = cmd()
 
@@ -544,9 +548,11 @@ func TestWaitForOutput(t *testing.T) {
 
 // TestWaitForError tests the error channel waiting function
 func TestWaitForError(t *testing.T) {
-	ch := make(chan error, 1)
+	ctx := loadFixture(t)
+
+	ch := NewChannel(ctx, "test", nil, nil)
 	testErr := errors.New("test error")
-	ch <- testErr
+	ch.WriteError(testErr)
 
 	cmd := waitForError(0, ch)
 	msg := cmd()
@@ -563,7 +569,7 @@ func TestWaitForError(t *testing.T) {
 	}
 
 	// Test channel close
-	close(ch)
+	ch.Close()
 	cmd = waitForError(0, ch)
 	msg = cmd()
 
@@ -1004,11 +1010,11 @@ func TestPrintFullOutput(t *testing.T) {
 	// Set up some test output
 	m.repos[0].completed = true
 	m.repos[0].failed = false
-	m.repos[0].output = []string{"line 1", "line 2"}
+	m.repos[0].output = []byte("line 1\nline 2")
 
 	m.repos[1].completed = true
 	m.repos[1].failed = true
-	m.repos[1].output = []string{"error line"}
+	m.repos[1].output = []byte("error line")
 	m.repos[1].errors = []error{errors.New("test error")}
 
 	printFullOutput(cmd, m)

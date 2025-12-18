@@ -2,6 +2,7 @@ package output
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"testing"
 	"time"
@@ -31,14 +32,6 @@ func TestNewChannel(t *testing.T) {
 
 		if ch.Err() == nil {
 			t.Error("Expected Err() to return non-nil channel")
-		}
-
-		if ch.WOut() == nil {
-			t.Error("Expected WOut() to return non-nil channel")
-		}
-
-		if ch.WErr() == nil {
-			t.Error("Expected WErr() to return non-nil channel")
 		}
 	})
 
@@ -77,7 +70,7 @@ func Test_channel_Name(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			c := &channel{
 				name:   tt.want,
-				output: make(chan string),
+				output: make(chan []byte),
 				err:    make(chan error),
 				ctx:    context.Background(),
 			}
@@ -90,7 +83,7 @@ func Test_channel_Name(t *testing.T) {
 
 func Test_channel_Out(t *testing.T) {
 	t.Run("returns output channel for reading", func(t *testing.T) {
-		outChan := make(chan string)
+		outChan := make(chan []byte)
 		c := &channel{
 			name:   "test",
 			output: outChan,
@@ -105,12 +98,12 @@ func Test_channel_Out(t *testing.T) {
 
 		// Test that we can read from it
 		go func() {
-			outChan <- "test message"
+			outChan <- []byte("test message")
 		}()
 
 		msg := <-got
-		if msg != "test message" {
-			t.Errorf("Expected to read 'test message', got %s", msg)
+		if string(msg) != "test message" {
+			t.Errorf("Expected to read 'test message', got %s", string(msg))
 		}
 	})
 }
@@ -120,7 +113,7 @@ func Test_channel_Err(t *testing.T) {
 		errChan := make(chan error)
 		c := &channel{
 			name:   "test",
-			output: make(chan string),
+			output: make(chan []byte),
 			err:    errChan,
 			ctx:    context.Background(),
 		}
@@ -137,59 +130,8 @@ func Test_channel_Err(t *testing.T) {
 		}()
 
 		err := <-got
-		if err != testErr {
+		if !errors.Is(err, testErr) {
 			t.Errorf("Expected to read context.Canceled, got %v", err)
-		}
-	})
-}
-
-func Test_channel_WOut(t *testing.T) {
-	t.Run("returns output channel for writing", func(t *testing.T) {
-		outChan := make(chan string, 1)
-		c := &channel{
-			name:   "test",
-			output: outChan,
-			err:    make(chan error),
-			ctx:    context.Background(),
-		}
-
-		got := c.WOut()
-		if got == nil {
-			t.Fatal("Expected WOut() to return non-nil channel")
-		}
-
-		// Test that we can write to it
-		got <- "test message"
-
-		msg := <-outChan
-		if msg != "test message" {
-			t.Errorf("Expected to write 'test message', got %s", msg)
-		}
-	})
-}
-
-func Test_channel_WErr(t *testing.T) {
-	t.Run("returns error channel for writing", func(t *testing.T) {
-		errChan := make(chan error, 1)
-		c := &channel{
-			name:   "test",
-			output: make(chan string),
-			err:    errChan,
-			ctx:    context.Background(),
-		}
-
-		got := c.WErr()
-		if got == nil {
-			t.Fatal("Expected WErr() to return non-nil channel")
-		}
-
-		// Test that we can write to it
-		testErr := context.Canceled
-		got <- testErr
-
-		err := <-errChan
-		if err != testErr {
-			t.Errorf("Expected to write context.Canceled, got %v", err)
 		}
 	})
 }
@@ -198,23 +140,19 @@ func Test_channel_Start(t *testing.T) {
 	t.Run("starts without semaphore", func(t *testing.T) {
 		c := &channel{
 			name:   "test",
-			output: make(chan string),
+			output: make(chan []byte),
 			err:    make(chan error),
 			ctx:    context.Background(),
 			sem:    nil,
 			wg:     nil,
 		}
 
-		done, err := c.Start(1)
+		err := c.Start(1)
 		if err != nil {
 			t.Errorf("Expected no error, got %v", err)
 		}
-		if done == nil {
-			t.Fatal("Expected done function to be non-nil")
-		}
 
-		// Call done to close channels
-		done()
+		c.Close()
 
 		// Verify channels are closed
 		select {
@@ -231,19 +169,16 @@ func Test_channel_Start(t *testing.T) {
 		sem := semaphore.NewWeighted(10)
 		c := &channel{
 			name:   "test",
-			output: make(chan string),
+			output: make(chan []byte),
 			err:    make(chan error),
 			ctx:    context.Background(),
 			sem:    sem,
 			wg:     nil,
 		}
 
-		done, err := c.Start(2)
+		err := c.Start(2)
 		if err != nil {
 			t.Errorf("Expected no error, got %v", err)
-		}
-		if done == nil {
-			t.Fatal("Expected done function to be non-nil")
 		}
 
 		// Verify semaphore was acquired (8 left out of 10)
@@ -252,8 +187,7 @@ func Test_channel_Start(t *testing.T) {
 		}
 		sem.Release(8)
 
-		// Call done to release
-		done()
+		c.Close()
 
 		// Verify semaphore was released (should have full 10 now)
 		if !sem.TryAcquire(10) {
@@ -268,20 +202,19 @@ func Test_channel_Start(t *testing.T) {
 
 		c := &channel{
 			name:   "test",
-			output: make(chan string),
+			output: make(chan []byte),
 			err:    make(chan error),
 			ctx:    context.Background(),
 			sem:    nil,
 			wg:     &wg,
 		}
 
-		done, err := c.Start(1)
+		err := c.Start(1)
 		if err != nil {
 			t.Errorf("Expected no error, got %v", err)
 		}
 
-		// Call done to decrement waitgroup
-		done()
+		c.Close()
 
 		// Create a channel that closes when waitgroup is done
 		doneCh := make(chan struct{})
@@ -306,14 +239,14 @@ func Test_channel_Start(t *testing.T) {
 		sem := semaphore.NewWeighted(10)
 		c := &channel{
 			name:   "test",
-			output: make(chan string),
+			output: make(chan []byte),
 			err:    make(chan error),
 			ctx:    context.Background(),
 			sem:    sem,
 			wg:     nil,
 		}
 
-		done, err := c.Start(0)
+		err := c.Start(0)
 		if err != nil {
 			t.Errorf("Expected no error, got %v", err)
 		}
@@ -324,21 +257,21 @@ func Test_channel_Start(t *testing.T) {
 		}
 		sem.Release(9)
 
-		done()
+		c.Close()
 	})
 
 	t.Run("handles negative weight", func(t *testing.T) {
 		sem := semaphore.NewWeighted(10)
 		c := &channel{
 			name:   "test",
-			output: make(chan string),
+			output: make(chan []byte),
 			err:    make(chan error),
 			ctx:    context.Background(),
 			sem:    sem,
 			wg:     nil,
 		}
 
-		done, err := c.Start(-5)
+		err := c.Start(-5)
 		if err != nil {
 			t.Errorf("Expected no error, got %v", err)
 		}
@@ -349,7 +282,7 @@ func Test_channel_Start(t *testing.T) {
 		}
 		sem.Release(9)
 
-		done()
+		c.Close()
 	})
 
 	t.Run("handles cancelled context", func(t *testing.T) {
@@ -359,23 +292,20 @@ func Test_channel_Start(t *testing.T) {
 		sem := semaphore.NewWeighted(10)
 		c := &channel{
 			name:   "test",
-			output: make(chan string),
+			output: make(chan []byte),
 			err:    make(chan error),
 			ctx:    ctx,
 			sem:    sem,
 			wg:     nil,
 		}
 
-		done, err := c.Start(1)
+		err := c.Start(1)
 		if err == nil {
 			t.Error("Expected error due to cancelled context")
 		}
-		if done == nil {
-			t.Fatal("Expected done function to be non-nil even on error")
-		}
 
-		// Calling done should not panic and should not release (since acquire failed)
-		done()
+		// Calling Close should not panic and should not release (since acquire failed)
+		c.Close()
 
 		// Semaphore should still have full capacity
 		if !sem.TryAcquire(10) {

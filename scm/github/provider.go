@@ -30,6 +30,7 @@ func init() {
 	scm.Register("github", New)
 }
 
+// New creates a new GitHub provider instance.
 func New(ctx context.Context, project string) scm.Provider {
 	viper := config.Viper(ctx)
 	return &Github{
@@ -40,6 +41,7 @@ func New(ctx context.Context, project string) scm.Provider {
 	}
 }
 
+// Github implements the scm.Provider interface for GitHub.
 type Github struct {
 	client  *github.Client
 	project string
@@ -75,7 +77,10 @@ func (g *Github) checkRateLimit(ctx context.Context, search bool) (*github.Rate,
 }
 
 func (g *Github) readLock() (done func()) {
-	sem.Acquire(g.ctx, readWeight)
+	if err := sem.Acquire(g.ctx, readWeight); err != nil {
+		// Context cancelled or deadline exceeded, return no-op cleanup
+		return func() {}
+	}
 
 	return func() {
 		sem.Release(readWeight)
@@ -83,7 +88,10 @@ func (g *Github) readLock() (done func()) {
 }
 
 func (g *Github) writeLock() (done func()) {
-	sem.Acquire(g.ctx, writeWeight)
+	if err := sem.Acquire(g.ctx, writeWeight); err != nil {
+		// Context cancelled or deadline exceeded, return no-op cleanup
+		return func() {}
+	}
 
 	return func() {
 		// delay release to avoid rate limiting

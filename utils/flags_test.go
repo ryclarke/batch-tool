@@ -5,9 +5,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/spf13/cobra"
+
 	"github.com/ryclarke/batch-tool/config"
 	"github.com/ryclarke/batch-tool/utils"
-	"github.com/spf13/cobra"
 )
 
 func TestCheckMutuallyExclusiveFlags(t *testing.T) {

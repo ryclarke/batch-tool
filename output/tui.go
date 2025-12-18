@@ -1,6 +1,7 @@
 package output
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"strings"
@@ -75,7 +76,7 @@ type model struct {
 type repoStatus struct {
 	Channel
 
-	output     []string
+	output     []byte
 	errors     []error
 	completed  bool
 	failed     bool
@@ -86,7 +87,7 @@ type repoStatus struct {
 
 type repoOutputMsg struct {
 	index int
-	msg   string
+	data  []byte
 }
 
 type repoErrorMsg struct {
@@ -110,7 +111,7 @@ func initialModel(cmd *cobra.Command, channels []Channel, cancel context.CancelF
 		}
 	}
 
-	output := make([]<-chan string, len(channels))
+	output := make([]<-chan []byte, len(channels))
 	errs := make([]<-chan error, len(channels))
 	for i, ch := range channels {
 		output[i] = ch.Out()
@@ -158,8 +159,8 @@ func (m model) Init() tea.Cmd {
 
 	// Start listening to all output and error channels
 	for i := range m.repos {
-		cmds = append(cmds, waitForOutput(i, m.repos[i].Out()))
-		cmds = append(cmds, waitForError(i, m.repos[i].Err()))
+		cmds = append(cmds, waitForOutput(i, m.repos[i]))
+		cmds = append(cmds, waitForError(i, m.repos[i]))
 	}
 
 	// Add ticker for smooth UI updates
@@ -174,20 +175,20 @@ func tickCmd() tea.Cmd {
 	})
 }
 
-func waitForOutput(index int, ch <-chan string) tea.Cmd {
+func waitForOutput(index int, ch Channel) tea.Cmd {
 	return func() tea.Msg {
-		msg, ok := <-ch
+		data, ok := <-ch.Out()
 		if !ok {
 			return repoCompletedMsg{index: index}
 		}
 
-		return repoOutputMsg{index: index, msg: msg}
+		return repoOutputMsg{index: index, data: data}
 	}
 }
 
-func waitForError(index int, ch <-chan error) tea.Cmd {
+func waitForError(index int, ch Channel) tea.Cmd {
 	return func() tea.Msg {
-		err, ok := <-ch
+		err, ok := <-ch.Err()
 		if !ok {
 			return repoCompletedMsg{index: index}
 		}
@@ -301,17 +302,17 @@ func (m model) handleRepoOutput(msg repoOutputMsg) (tea.Model, tea.Cmd) {
 		// First output signals that the subprocess has started
 		if !m.repos[msg.index].active {
 			m.repos[msg.index].active = true
-			if msg.msg == "" {
+			if len(msg.data) == 0 {
 				// Skip an initial empty line
-				return m, waitForOutput(msg.index, m.repos[msg.index].Out())
+				return m, waitForOutput(msg.index, m.repos[msg.index])
 			}
 		}
 
-		m.repos[msg.index].output = append(m.repos[msg.index].output, msg.msg)
+		m.repos[msg.index].output = append(m.repos[msg.index].output, msg.data...)
 	}
 
 	m.viewport.SetContent(m.buildContent())
-	return m, waitForOutput(msg.index, m.repos[msg.index].Out())
+	return m, waitForOutput(msg.index, m.repos[msg.index])
 }
 
 // handleRepoError processes error messages from repositories
@@ -321,7 +322,7 @@ func (m model) handleRepoError(msg repoErrorMsg) (tea.Model, tea.Cmd) {
 	}
 
 	m.viewport.SetContent(m.buildContent())
-	return m, waitForError(msg.index, m.repos[msg.index].Err())
+	return m, waitForError(msg.index, m.repos[msg.index])
 }
 
 // handleRepoCompleted processes completion messages from repositories
@@ -426,9 +427,11 @@ func (m model) formatRepoSection(repo repoStatus) string {
 	section.WriteString(m.formatRepoHeader(repo))
 	section.WriteString("\n")
 
-	// Show all output lines
-	for _, line := range repo.output {
-		section.WriteString(m.styles.output.Render(line))
+	// Split output stream by newlines
+	for line := range bytes.SplitSeq(repo.output, []byte{'\n'}) {
+		if len(line) > 0 {
+			section.WriteString(m.styles.output.Render(string(line)))
+		}
 		section.WriteString("\n")
 	}
 

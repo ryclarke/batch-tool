@@ -11,8 +11,10 @@ import (
 	"testing"
 	"time"
 
-	testhelper "github.com/ryclarke/batch-tool/utils/test"
 	"github.com/spf13/cobra"
+
+	"github.com/ryclarke/batch-tool/output"
+	testhelper "github.com/ryclarke/batch-tool/utils/testing"
 )
 
 func loadFixture(t *testing.T) context.Context {
@@ -25,17 +27,17 @@ func fakeCmd(t *testing.T, ctx context.Context, out io.Writer) *cobra.Command {
 	return testhelper.FakeCmd(t, ctx, out)
 }
 
-// fakeCallFunc returns a CallFunc that sends the specified output messages to the channel.
-func fakeCallFunc(t *testing.T, wantErr bool, output ...string) CallFunc {
+// fakeCallFunc returns a Func that sends the specified output messages to the channel.
+func fakeCallFunc(t *testing.T, wantErr bool, wantOutput ...string) Func {
 	t.Helper()
 
-	return func(_ context.Context, repo string, ch chan<- string) error {
-		for _, msg := range output {
+	return func(_ context.Context, ch output.Channel) error {
+		for _, msg := range wantOutput {
 			if strings.Contains(msg, "%s") {
-				msg = fmt.Sprintf(msg, repo)
+				msg = fmt.Sprintf(msg, ch.Name())
 			}
 
-			ch <- msg
+			ch.WriteString(msg)
 		}
 
 		if wantErr {
@@ -46,10 +48,10 @@ func fakeCallFunc(t *testing.T, wantErr bool, output ...string) CallFunc {
 	}
 }
 
-func fakeCallFuncConcurrent(t *testing.T, activeWorkers, maxConcurrent, count *int64, mutex *sync.Mutex, workDuration time.Duration) CallFunc {
+func fakeCallFuncConcurrent(t *testing.T, activeWorkers, maxConcurrent, count *int64, mutex *sync.Mutex, workDuration time.Duration) Func {
 	t.Helper()
 
-	return func(_ context.Context, repo string, ch chan<- string) error {
+	return func(_ context.Context, ch output.Channel) error {
 		// Track concurrent workers
 		current := atomic.AddInt64(activeWorkers, 1)
 		defer atomic.AddInt64(activeWorkers, -1)
@@ -67,7 +69,7 @@ func fakeCallFuncConcurrent(t *testing.T, activeWorkers, maxConcurrent, count *i
 			time.Sleep(workDuration)
 		}
 
-		ch <- repo
+		ch.WriteString(ch.Name())
 		return nil
 	}
 }

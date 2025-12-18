@@ -1,5 +1,7 @@
+// Package scm provides source control management abstractions and provider interfaces.
 package scm
 
+// Repository represents a source code repository.
 type Repository struct {
 	Name          string   `json:"name"`
 	Description   string   `json:"description"`
@@ -9,6 +11,7 @@ type Repository struct {
 	Labels        []string `json:"labels,omitempty"`
 }
 
+// PullRequest represents a pull request in a repository.
 type PullRequest struct {
 	Title       string   `json:"title"`
 	Description string   `json:"description"`

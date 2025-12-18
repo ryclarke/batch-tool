@@ -7,7 +7,7 @@ import (
 	"github.com/ryclarke/batch-tool/config"
 	"github.com/ryclarke/batch-tool/scm"
 	"github.com/ryclarke/batch-tool/scm/fake"
-	testhelper "github.com/ryclarke/batch-tool/utils/test"
+	testhelper "github.com/ryclarke/batch-tool/utils/testing"
 )
 
 // loadFixture loads the test configuration
@@ -58,7 +58,7 @@ func setupTestContext(t *testing.T, reposPath string) (context.Context, *fake.Fa
 	sharedProvider := fake.NewFake("test-project", testRepos)
 
 	// Register fake provider factory that returns the same instance each time
-	scm.Register(providerName, func(ctx context.Context, project string) scm.Provider {
+	scm.Register(providerName, func(_ context.Context, _ string) scm.Provider {
 		return sharedProvider
 	})
 

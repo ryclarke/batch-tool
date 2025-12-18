@@ -7,7 +7,7 @@ import (
 
 	"github.com/ryclarke/batch-tool/scm"
 	"github.com/ryclarke/batch-tool/scm/fake"
-	testhelper "github.com/ryclarke/batch-tool/utils/test"
+	testhelper "github.com/ryclarke/batch-tool/utils/testing"
 )
 
 func loadFixture(t *testing.T) context.Context {
@@ -40,7 +40,7 @@ func TestRegister(t *testing.T) {
 func TestGet(t *testing.T) {
 	ctx := loadFixture(t)
 	// Register a test provider with data
-	scm.Register("test-scm-with-data", func(ctx context.Context, project string) scm.Provider {
+	scm.Register("test-scm-with-data", func(_ context.Context, project string) scm.Provider {
 		return fake.NewFake(project, fake.CreateTestRepositories(project))
 	})
 
@@ -191,11 +191,11 @@ func TestErrorProviderIntegration(t *testing.T) {
 func TestMultipleProviders(t *testing.T) {
 	ctx := loadFixture(t)
 	// Register multiple providers
-	scm.Register("provider-a", func(ctx context.Context, project string) scm.Provider {
+	scm.Register("provider-a", func(_ context.Context, project string) scm.Provider {
 		return fake.NewFake("project-a-"+project, fake.CreateTestRepositories("project-a-"+project))
 	})
 
-	scm.Register("provider-b", func(ctx context.Context, project string) scm.Provider {
+	scm.Register("provider-b", func(_ context.Context, project string) scm.Provider {
 		return fake.NewFake("project-b-"+project, fake.CreateTestRepositories("project-b-"+project))
 	})
 

@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	testhelper "github.com/ryclarke/batch-tool/utils/test"
+	testhelper "github.com/ryclarke/batch-tool/utils/testing"
 )
 
 func TestAddUpdateCmd(t *testing.T) {

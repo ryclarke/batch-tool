@@ -11,7 +11,8 @@ import (
 	"time"
 
 	"github.com/ryclarke/batch-tool/config"
-	testhelper "github.com/ryclarke/batch-tool/utils/test"
+	"github.com/ryclarke/batch-tool/output"
+	testhelper "github.com/ryclarke/batch-tool/utils/testing"
 )
 
 // TestDo tests the Do function which orchestrates concurrent repository operations
@@ -19,7 +20,7 @@ func TestDo(t *testing.T) {
 	tests := []struct {
 		name          string
 		repos         []string
-		callFunc      CallFunc
+		callFunc      Func
 		channelBuffer int
 		wantOutput    map[string]string // repo -> expected output
 		wantError     bool
@@ -368,11 +369,11 @@ func TestDoWithContextCancellation(t *testing.T) {
 	// Create a cancellable context
 	cancelCtx, cancel := context.WithCancel(ctx)
 
-	// CallFunc that takes time and allows cancellation
-	slowFunc := func(ctx context.Context, repo string, ch chan<- string) error {
+	// Func that takes time and allows cancellation
+	slowFunc := func(ctx context.Context, ch output.Channel) error {
 		select {
 		case <-time.After(100 * time.Millisecond):
-			ch <- "completed " + repo
+			ch.WriteString("completed " + ch.Name())
 			return nil
 		case <-ctx.Done():
 			return ctx.Err()
@@ -406,8 +407,8 @@ func TestRunCallFuncCloning(t *testing.T) {
 	// Use a repo that doesn't exist - will attempt to clone
 	missingRepo := "nonexistent-test-repo"
 
-	testFunc := func(_ context.Context, repo string, ch chan<- string) error {
-		ch <- "executed for " + repo
+	testFunc := func(_ context.Context, ch output.Channel) error {
+		ch.WriteString("executed for " + ch.Name())
 		return nil
 	}
 
