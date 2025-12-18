@@ -3,26 +3,15 @@ package make
 import (
 	"bytes"
 	"context"
-	"io"
 	"testing"
 
-	"github.com/ryclarke/batch-tool/output"
-	testhelper "github.com/ryclarke/batch-tool/utils/test"
-
 	"github.com/ryclarke/batch-tool/config"
-	"github.com/spf13/cobra"
+	"github.com/ryclarke/batch-tool/output"
+	testhelper "github.com/ryclarke/batch-tool/utils/testing"
 )
 
 func loadFixture(t *testing.T) context.Context {
 	return testhelper.LoadFixture(t, "../../config")
-}
-
-// testCmd creates a test cobra command with the given context and output writer
-func testCmd(ctx context.Context, out io.Writer) *cobra.Command {
-	cmd := &cobra.Command{}
-	cmd.SetContext(ctx)
-	cmd.SetOut(out)
-	return cmd
 }
 
 func TestCmd(t *testing.T) {
@@ -51,7 +40,7 @@ func TestMakeCmdFlags(t *testing.T) {
 	// Test target flag
 	targetFlag := cmd.Flags().Lookup("target")
 	if targetFlag == nil {
-		t.Error("target flag not found")
+		t.Fatal("target flag not found")
 	}
 
 	if targetFlag.Shorthand != "t" {
@@ -263,7 +252,7 @@ func TestMake(t *testing.T) {
 			// Collect output messages
 			var messages []string
 			for msg := range ch.Out() {
-				messages = append(messages, msg)
+				messages = append(messages, string(msg))
 			}
 
 			// Verify we got some output (error messages)

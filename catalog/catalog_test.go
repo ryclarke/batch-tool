@@ -8,12 +8,12 @@ import (
 	"testing"
 	"time"
 
-	testhelper "github.com/ryclarke/batch-tool/utils/test"
-
 	mapset "github.com/deckarep/golang-set/v2"
+
 	"github.com/ryclarke/batch-tool/config"
 	"github.com/ryclarke/batch-tool/scm"
 	"github.com/ryclarke/batch-tool/scm/fake"
+	testhelper "github.com/ryclarke/batch-tool/utils/testing"
 )
 
 // TestInit tests the Init function which initializes the catalog
@@ -50,7 +50,7 @@ func TestInit(t *testing.T) {
 		},
 		{
 			name: "init with already initialized catalog does nothing",
-			setupFunc: func(t *testing.T, ctx context.Context) {
+			setupFunc: func(_ *testing.T, _ context.Context) {
 				// Pre-populate catalog
 				Catalog = map[string]scm.Repository{
 					"existing-repo": {
@@ -119,7 +119,7 @@ func TestInitRepositoryCatalog(t *testing.T) {
 		},
 		{
 			name: "skip init when catalog already populated",
-			setupFunc: func(t *testing.T, ctx context.Context) {
+			setupFunc: func(_ *testing.T, _ context.Context) {
 				Catalog = map[string]scm.Repository{
 					"existing": {
 						Name:          "existing",
@@ -209,7 +209,7 @@ func TestLoadCatalogCache(t *testing.T) {
 		},
 		{
 			name: "load missing cache returns error",
-			setupFunc: func(t *testing.T, ctx context.Context) {
+			setupFunc: func(_ *testing.T, _ context.Context) {
 				// No cache file created
 			},
 			wantRepoCount: 0,
@@ -269,7 +269,7 @@ func TestSaveCatalogCache(t *testing.T) {
 	}{
 		{
 			name: "save catalog with repositories",
-			setupFunc: func(t *testing.T, ctx context.Context) {
+			setupFunc: func(_ *testing.T, _ context.Context) {
 				Catalog = map[string]scm.Repository{
 					"repo1": {
 						Name:          "repo1",
@@ -291,7 +291,7 @@ func TestSaveCatalogCache(t *testing.T) {
 		},
 		{
 			name: "save empty catalog",
-			setupFunc: func(t *testing.T, ctx context.Context) {
+			setupFunc: func(_ *testing.T, _ context.Context) {
 				Catalog = make(map[string]scm.Repository)
 			},
 			wantError: false,
@@ -1109,7 +1109,7 @@ func TestInitWithFakeProvider(t *testing.T) {
 	fakeProvider := fake.NewFake("test-project", testRepos)
 
 	// Register fake provider
-	scm.Register("fake-test", func(ctx context.Context, project string) scm.Provider {
+	scm.Register("fake-test", func(_ context.Context, _ string) scm.Provider {
 		return fakeProvider
 	})
 
@@ -1637,9 +1637,9 @@ func TestInitWithFlush(t *testing.T) {
 	resetCatalogState(t)
 
 	// Register a fake provider that returns different data
-	scm.Register("fake-flush-test", func(ctx context.Context, project string) scm.Provider {
-		return fake.NewFake("test-project", []*scm.Repository{
-			{Name: "new-repo", Project: "test-project", Labels: []string{"new"}},
+	scm.Register("fake-flush-test", func(_ context.Context, project string) scm.Provider {
+		return fake.NewFake(project, []*scm.Repository{
+			{Name: "new-repo", Project: project, Labels: []string{"new"}},
 		})
 	})
 	viper.Set(config.GitProvider, "fake-flush-test")
@@ -1678,9 +1678,9 @@ func TestInitRepositoryCatalogWithFlush(t *testing.T) {
 				setupCacheFile(t, ctx, repos, time.Now().Add(-10*time.Second))
 
 				// Register fake provider
-				scm.Register("fake-flush", func(ctx context.Context, project string) scm.Provider {
-					return fake.NewFake("test-project", []*scm.Repository{
-						{Name: "fresh-repo", Project: "test-project", Labels: []string{"fresh"}},
+				scm.Register("fake-flush", func(_ context.Context, project string) scm.Provider {
+					return fake.NewFake(project, []*scm.Repository{
+						{Name: "fresh-repo", Project: project, Labels: []string{"fresh"}},
 					})
 				})
 				viper := config.Viper(ctx)
@@ -1712,7 +1712,7 @@ func TestInitRepositoryCatalogWithFlush(t *testing.T) {
 		{
 			name:  "flush refetches even with already populated catalog",
 			flush: true,
-			setupFunc: func(t *testing.T, ctx context.Context) {
+			setupFunc: func(_ *testing.T, ctx context.Context) {
 				// Pre-populate catalog
 				Catalog = map[string]scm.Repository{
 					"test-project/existing-repo": {
@@ -1723,9 +1723,9 @@ func TestInitRepositoryCatalogWithFlush(t *testing.T) {
 				}
 
 				// Register fake provider that would return different data
-				scm.Register("fake-flush-2", func(ctx context.Context, project string) scm.Provider {
-					return fake.NewFake("test-project", []*scm.Repository{
-						{Name: "new-repo", Project: "test-project", Labels: []string{"new"}},
+				scm.Register("fake-flush-2", func(_ context.Context, project string) scm.Provider {
+					return fake.NewFake(project, []*scm.Repository{
+						{Name: "new-repo", Project: project, Labels: []string{"new"}},
 					})
 				})
 				viper := config.Viper(ctx)
@@ -1791,9 +1791,9 @@ func TestFlushTTL(t *testing.T) {
 	setupCacheFile(t, ctx, repos, time.Now().Add(-10*time.Second))
 
 	// Register fake provider with different data
-	scm.Register("fake-flush-ttl", func(ctx context.Context, project string) scm.Provider {
-		return fake.NewFake("test-project", []*scm.Repository{
-			{Name: "new-repo", Project: "test-project", Labels: []string{"new"}},
+	scm.Register("fake-flush-ttl", func(_ context.Context, project string) scm.Provider {
+		return fake.NewFake(project, []*scm.Repository{
+			{Name: "new-repo", Project: project, Labels: []string{"new"}},
 		})
 	})
 	viper.Set(config.GitProvider, "fake-flush-ttl")

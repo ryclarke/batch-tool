@@ -12,7 +12,7 @@ import (
 
 	"github.com/ryclarke/batch-tool/config"
 	"github.com/ryclarke/batch-tool/output"
-	testhelper "github.com/ryclarke/batch-tool/utils/test"
+	testhelper "github.com/ryclarke/batch-tool/utils/testing"
 )
 
 // TestDo tests the Do function which orchestrates concurrent repository operations
@@ -20,7 +20,7 @@ func TestDo(t *testing.T) {
 	tests := []struct {
 		name          string
 		repos         []string
-		callFunc      CallFunc
+		callFunc      Func
 		channelBuffer int
 		wantOutput    map[string]string // repo -> expected output
 		wantError     bool
@@ -369,7 +369,7 @@ func TestDoWithContextCancellation(t *testing.T) {
 	// Create a cancellable context
 	cancelCtx, cancel := context.WithCancel(ctx)
 
-	// CallFunc that takes time and allows cancellation
+	// Func that takes time and allows cancellation
 	slowFunc := func(ctx context.Context, ch output.Channel) error {
 		select {
 		case <-time.After(100 * time.Millisecond):

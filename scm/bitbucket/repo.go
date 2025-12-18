@@ -98,7 +98,7 @@ func (b *Bitbucket) getLabels(repo string) ([]string, error) {
 }
 
 type defaultBranchResp struct {
-	DisplayId string `json:"displayId"`
+	DisplayID string `json:"displayId"`
 }
 
 func (b *Bitbucket) getDefaultBranch(repo string) (string, error) {
@@ -107,5 +107,5 @@ func (b *Bitbucket) getDefaultBranch(repo string) (string, error) {
 		return "", err
 	}
 
-	return resp.DisplayId, nil
+	return resp.DisplayID, nil
 }

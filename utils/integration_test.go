@@ -5,12 +5,11 @@ import (
 	"path/filepath"
 	"testing"
 
-	testhelper "github.com/ryclarke/batch-tool/utils/test"
-
 	"github.com/ryclarke/batch-tool/config"
 	"github.com/ryclarke/batch-tool/scm"
 	"github.com/ryclarke/batch-tool/scm/fake"
 	"github.com/ryclarke/batch-tool/utils"
+	testhelper "github.com/ryclarke/batch-tool/utils/testing"
 )
 
 func TestSCMIntegrationWithUtils(t *testing.T) {
@@ -25,7 +24,7 @@ func TestSCMIntegrationWithUtils(t *testing.T) {
 	viper.Set(config.GitDirectory, "/tmp/test-gitdir")
 
 	// Register fake provider with test repositories
-	scm.Register("fake-utils-test", func(ctx context.Context, project string) scm.Provider {
+	scm.Register("fake-utils-test", func(_ context.Context, project string) scm.Provider {
 		return fake.NewFake(project, fake.CreateTestRepositories(project))
 	})
 
@@ -216,7 +215,7 @@ func TestUtilsWithFakeRepositories(t *testing.T) {
 	ctx := loadFixture(t)
 
 	// Register fake provider
-	scm.Register("utils-fake-provider", func(ctx context.Context, project string) scm.Provider {
+	scm.Register("utils-fake-provider", func(_ context.Context, project string) scm.Provider {
 		return fake.NewFake(project, fake.CreateTestRepositories(project))
 	})
 

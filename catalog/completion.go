@@ -5,9 +5,10 @@ import (
 	"strings"
 
 	mapset "github.com/deckarep/golang-set/v2"
+	"github.com/spf13/cobra"
+
 	"github.com/ryclarke/batch-tool/config"
 	"github.com/ryclarke/batch-tool/utils"
-	"github.com/spf13/cobra"
 )
 
 // NoCompletion provides a no-op completion function to disable file completions for interstitial commands.

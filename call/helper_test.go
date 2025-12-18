@@ -11,9 +11,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ryclarke/batch-tool/output"
-	testhelper "github.com/ryclarke/batch-tool/utils/test"
 	"github.com/spf13/cobra"
+
+	"github.com/ryclarke/batch-tool/output"
+	testhelper "github.com/ryclarke/batch-tool/utils/testing"
 )
 
 func loadFixture(t *testing.T) context.Context {
@@ -26,8 +27,8 @@ func fakeCmd(t *testing.T, ctx context.Context, out io.Writer) *cobra.Command {
 	return testhelper.FakeCmd(t, ctx, out)
 }
 
-// fakeCallFunc returns a CallFunc that sends the specified output messages to the channel.
-func fakeCallFunc(t *testing.T, wantErr bool, wantOutput ...string) CallFunc {
+// fakeCallFunc returns a Func that sends the specified output messages to the channel.
+func fakeCallFunc(t *testing.T, wantErr bool, wantOutput ...string) Func {
 	t.Helper()
 
 	return func(_ context.Context, ch output.Channel) error {
@@ -47,7 +48,7 @@ func fakeCallFunc(t *testing.T, wantErr bool, wantOutput ...string) CallFunc {
 	}
 }
 
-func fakeCallFuncConcurrent(t *testing.T, activeWorkers, maxConcurrent, count *int64, mutex *sync.Mutex, workDuration time.Duration) CallFunc {
+func fakeCallFuncConcurrent(t *testing.T, activeWorkers, maxConcurrent, count *int64, mutex *sync.Mutex, workDuration time.Duration) Func {
 	t.Helper()
 
 	return func(_ context.Context, ch output.Channel) error {

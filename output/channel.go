@@ -1,3 +1,4 @@
+// Package output provides output handling and formatting for batch operations.
 package output
 
 import (
@@ -5,21 +6,25 @@ import (
 	"io"
 	"sync"
 
-	"github.com/ryclarke/batch-tool/config"
 	"golang.org/x/sync/semaphore"
+
+	"github.com/ryclarke/batch-tool/config"
 )
 
+// Channel represents an output channel for concurrent operations
 type Channel interface {
 	// Name returns the name of the channel.
 	Name() string
 
 	// Out returns the output channel for reading.
-	Out() <-chan string
+	Out() <-chan []byte
 	// Err returns the error channel for reading.
 	Err() <-chan error
 
-	// WriteString writes a string to the output channel.
+	// WriteString writes a whole line to the output channel as a string.
 	io.StringWriter
+	// Write bytes directly to the output channel.
+	io.Writer
 
 	// WriteError writes an error to the error channel.
 	WriteError(err error)
@@ -31,10 +36,11 @@ type Channel interface {
 	io.Closer
 }
 
+// NewChannel creates a new output channel with the given context, name, semaphore, and wait group
 func NewChannel(ctx context.Context, name string, sem *semaphore.Weighted, wg *sync.WaitGroup) Channel {
 	return &channel{
 		name:   name,
-		output: make(chan string, config.Viper(ctx).GetInt(config.ChannelBuffer)),
+		output: make(chan []byte, config.Viper(ctx).GetInt(config.ChannelBuffer)),
 		err:    make(chan error, 1),
 
 		ctx: ctx,
@@ -45,7 +51,7 @@ func NewChannel(ctx context.Context, name string, sem *semaphore.Weighted, wg *s
 
 type channel struct {
 	name   string
-	output chan string
+	output chan []byte
 	err    chan error
 
 	ctx context.Context
@@ -59,7 +65,7 @@ func (c *channel) Name() string {
 	return c.name
 }
 
-func (c *channel) Out() <-chan string {
+func (c *channel) Out() <-chan []byte {
 	return c.output
 }
 
@@ -67,9 +73,27 @@ func (c *channel) Err() <-chan error {
 	return c.err
 }
 
+func (c *channel) Write(p []byte) (n int, _ error) {
+	if len(p) == 0 {
+		return 0, nil
+	}
+
+	// Make a copy to prevent caller from modifying the buffer
+	buf := make([]byte, len(p))
+	copy(buf, p)
+	c.output <- buf
+
+	return len(p), nil
+}
+
 // WriteString writes a string to the output channel and always returns a nil error.
+// Each string is treated as a line and terminated with a newline in the output.
 func (c *channel) WriteString(s string) (n int, _ error) {
-	c.output <- s
+	if len(s) == 0 {
+		return 0, nil
+	}
+
+	c.output <- []byte(s + "\n")
 	return len(s), nil
 }
 

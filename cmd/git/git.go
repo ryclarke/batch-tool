@@ -6,10 +6,11 @@ import (
 	"os/exec"
 	"strings"
 
+	"github.com/spf13/cobra"
+
 	"github.com/ryclarke/batch-tool/config"
 	"github.com/ryclarke/batch-tool/output"
 	"github.com/ryclarke/batch-tool/utils"
-	"github.com/spf13/cobra"
 )
 
 // Cmd configures the root git command along with all subcommands and flags

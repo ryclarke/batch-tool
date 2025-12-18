@@ -1,3 +1,4 @@
+// Package pr provides pull request management commands for batch-tool.
 package pr
 
 import (
@@ -62,7 +63,7 @@ func Edit(ctx context.Context, ch output.Channel) error {
 		return err
 	}
 
-	ch.WriteString(fmt.Sprintf("Updated pull request (#%d) %s %v\n", pr.Number, pr.Title, pr.Reviewers))
+	fmt.Fprintf(ch, "Updated pull request (#%d) %s %v\n", pr.Number, pr.Title, pr.Reviewers)
 
 	return nil
 }

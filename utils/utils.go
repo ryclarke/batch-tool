@@ -1,3 +1,4 @@
+// Package utils provides utility functions and helpers for batch-tool.
 package utils
 
 import (
@@ -7,8 +8,9 @@ import (
 	"strings"
 
 	mapset "github.com/deckarep/golang-set/v2"
-	"github.com/ryclarke/batch-tool/config"
 	"github.com/spf13/cobra"
+
+	"github.com/ryclarke/batch-tool/config"
 )
 
 // CleanFilter standardizes the formatting of an imput argument by removing all configured signal tokens

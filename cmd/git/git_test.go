@@ -6,7 +6,7 @@ import (
 
 	"github.com/ryclarke/batch-tool/config"
 	"github.com/ryclarke/batch-tool/output"
-	testhelper "github.com/ryclarke/batch-tool/utils/test"
+	testhelper "github.com/ryclarke/batch-tool/utils/testing"
 )
 
 func TestGitCmd(t *testing.T) {

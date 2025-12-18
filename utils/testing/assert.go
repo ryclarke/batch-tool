@@ -1,4 +1,5 @@
-package test
+// Package testing provides utility functions for testing purposes across multiple packages.
+package testing
 
 import (
 	"reflect"

@@ -71,7 +71,7 @@ func New(ctx context.Context, ch output.Channel) error {
 		return err
 	}
 
-	ch.WriteString(fmt.Sprintf("New pull request (#%d) %s %v\n", pr.Number, pr.Branch, pr.Reviewers))
+	fmt.Fprintf(ch, "New pull request (#%d) %s %v\n", pr.Number, pr.Branch, pr.Reviewers)
 
 	return nil
 }

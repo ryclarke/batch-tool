@@ -49,9 +49,9 @@ func Get(ctx context.Context, ch output.Channel) error {
 		return fmt.Errorf("failed to get pull request for %s: %w", ch.Name(), err)
 	}
 
-	ch.WriteString(fmt.Sprintf("(PR #%d) %s %v\n", pr.Number, pr.Title, pr.Reviewers))
+	fmt.Fprintf(ch, "(PR #%d) %s %v\n", pr.Number, pr.Title, pr.Reviewers)
 	if pr.Description != "" {
-		ch.WriteString(fmt.Sprintln(pr.Description))
+		fmt.Fprintln(ch, pr.Description)
 	}
 
 	return nil

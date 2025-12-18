@@ -1,6 +1,5 @@
-/* Package test provides utility functions for testing purposes across multiple packages.
- */
-package test
+// Package testing provides utility functions for testing purposes across multiple packages.
+package testing
 
 import (
 	"context"
@@ -8,9 +7,10 @@ import (
 	"os"
 	"testing"
 
+	"github.com/spf13/cobra"
+
 	"github.com/ryclarke/batch-tool/config"
 	"github.com/ryclarke/batch-tool/utils"
-	"github.com/spf13/cobra"
 )
 
 // LoadFixture loads test configuration from the config package.

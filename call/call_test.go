@@ -2,11 +2,12 @@ package call
 
 import (
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/ryclarke/batch-tool/output"
 	"github.com/ryclarke/batch-tool/utils"
-	testhelper "github.com/ryclarke/batch-tool/utils/test"
+	testhelper "github.com/ryclarke/batch-tool/utils/testing"
 )
 
 // TestWrap tests the Wrap function which combines multiple CallFuncs
@@ -19,14 +20,14 @@ func TestWrap(t *testing.T) {
 
 	tests := []struct {
 		name       string
-		callFuncs  []CallFunc
+		callFuncs  []Func
 		repo       string
 		wantOutput []string
 		wantError  bool
 	}{
 		{
 			name: "basic wrap with two functions",
-			callFuncs: []CallFunc{
+			callFuncs: []Func{
 				fakeCallFunc(t, false, output1),
 				fakeCallFunc(t, false, output2),
 			},
@@ -35,7 +36,7 @@ func TestWrap(t *testing.T) {
 		},
 		{
 			name: "wrap with error in first function",
-			callFuncs: []CallFunc{
+			callFuncs: []Func{
 				fakeCallFunc(t, true, output1),
 				fakeCallFunc(t, false, output2),
 			},
@@ -45,7 +46,7 @@ func TestWrap(t *testing.T) {
 		},
 		{
 			name: "wrap with error in second function",
-			callFuncs: []CallFunc{
+			callFuncs: []Func{
 				fakeCallFunc(t, false, output1),
 				fakeCallFunc(t, true, output2),
 			},
@@ -55,13 +56,13 @@ func TestWrap(t *testing.T) {
 		},
 		{
 			name:       "wrap with no CallFuncs",
-			callFuncs:  []CallFunc{},
+			callFuncs:  []Func{},
 			repo:       testRepo,
 			wantOutput: []string{},
 		},
 		{
 			name: "wrap with single function",
-			callFuncs: []CallFunc{
+			callFuncs: []Func{
 				fakeCallFunc(t, false, "test output"),
 			},
 			repo:       testRepo,
@@ -69,7 +70,7 @@ func TestWrap(t *testing.T) {
 		},
 		{
 			name: "wrap repository cloning scenario",
-			callFuncs: []CallFunc{
+			callFuncs: []Func{
 				fakeCallFunc(t, false, "test after clone"),
 			},
 			repo:       "nonexistent-repo",
@@ -88,10 +89,14 @@ func TestWrap(t *testing.T) {
 			err := wrapper(ctx, ch)
 			ch.Close()
 
-			// Collect output
-			var res []string
+			// Collect output - reconstruct lines from byte chunks
+			var buffer []byte
 			for msg := range ch.Out() {
-				res = append(res, msg)
+				buffer = append(buffer, msg...)
+			}
+			res := strings.Split(strings.TrimSuffix(string(buffer), "\n"), "\n")
+			if len(buffer) == 0 {
+				res = []string{}
 			}
 
 			testhelper.AssertOutput(t, res, tt.wantOutput, err, tt.wantError)
@@ -170,10 +175,14 @@ func TestExec(t *testing.T) {
 			err := execFunc(ctx, ch)
 			ch.Close()
 
-			// Collect output
-			var output []string
+			// Collect output - reconstruct lines from byte chunks
+			var buffer []byte
 			for msg := range ch.Out() {
-				output = append(output, msg)
+				buffer = append(buffer, msg...)
+			}
+			output := strings.Split(strings.TrimSuffix(string(buffer), "\n"), "\n")
+			if len(buffer) == 0 {
+				output = []string{}
 			}
 
 			testhelper.AssertOutput(t, output, tt.wantOutput, err, tt.wantError)

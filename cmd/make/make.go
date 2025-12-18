@@ -1,3 +1,4 @@
+// Package make provides make target execution functionality for batch-tool.
 package make
 
 import (

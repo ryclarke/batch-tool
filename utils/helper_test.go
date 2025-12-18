@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	testhelper "github.com/ryclarke/batch-tool/utils/test"
+	testhelper "github.com/ryclarke/batch-tool/utils/testing"
 )
 
 // loadFixture loads test configuration fixture

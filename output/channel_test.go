@@ -2,6 +2,7 @@ package output
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"testing"
 	"time"
@@ -69,7 +70,7 @@ func Test_channel_Name(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			c := &channel{
 				name:   tt.want,
-				output: make(chan string),
+				output: make(chan []byte),
 				err:    make(chan error),
 				ctx:    context.Background(),
 			}
@@ -82,7 +83,7 @@ func Test_channel_Name(t *testing.T) {
 
 func Test_channel_Out(t *testing.T) {
 	t.Run("returns output channel for reading", func(t *testing.T) {
-		outChan := make(chan string)
+		outChan := make(chan []byte)
 		c := &channel{
 			name:   "test",
 			output: outChan,
@@ -97,12 +98,12 @@ func Test_channel_Out(t *testing.T) {
 
 		// Test that we can read from it
 		go func() {
-			outChan <- "test message"
+			outChan <- []byte("test message")
 		}()
 
 		msg := <-got
-		if msg != "test message" {
-			t.Errorf("Expected to read 'test message', got %s", msg)
+		if string(msg) != "test message" {
+			t.Errorf("Expected to read 'test message', got %s", string(msg))
 		}
 	})
 }
@@ -112,7 +113,7 @@ func Test_channel_Err(t *testing.T) {
 		errChan := make(chan error)
 		c := &channel{
 			name:   "test",
-			output: make(chan string),
+			output: make(chan []byte),
 			err:    errChan,
 			ctx:    context.Background(),
 		}
@@ -129,7 +130,7 @@ func Test_channel_Err(t *testing.T) {
 		}()
 
 		err := <-got
-		if err != testErr {
+		if !errors.Is(err, testErr) {
 			t.Errorf("Expected to read context.Canceled, got %v", err)
 		}
 	})
@@ -139,7 +140,7 @@ func Test_channel_Start(t *testing.T) {
 	t.Run("starts without semaphore", func(t *testing.T) {
 		c := &channel{
 			name:   "test",
-			output: make(chan string),
+			output: make(chan []byte),
 			err:    make(chan error),
 			ctx:    context.Background(),
 			sem:    nil,
@@ -168,7 +169,7 @@ func Test_channel_Start(t *testing.T) {
 		sem := semaphore.NewWeighted(10)
 		c := &channel{
 			name:   "test",
-			output: make(chan string),
+			output: make(chan []byte),
 			err:    make(chan error),
 			ctx:    context.Background(),
 			sem:    sem,
@@ -201,7 +202,7 @@ func Test_channel_Start(t *testing.T) {
 
 		c := &channel{
 			name:   "test",
-			output: make(chan string),
+			output: make(chan []byte),
 			err:    make(chan error),
 			ctx:    context.Background(),
 			sem:    nil,
@@ -238,7 +239,7 @@ func Test_channel_Start(t *testing.T) {
 		sem := semaphore.NewWeighted(10)
 		c := &channel{
 			name:   "test",
-			output: make(chan string),
+			output: make(chan []byte),
 			err:    make(chan error),
 			ctx:    context.Background(),
 			sem:    sem,
@@ -263,7 +264,7 @@ func Test_channel_Start(t *testing.T) {
 		sem := semaphore.NewWeighted(10)
 		c := &channel{
 			name:   "test",
-			output: make(chan string),
+			output: make(chan []byte),
 			err:    make(chan error),
 			ctx:    context.Background(),
 			sem:    sem,
@@ -291,7 +292,7 @@ func Test_channel_Start(t *testing.T) {
 		sem := semaphore.NewWeighted(10)
 		c := &channel{
 			name:   "test",
-			output: make(chan string),
+			output: make(chan []byte),
 			err:    make(chan error),
 			ctx:    ctx,
 			sem:    sem,

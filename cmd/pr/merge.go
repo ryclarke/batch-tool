@@ -57,7 +57,7 @@ func Merge(ctx context.Context, ch output.Channel) error {
 		return err
 	}
 
-	ch.WriteString(fmt.Sprintf("Merged pull request (#%d) %s\n", pr.Number, pr.Title))
+	fmt.Fprintf(ch, "Merged pull request (#%d) %s\n", pr.Number, pr.Title)
 
 	return nil
 }
