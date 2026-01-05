@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/ryclarke/batch-tool/config"
-	testhelper "github.com/ryclarke/batch-tool/utils/test"
+	testhelper "github.com/ryclarke/batch-tool/utils/testing"
 )
 
 func TestAddCommitCmd(t *testing.T) {
@@ -106,7 +106,7 @@ func TestCommitCommandRun(t *testing.T) {
 			expectedOutput: []string{
 				"repo-1",
 			},
-			setupFunc: func(t *testing.T, repoPath string) {},
+			setupFunc: func(_ *testing.T, _ string) {},
 		},
 		{
 			name:    "Amend commit",

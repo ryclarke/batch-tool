@@ -7,12 +7,13 @@ import (
 	"testing"
 
 	mapset "github.com/deckarep/golang-set/v2"
+
 	"github.com/ryclarke/batch-tool/call"
 	"github.com/ryclarke/batch-tool/catalog"
 	"github.com/ryclarke/batch-tool/config"
 	"github.com/ryclarke/batch-tool/output"
 	"github.com/ryclarke/batch-tool/scm"
-	testhelper "github.com/ryclarke/batch-tool/utils/test"
+	testhelper "github.com/ryclarke/batch-tool/utils/testing"
 )
 
 // TestNativeHandler tests that NativeHandler properly handles and prints messages and errors
@@ -25,10 +26,10 @@ func TestNativeHandler(t *testing.T) {
 	viper.Set(config.ChannelBuffer, 10)
 	viper.Set(config.SortRepos, false)
 
-	// CallFunc that returns an error
-	errorFunc := func(_ context.Context, repo string, ch chan<- string) error {
-		ch <- "some output before error"
-		return errors.New("test error for " + repo)
+	// Func that returns an error
+	errorFunc := func(_ context.Context, ch output.Channel) error {
+		ch.WriteString("some output before error")
+		return errors.New("test error for " + ch.Name())
 	}
 
 	var buf, errBuf bytes.Buffer

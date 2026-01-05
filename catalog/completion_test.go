@@ -5,9 +5,10 @@ import (
 	"testing"
 
 	mapset "github.com/deckarep/golang-set/v2"
+	"github.com/spf13/cobra"
+
 	"github.com/ryclarke/batch-tool/config"
 	"github.com/ryclarke/batch-tool/scm"
-	"github.com/spf13/cobra"
 )
 
 // checkCompletionCount checks that the number of completions matches the expected count
@@ -22,9 +23,7 @@ func checkCompletionCount(t *testing.T, completions []cobra.Completion, wantCoun
 func checkCompletionContains(t *testing.T, completions []cobra.Completion, wantCompletions []string) {
 	t.Helper()
 	completionStrings := make([]string, len(completions))
-	for i, c := range completions {
-		completionStrings[i] = string(c)
-	}
+	copy(completionStrings, completions)
 	completionSet := mapset.NewSet(completionStrings...)
 
 	for _, expected := range wantCompletions {
@@ -38,9 +37,7 @@ func checkCompletionContains(t *testing.T, completions []cobra.Completion, wantC
 func checkCompletionNotContains(t *testing.T, completions []cobra.Completion, unwantedCompletions []string) {
 	t.Helper()
 	completionStrings := make([]string, len(completions))
-	for i, c := range completions {
-		completionStrings[i] = string(c)
-	}
+	copy(completionStrings, completions)
 	completionSet := mapset.NewSet(completionStrings...)
 
 	for _, notExpected := range unwantedCompletions {
@@ -69,7 +66,7 @@ func checkSetCardinality(t *testing.T, set mapset.Set[cobra.Completion], wantSiz
 // checkSetContains verifies a set contains an expected value
 func checkSetContains(t *testing.T, set mapset.Set[cobra.Completion], wantValue string) {
 	t.Helper()
-	if !set.Contains(cobra.Completion(wantValue)) {
+	if !set.Contains(wantValue) {
 		t.Errorf("Expected set to contain '%s', got %v", wantValue, set.ToSlice())
 	}
 }

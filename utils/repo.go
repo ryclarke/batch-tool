@@ -11,7 +11,7 @@ import (
 )
 
 // CatalogLookup is a function type for looking up project from catalog
-var CatalogLookup func(ctx context.Context, repoName string) string
+var CatalogLookup = defaultCatalogLookup
 
 // ParseRepo splits a repo identifier into its component parts
 func ParseRepo(ctx context.Context, repo string) (host, project, name string) {
@@ -97,21 +97,6 @@ func LookupBranch(ctx context.Context, name string) (string, error) {
 	return branch, nil
 }
 
-// ValidateBranch returns an error if the current git branch is the source branch
-func ValidateBranch(ctx context.Context, repo string, ch chan<- string) error {
-	viper := config.Viper(ctx)
-
-	cmd := exec.Command("git", "rev-parse", "--abbrev-ref", "HEAD")
-	cmd.Dir = RepoPath(ctx, repo)
-
-	output, err := cmd.Output()
-	if err != nil {
-		return err
-	}
-
-	if strings.TrimSpace(string(output)) == strings.TrimSpace(viper.GetString(config.SourceBranch)) {
-		return fmt.Errorf("skipping operation - %s is the source branch", output)
-	}
-
-	return nil
+func defaultCatalogLookup(ctx context.Context, _ string) string {
+	return config.Viper(ctx).GetString(config.GitProject)
 }

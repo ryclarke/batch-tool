@@ -1,3 +1,4 @@
+// Package git provides git operations commands for batch-tool.
 package git
 
 import (
@@ -8,6 +9,7 @@ import (
 	"github.com/ryclarke/batch-tool/call"
 	"github.com/ryclarke/batch-tool/catalog"
 	"github.com/ryclarke/batch-tool/config"
+	"github.com/ryclarke/batch-tool/output"
 	"github.com/ryclarke/batch-tool/utils"
 )
 
@@ -41,8 +43,8 @@ func addBranchCmd() *cobra.Command {
 }
 
 // Branch checks out a new branch in the given repository.
-func Branch(ctx context.Context, name string, ch chan<- string) error {
+func Branch(ctx context.Context, ch output.Channel) error {
 	branch := config.Viper(ctx).GetString(config.Branch)
 
-	return call.Exec("git", "checkout", "-B", branch)(ctx, name, ch)
+	return call.Exec("git", "checkout", "-B", branch)(ctx, ch)
 }

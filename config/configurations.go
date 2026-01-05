@@ -1,3 +1,4 @@
+// Package config provides configuration management for batch-tool.
 package config
 
 import (
@@ -14,6 +15,7 @@ import (
 )
 
 var (
+	// CfgFile specifies the configuration file path
 	CfgFile string
 
 	// Version is dynamically set at build time using the -X linker flag.
@@ -24,15 +26,15 @@ var (
 const (
 	EnvGopath = "gopath"
 
-	GitUser      = "git.user"
-	GitHost      = "git.host"
-	GitProject   = "git.project"
-	GitProjects  = "git.projects"
-	GitProvider  = "git.provider"
-	GitDirectory = "git.directory"
-	SourceBranch = "git.default-branch"
+	GitUser       = "git.user"
+	GitHost       = "git.host"
+	GitProject    = "git.project"
+	GitProjects   = "git.projects"
+	GitProvider   = "git.provider"
+	GitDirectory  = "git.directory"
+	DefaultBranch = "git.default-branch"
 
-	// User, Host, Project, Repo
+	// CloneSSHURLTmpl is the SSH URL template with placeholders: User, Host, Project, Repo
 	CloneSSHURLTmpl = "ssh://%s@%s/%s/%s.git"
 
 	SortRepos        = "repos.sort"
@@ -138,7 +140,7 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault(GitHost, "github.com")
 	v.SetDefault(GitProvider, "github")
 	v.SetDefault(GitProjects, []string{})
-	v.SetDefault(SourceBranch, "main")
+	v.SetDefault(DefaultBranch, "main")
 	v.SetDefault(SortRepos, true)
 
 	v.SetDefault(SkipUnwanted, true)

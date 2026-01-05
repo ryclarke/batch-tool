@@ -1,13 +1,14 @@
+// Package github provides GitHub SCM integration for batch-tool.
 package github
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/google/go-github/v74/github"
 
 	"github.com/ryclarke/batch-tool/catalog"
-	"github.com/ryclarke/batch-tool/config"
 	"github.com/ryclarke/batch-tool/scm"
 )
 
@@ -28,11 +29,8 @@ func (g *Github) OpenPullRequest(repo, branch, title, description string, review
 		return nil, fmt.Errorf("a pull request already exists for branch %s in repository %s", branch, repo)
 	}
 
-	// check default branch for the current repo, or use the fallback config
-	defaultBranch := catalog.Catalog[repo].DefaultBranch
-	if defaultBranch == "" {
-		defaultBranch = config.Viper(g.ctx).GetString(config.SourceBranch)
-	}
+	// check default branch for the current repo
+	defaultBranch := catalog.GetBranchForRepo(g.ctx, repo)
 
 	// if title is not specified, use the branch name
 	if title == "" {
@@ -61,7 +59,7 @@ func (g *Github) OpenPullRequest(repo, branch, title, description string, review
 }
 
 // UpdatePullRequest updates an existing pull request.
-func (g *Github) UpdatePullRequest(repo, branch, title, description string, reviewers []string, appendReviewers bool) (*scm.PullRequest, error) {
+func (g *Github) UpdatePullRequest(repo, branch, title, description string, reviewers []string, _ bool) (*scm.PullRequest, error) {
 	pr, err := g.getPullRequest(context.TODO(), repo, branch)
 	if err != nil {
 		return nil, err
@@ -87,6 +85,7 @@ func (g *Github) UpdatePullRequest(repo, branch, title, description string, revi
 	return parsePR(pr), nil
 }
 
+// MergePullRequest merges an existing pull request
 func (g *Github) MergePullRequest(repo, branch string, force bool) (*scm.PullRequest, error) {
 	pr, err := g.getPullRequest(context.TODO(), repo, branch)
 	if err != nil {
@@ -115,18 +114,18 @@ func (g *Github) getPullRequest(ctx context.Context, repo, branch string) (*gith
 
 	resp, _, err := g.client.PullRequests.List(ctx, g.project, repo, opts)
 	if err != nil {
-		if _, ok := err.(*github.RateLimitError); !ok {
+		rateLimitError := &github.RateLimitError{}
+		if errors.As(err, &rateLimitError) {
 			return nil, fmt.Errorf("failed to get pull request: %w", err)
-		} else {
-			if rateErr := g.waitForRateLimit(ctx, true); rateErr != nil {
-				return nil, fmt.Errorf("failed to get pull request: %w: %w", rateErr, err)
-			}
+		}
+		if rateErr := g.waitForRateLimit(ctx, true); rateErr != nil {
+			return nil, fmt.Errorf("failed to get pull request: %w: %w", rateErr, err)
+		}
 
-			// retry the request after waiting for the rate limit to reset
-			resp, _, err = g.client.PullRequests.List(ctx, g.project, repo, opts)
-			if err != nil {
-				return nil, fmt.Errorf("failed to get pull request after retry: %w", err)
-			}
+		// retry the request after waiting for the rate limit to reset
+		resp, _, err = g.client.PullRequests.List(ctx, g.project, repo, opts)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get pull request after retry: %w", err)
 		}
 	}
 
@@ -143,18 +142,18 @@ func (g *Github) openPullRequest(ctx context.Context, repo string, req *github.N
 
 	resp, _, err := g.client.PullRequests.Create(ctx, g.project, repo, req)
 	if err != nil {
-		if _, ok := err.(*github.RateLimitError); !ok {
+		rateLimitError := &github.RateLimitError{}
+		if errors.As(err, &rateLimitError) {
 			return nil, fmt.Errorf("failed to open pull request: %w", err)
-		} else {
-			if rateErr := g.waitForRateLimit(ctx, false); rateErr != nil {
-				return nil, fmt.Errorf("failed to open pull request: %w: %w", rateErr, err)
-			}
+		}
+		if rateErr := g.waitForRateLimit(ctx, false); rateErr != nil {
+			return nil, fmt.Errorf("failed to open pull request: %w: %w", rateErr, err)
+		}
 
-			// retry the request after waiting for the rate limit to reset
-			resp, _, err = g.client.PullRequests.Create(ctx, g.project, repo, req)
-			if err != nil {
-				return nil, fmt.Errorf("failed to open pull request after retry: %w", err)
-			}
+		// retry the request after waiting for the rate limit to reset
+		resp, _, err = g.client.PullRequests.Create(ctx, g.project, repo, req)
+		if err != nil {
+			return nil, fmt.Errorf("failed to open pull request after retry: %w", err)
 		}
 	}
 
@@ -167,17 +166,17 @@ func (g *Github) editPullRequest(ctx context.Context, repo string, prNumber int,
 
 	pr, _, err := g.client.PullRequests.Edit(ctx, g.project, repo, prNumber, req)
 	if err != nil {
-		if _, ok := err.(*github.RateLimitError); !ok {
+		rateLimitError := &github.RateLimitError{}
+		if errors.As(err, &rateLimitError) {
 			return nil, fmt.Errorf("failed to update pull request: %w", err)
-		} else {
-			if rateErr := g.waitForRateLimit(ctx, false); rateErr != nil {
-				return nil, fmt.Errorf("failed to update pull request: %w: %w", rateErr, err)
-			}
+		}
+		if rateErr := g.waitForRateLimit(ctx, false); rateErr != nil {
+			return nil, fmt.Errorf("failed to update pull request: %w: %w", rateErr, err)
+		}
 
-			// retry the request after waiting for the rate limit to reset
-			if pr, _, err = g.client.PullRequests.Edit(ctx, g.project, repo, prNumber, req); err != nil {
-				return nil, fmt.Errorf("failed to update pull request after retry: %w", err)
-			}
+		// retry the request after waiting for the rate limit to reset
+		if pr, _, err = g.client.PullRequests.Edit(ctx, g.project, repo, prNumber, req); err != nil {
+			return nil, fmt.Errorf("failed to update pull request after retry: %w", err)
 		}
 	}
 
@@ -190,17 +189,17 @@ func (g *Github) requestReviewers(ctx context.Context, repo string, prNumber int
 
 	resp, _, err := g.client.PullRequests.RequestReviewers(ctx, g.project, repo, prNumber, req)
 	if err != nil {
-		if _, ok := err.(*github.RateLimitError); !ok {
+		rateLimitError := &github.RateLimitError{}
+		if errors.As(err, &rateLimitError) {
 			return nil, fmt.Errorf("failed to request reviewers: %w", err)
-		} else {
-			if rateErr := g.waitForRateLimit(ctx, false); rateErr != nil {
-				return nil, fmt.Errorf("failed to request reviewers: %w: %w", rateErr, err)
-			}
+		}
+		if rateErr := g.waitForRateLimit(ctx, false); rateErr != nil {
+			return nil, fmt.Errorf("failed to request reviewers: %w: %w", rateErr, err)
+		}
 
-			// retry the request after waiting for the rate limit to reset
-			if resp, _, err = g.client.PullRequests.RequestReviewers(ctx, g.project, repo, prNumber, req); err != nil {
-				return nil, fmt.Errorf("failed to request reviewers after retry: %w", err)
-			}
+		// retry the request after waiting for the rate limit to reset
+		if resp, _, err = g.client.PullRequests.RequestReviewers(ctx, g.project, repo, prNumber, req); err != nil {
+			return nil, fmt.Errorf("failed to request reviewers after retry: %w", err)
 		}
 	}
 
@@ -213,17 +212,17 @@ func (g *Github) mergePullRequest(ctx context.Context, repo string, prNumber int
 
 	_, _, err := g.client.PullRequests.Merge(ctx, g.project, repo, prNumber, "", nil)
 	if err != nil {
-		if _, ok := err.(*github.RateLimitError); !ok {
+		rateLimitError := &github.RateLimitError{}
+		if errors.As(err, &rateLimitError) {
 			return fmt.Errorf("failed to merge pull request: %w", err)
-		} else {
-			if rateErr := g.waitForRateLimit(ctx, false); rateErr != nil {
-				return fmt.Errorf("failed to merge pull request: %w: %w", rateErr, err)
-			}
+		}
+		if rateErr := g.waitForRateLimit(ctx, false); rateErr != nil {
+			return fmt.Errorf("failed to merge pull request: %w: %w", rateErr, err)
+		}
 
-			// retry the request after waiting for the rate limit to reset
-			if _, _, err = g.client.PullRequests.Merge(ctx, g.project, repo, prNumber, "", nil); err != nil {
-				return fmt.Errorf("failed to merge pull request after retry: %w", err)
-			}
+		// retry the request after waiting for the rate limit to reset
+		if _, _, err = g.client.PullRequests.Merge(ctx, g.project, repo, prNumber, "", nil); err != nil {
+			return fmt.Errorf("failed to merge pull request after retry: %w", err)
 		}
 	}
 

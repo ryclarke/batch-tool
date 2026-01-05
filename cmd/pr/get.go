@@ -8,7 +8,9 @@ import (
 
 	"github.com/ryclarke/batch-tool/call"
 	"github.com/ryclarke/batch-tool/catalog"
+	"github.com/ryclarke/batch-tool/cmd/git"
 	"github.com/ryclarke/batch-tool/config"
+	"github.com/ryclarke/batch-tool/output"
 	"github.com/ryclarke/batch-tool/scm"
 	"github.com/ryclarke/batch-tool/utils"
 )
@@ -22,7 +24,7 @@ func addGetCmd() *cobra.Command {
 		Args:              cobra.MinimumNArgs(1),
 		ValidArgsFunction: catalog.CompletionFunc(),
 		Run: func(cmd *cobra.Command, args []string) {
-			call.Do(cmd, args, call.Wrap(utils.ValidateBranch, Get))
+			call.Do(cmd, args, call.Wrap(git.ValidateBranch, Get))
 		},
 	}
 
@@ -30,26 +32,26 @@ func addGetCmd() *cobra.Command {
 }
 
 // Get retrieves and displays the pull request information for the given repository.
-func Get(ctx context.Context, name string, ch chan<- string) error {
+func Get(ctx context.Context, ch output.Channel) error {
 	viper := config.Viper(ctx)
 
-	branch, err := utils.LookupBranch(ctx, name)
+	branch, err := utils.LookupBranch(ctx, ch.Name())
 	if err != nil {
-		return fmt.Errorf("failed to lookup branch for %s: %w", name, err)
+		return fmt.Errorf("failed to lookup branch for %s: %w", ch.Name(), err)
 	}
 
 	// Get project from repository metadata in catalog, fall back to default
-	project := catalog.GetProjectForRepo(ctx, name)
+	project := catalog.GetProjectForRepo(ctx, ch.Name())
 	provider := scm.Get(ctx, viper.GetString(config.GitProvider), project)
 
-	pr, err := provider.GetPullRequest(name, branch)
+	pr, err := provider.GetPullRequest(ch.Name(), branch)
 	if err != nil {
-		return fmt.Errorf("failed to get pull request for %s: %w", name, err)
+		return fmt.Errorf("failed to get pull request for %s: %w", ch.Name(), err)
 	}
 
-	ch <- fmt.Sprintf("(PR #%d) %s %v\n", pr.Number, pr.Title, pr.Reviewers)
+	fmt.Fprintf(ch, "(PR #%d) %s %v\n", pr.Number, pr.Title, pr.Reviewers)
 	if pr.Description != "" {
-		ch <- fmt.Sprintln(pr.Description)
+		fmt.Fprintln(ch, pr.Description)
 	}
 
 	return nil

@@ -22,7 +22,7 @@ func TestPRIntegrationWithFakeProvider(t *testing.T) {
 	viper.Set(config.AuthToken, "fake-token")
 
 	// Register fake provider with test data
-	scm.Register("fake-pr-test", func(ctx context.Context, project string) scm.Provider {
+	scm.Register("fake-pr-test", func(_ context.Context, project string) scm.Provider {
 		return fake.NewFake(project, fake.CreateTestRepositories(project))
 	})
 
@@ -135,7 +135,6 @@ func TestValidatePRConfig(t *testing.T) {
 }
 
 func TestPRCommandValidation(t *testing.T) {
-
 	tests := []struct {
 		name     string
 		cmdFunc  func() *cobra.Command

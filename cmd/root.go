@@ -1,3 +1,4 @@
+// Package cmd provides the command-line interface for batch-tool.
 package cmd
 
 import (
@@ -19,7 +20,7 @@ import (
 	"github.com/ryclarke/batch-tool/output"
 	"github.com/ryclarke/batch-tool/utils"
 
-	// Register the SCM providers
+	// Register SCM providers
 	_ "github.com/ryclarke/batch-tool/scm/bitbucket"
 	_ "github.com/ryclarke/batch-tool/scm/github"
 )
@@ -142,7 +143,7 @@ func setTerminalWait(cmd *cobra.Command) error {
 	}
 
 	// If printing is requested without explicit wait/no-wait, disable wait by default regardless of terminal state
-	if print, err := cmd.Flags().GetBool(printFlag); err == nil && print {
+	if shouldPrint, err := cmd.Flags().GetBool(printFlag); err == nil && shouldPrint {
 		viper.Set(config.WaitOnExit, false)
 	}
 

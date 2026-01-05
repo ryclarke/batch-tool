@@ -3,15 +3,19 @@ package output
 import (
 	"context"
 
-	"github.com/ryclarke/batch-tool/config"
 	"github.com/spf13/cobra"
+
+	"github.com/ryclarke/batch-tool/config"
 )
 
 const (
-	TUI    = "tui"
+	// TUI is the terminal UI output style
+	TUI = "tui"
+	// Native is the native output style
 	Native = "native"
 )
 
+// AvailableStyles lists all supported output styles
 var AvailableStyles = []string{TUI, Native}
 
 // Handler represents a function for processing streaming command output.

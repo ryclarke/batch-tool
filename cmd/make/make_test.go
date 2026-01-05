@@ -1,26 +1,17 @@
 package make
 
 import (
-	testhelper "github.com/ryclarke/batch-tool/utils/test"
 	"bytes"
 	"context"
-	"io"
 	"testing"
 
 	"github.com/ryclarke/batch-tool/config"
-	"github.com/spf13/cobra"
+	"github.com/ryclarke/batch-tool/output"
+	testhelper "github.com/ryclarke/batch-tool/utils/testing"
 )
 
 func loadFixture(t *testing.T) context.Context {
 	return testhelper.LoadFixture(t, "../../config")
-}
-
-// testCmd creates a test cobra command with the given context and output writer
-func testCmd(ctx context.Context, out io.Writer) *cobra.Command {
-	cmd := &cobra.Command{}
-	cmd.SetContext(ctx)
-	cmd.SetOut(out)
-	return cmd
 }
 
 func TestCmd(t *testing.T) {
@@ -49,7 +40,7 @@ func TestMakeCmdFlags(t *testing.T) {
 	// Test target flag
 	targetFlag := cmd.Flags().Lookup("target")
 	if targetFlag == nil {
-		t.Error("target flag not found")
+		t.Fatal("target flag not found")
 	}
 
 	if targetFlag.Shorthand != "t" {
@@ -249,9 +240,9 @@ func TestMake(t *testing.T) {
 			// Set up targets in viper
 			viper.Set(config.MakeTargets, tt.targets)
 
-			ch := make(chan string, 10)
-			err := Make(ctx, tt.repo, ch)
-			close(ch)
+			ch := output.NewChannel(ctx, tt.repo, nil, nil)
+			err := Make(ctx, ch)
+			ch.Close()
 
 			// In tests, we expect errors since repos don't exist
 			if (err != nil) != tt.wantErr {
@@ -260,8 +251,8 @@ func TestMake(t *testing.T) {
 
 			// Collect output messages
 			var messages []string
-			for msg := range ch {
-				messages = append(messages, msg)
+			for msg := range ch.Out() {
+				messages = append(messages, string(msg))
 			}
 
 			// Verify we got some output (error messages)
@@ -279,9 +270,9 @@ func TestMakeWithEmptyTargets(t *testing.T) {
 	// Set empty targets
 	viper.Set(config.MakeTargets, []string{})
 
-	ch := make(chan string, 10)
-	err := Make(ctx, "test-repo", ch)
-	close(ch)
+	ch := output.NewChannel(ctx, "test-repo", nil, nil)
+	err := Make(ctx, ch)
+	ch.Close()
 
 	// Should still attempt to run make (even without targets)
 	// This will fail because repo doesn't exist

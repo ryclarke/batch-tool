@@ -7,20 +7,20 @@ import (
 	"sort"
 	"sync"
 
+	"github.com/spf13/cobra"
 	"golang.org/x/sync/semaphore"
 
 	"github.com/ryclarke/batch-tool/catalog"
 	"github.com/ryclarke/batch-tool/config"
 	"github.com/ryclarke/batch-tool/output"
 	"github.com/ryclarke/batch-tool/utils"
-	"github.com/spf13/cobra"
 )
 
-// Do executes the provided CallFunc on each repository, operating asynchronously by default with configurable
+// Do executes the provided Func on each repository, operating asynchronously by default with configurable
 // concurrency limits. Repository aliases are also expanded here to allow for configurable repository grouping.
 // Output formatting can be fully customized by optionally providing one or more OutputHandler functions. Each
 // repository will also be cloned first if it is missing from the local file system.
-func Do(cmd *cobra.Command, repos []string, callFunc CallFunc, handler ...output.Handler) {
+func Do(cmd *cobra.Command, repos []string, callFunc Func, handler ...output.Handler) {
 	ctx := cmd.Context()
 	viper := config.Viper(ctx)
 	repos = processArguments(ctx, repos)
@@ -34,7 +34,7 @@ func Do(cmd *cobra.Command, repos []string, callFunc CallFunc, handler ...output
 	sem := semaphore.NewWeighted(int64(maxConcurrency))
 	wg := new(sync.WaitGroup)
 
-	// initialize channel set for CallFunc output
+	// initialize channel set for Func output
 	channels := make([]output.Channel, len(repos))
 	for i := range repos {
 		channels[i] = output.NewChannel(ctx, repos[i], sem, wg)
@@ -59,40 +59,39 @@ func Do(cmd *cobra.Command, repos []string, callFunc CallFunc, handler ...output
 	wg.Wait()
 }
 
-// runCallFunc executes the provided CallFunc for a single repository, managing concurrency via the provided semaphore and wait group.
+// runCallFunc executes the provided Func for a single repository, managing concurrency via the provided semaphore and wait group.
 // Output channels are closed after execution, and the repository is cloned first if it does not exist locally.
-func runCallFunc(ctx context.Context, ch output.Channel, callFunc CallFunc) {
-	done, err := ch.Start(1)
-	defer done()
+func runCallFunc(ctx context.Context, ch output.Channel, callFunc Func) {
+	defer ch.Close()
 
-	if err != nil {
-		ch.WErr() <- err
+	if err := ch.Start(1); err != nil {
+		ch.WriteError(err)
 		return
 	}
 
-	// Initial empty line to signal start of CallFunc execution
-	ch.WOut() <- ""
+	// Initial empty line to signal start of Func execution
+	ch.WriteString("")
 
 	// If the repository is missing, attempt to clone it first
 	repoDir := utils.RepoPath(ctx, ch.Name())
 	if _, err := os.Stat(repoDir); os.IsNotExist(err) {
 		// Create the directory if it doesn't exist yet
 		if err := os.MkdirAll(repoDir, 0755); err != nil {
-			ch.WErr() <- err
+			ch.WriteError(err)
 			return
 		}
 
 		// Execute git clone into the target directory
-		if err := Exec("git", "clone", utils.RepoURL(ctx, ch.Name()), repoDir)(ctx, ch.Name(), ch.WOut()); err != nil {
+		if err := Exec("git", "clone", utils.RepoURL(ctx, ch.Name()), repoDir)(ctx, ch); err != nil {
 			// Clone failed, return the error and abort further processing
-			ch.WErr() <- err
+			ch.WriteError(err)
 			return
 		}
 	}
 
-	// Execute the provided CallFunc for the repository
-	if err := callFunc(ctx, ch.Name(), ch.WOut()); err != nil {
-		ch.WErr() <- err
+	// Execute the provided Func for the repository
+	if err := callFunc(ctx, ch); err != nil {
+		ch.WriteError(err)
 	}
 }
 
@@ -119,13 +118,4 @@ func processArguments(ctx context.Context, args []string) []string {
 	}
 
 	return repos
-}
-
-// readOnlyChan converts a slice of bidirectional channels to a slice of read-only channels.
-func readOnlyChan[T any](chans []chan T) []<-chan T {
-	roCh := make([]<-chan T, len(chans))
-	for i, ch := range chans {
-		roCh[i] = ch
-	}
-	return roCh
 }

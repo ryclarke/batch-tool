@@ -4,12 +4,14 @@ SOURCES = go.mod go.sum $(shell find * -type f -name "*.go")
 help:
 	@echo "Makefile targets:"
 	@echo "  help         Show this help message"
-	@echo "  deps         Install required tools (gotestsum, goreleaser)"
+	@echo "  deps         Install required tools (gotestsum, goreleaser, golangci-lint)"
 	@echo "  install      Install batch-tool to ${GOPATH}/bin"
 	@echo "  build        Build the executable for the current OS and architecture using GoReleaser"
 	@echo "  release      Create release packages for all platforms using GoReleaser"
 	@echo "  test         Run tests"
 	@echo "  cover        Run tests with coverage report"
+	@echo "  lint         Run golangci-lint"
+	@echo "  lint-fix     Run golangci-lint with auto-fix"
 	@echo "  clean        Remove build artifacts"
 	@echo "  veryclean    Remove all generated files including vendor dependencies"
 
@@ -18,6 +20,7 @@ deps:
 	@echo "Installing required tools..."
 	go install gotest.tools/gotestsum@latest
 	go install github.com/goreleaser/goreleaser/v2@latest
+	go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.7.2
 
 .PHONY: install
 install: ${GOPATH}/bin/batch-tool
@@ -50,6 +53,14 @@ test: vendor .gotestsum
 cover: vendor .gotestsum
 	@gotestsum -- -coverprofile=coverage.out ./...
 
+.PHONY: lint
+lint: .golangci-lint
+	@golangci-lint run
+
+.PHONY: lint-fix
+lint-fix: .golangci-lint
+	@golangci-lint run --fix
+
 .PHONY: vendor
 vendor:
 	@go mod tidy && go mod vendor
@@ -69,3 +80,7 @@ veryclean: clean
 .PHONY: .goreleaser
 .goreleaser:
 	@which goreleaser > /dev/null || (echo "Error: goreleaser is not installed. Please install it first: https://goreleaser.com/install/"; exit 1)
+
+.PHONY: .golangci-lint
+.golangci-lint:
+	@which golangci-lint > /dev/null || (echo "Error: golangci-lint is not installed. Please install it first: https://golangci-lint.run/docs/welcome/install/"; exit 1)

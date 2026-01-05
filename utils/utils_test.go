@@ -4,10 +4,11 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/spf13/cobra"
+
 	"github.com/ryclarke/batch-tool/config"
 	"github.com/ryclarke/batch-tool/utils"
-	testhelper "github.com/ryclarke/batch-tool/utils/test"
-	"github.com/spf13/cobra"
+	testhelper "github.com/ryclarke/batch-tool/utils/testing"
 )
 
 func TestCleanFilter(t *testing.T) {

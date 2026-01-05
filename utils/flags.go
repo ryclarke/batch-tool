@@ -4,8 +4,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/ryclarke/batch-tool/config"
 	"github.com/spf13/cobra"
+
+	"github.com/ryclarke/batch-tool/config"
 )
 
 // BuildBoolFlags adds a pair of mutually exclusive boolean flags to the given command.

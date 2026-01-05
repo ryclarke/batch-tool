@@ -1,7 +1,16 @@
 package git
 
 import (
+	"context"
+	"fmt"
+	"os/exec"
+	"strings"
+
 	"github.com/spf13/cobra"
+
+	"github.com/ryclarke/batch-tool/catalog"
+	"github.com/ryclarke/batch-tool/output"
+	"github.com/ryclarke/batch-tool/utils"
 )
 
 // Cmd configures the root git command along with all subcommands and flags
@@ -24,4 +33,20 @@ func Cmd() *cobra.Command {
 	)
 
 	return gitCmd
+}
+
+// ValidateBranch returns an error if the current git branch is the default branch
+func ValidateBranch(ctx context.Context, ch output.Channel) error {
+	cmd := exec.Command("git", "rev-parse", "--abbrev-ref", "HEAD")
+	cmd.Dir = utils.RepoPath(ctx, ch.Name())
+	output, err := cmd.Output()
+	if err != nil {
+		return err
+	}
+
+	if strings.TrimSpace(string(output)) == strings.TrimSpace(catalog.GetBranchForRepo(ctx, ch.Name())) {
+		return fmt.Errorf("skipping operation - %s is the source branch", output)
+	}
+
+	return nil
 }

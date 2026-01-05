@@ -10,6 +10,7 @@ import (
 	"time"
 
 	mapset "github.com/deckarep/golang-set/v2"
+
 	"github.com/ryclarke/batch-tool/config"
 	"github.com/ryclarke/batch-tool/scm"
 	"github.com/ryclarke/batch-tool/scm/fake"
@@ -61,7 +62,7 @@ func TestMultiProjectCatalogInitialization(t *testing.T) {
 
 			// Register a single fake provider that returns data based on the project
 			providerName := "fake-multi-" + tt.name
-			scm.Register(providerName, func(ctx context.Context, project string) scm.Provider {
+			scm.Register(providerName, func(_ context.Context, project string) scm.Provider {
 				return fake.NewFake(project, fake.CreateTestRepositories(project))
 			})
 
@@ -166,7 +167,7 @@ func TestMultiProjectLabelAggregation(t *testing.T) {
 	}
 
 	// Register a single fake provider that handles both projects
-	scm.Register("fake-multiproject", func(ctx context.Context, proj string) scm.Provider {
+	scm.Register("fake-multiproject", func(_ context.Context, proj string) scm.Provider {
 		if repos, exists := projectRepos[proj]; exists {
 			return fake.NewFake(proj, repos)
 		}
@@ -224,8 +225,8 @@ func TestConcurrentCatalogInitialization(t *testing.T) {
 	viper := config.Viper(ctx)
 
 	// Register fake provider
-	scm.Register("fake-concurrent", func(ctx context.Context, project string) scm.Provider {
-		return fake.NewFake("test-project", fake.CreateTestRepositories("test-project"))
+	scm.Register("fake-concurrent", func(_ context.Context, project string) scm.Provider {
+		return fake.NewFake(project, fake.CreateTestRepositories(project))
 	})
 
 	viper.Set(config.GitProvider, "fake-concurrent")
@@ -418,8 +419,8 @@ func TestCacheErrorHandling(t *testing.T) {
 			viper := config.Viper(ctx)
 
 			// Register fake provider for fallback
-			scm.Register("fake-fallback-"+tt.name, func(ctx context.Context, project string) scm.Provider {
-				return fake.NewFake("test-project", fake.CreateTestRepositories("test-project"))
+			scm.Register("fake-fallback-"+tt.name, func(_ context.Context, project string) scm.Provider {
+				return fake.NewFake(project, fake.CreateTestRepositories(project))
 			})
 
 			viper.Set(config.GitProvider, "fake-fallback-"+tt.name)
@@ -531,7 +532,7 @@ func TestPartialProviderFailure(t *testing.T) {
 	viper := config.Viper(ctx)
 
 	// Create a single provider that behaves differently based on project
-	scm.Register("fake-partial-fail", func(ctx context.Context, project string) scm.Provider {
+	scm.Register("fake-partial-fail", func(_ context.Context, project string) scm.Provider {
 		if project == "failing-project" {
 			fake := fake.NewFake(project, fake.CreateTestRepositories(project))
 			fake.SetError("ListRepositories", fmt.Errorf("simulated API error"))

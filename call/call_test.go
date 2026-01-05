@@ -2,10 +2,12 @@ package call
 
 import (
 	"os"
+	"strings"
 	"testing"
 
-	"github.com/ryclarke/batch-tool/config"
-	testhelper "github.com/ryclarke/batch-tool/utils/test"
+	"github.com/ryclarke/batch-tool/output"
+	"github.com/ryclarke/batch-tool/utils"
+	testhelper "github.com/ryclarke/batch-tool/utils/testing"
 )
 
 // TestWrap tests the Wrap function which combines multiple CallFuncs
@@ -18,14 +20,14 @@ func TestWrap(t *testing.T) {
 
 	tests := []struct {
 		name       string
-		callFuncs  []CallFunc
+		callFuncs  []Func
 		repo       string
 		wantOutput []string
 		wantError  bool
 	}{
 		{
 			name: "basic wrap with two functions",
-			callFuncs: []CallFunc{
+			callFuncs: []Func{
 				fakeCallFunc(t, false, output1),
 				fakeCallFunc(t, false, output2),
 			},
@@ -34,7 +36,7 @@ func TestWrap(t *testing.T) {
 		},
 		{
 			name: "wrap with error in first function",
-			callFuncs: []CallFunc{
+			callFuncs: []Func{
 				fakeCallFunc(t, true, output1),
 				fakeCallFunc(t, false, output2),
 			},
@@ -44,7 +46,7 @@ func TestWrap(t *testing.T) {
 		},
 		{
 			name: "wrap with error in second function",
-			callFuncs: []CallFunc{
+			callFuncs: []Func{
 				fakeCallFunc(t, false, output1),
 				fakeCallFunc(t, true, output2),
 			},
@@ -54,13 +56,13 @@ func TestWrap(t *testing.T) {
 		},
 		{
 			name:       "wrap with no CallFuncs",
-			callFuncs:  []CallFunc{},
+			callFuncs:  []Func{},
 			repo:       testRepo,
 			wantOutput: []string{},
 		},
 		{
 			name: "wrap with single function",
-			callFuncs: []CallFunc{
+			callFuncs: []Func{
 				fakeCallFunc(t, false, "test output"),
 			},
 			repo:       testRepo,
@@ -68,7 +70,7 @@ func TestWrap(t *testing.T) {
 		},
 		{
 			name: "wrap repository cloning scenario",
-			callFuncs: []CallFunc{
+			callFuncs: []Func{
 				fakeCallFunc(t, false, "test after clone"),
 			},
 			repo:       "nonexistent-repo",
@@ -83,17 +85,21 @@ func TestWrap(t *testing.T) {
 				t.Fatal("Wrap returned nil")
 			}
 
-			ch := make(chan string, 10)
-			err := wrapper(ctx, tt.repo, ch)
-			close(ch)
+			ch := output.NewChannel(ctx, tt.repo, nil, nil)
+			err := wrapper(ctx, ch)
+			ch.Close()
 
-			// Collect output
-			var output []string
-			for msg := range ch {
-				output = append(output, msg)
+			// Collect output - reconstruct lines from byte chunks
+			var buffer []byte
+			for msg := range ch.Out() {
+				buffer = append(buffer, msg...)
+			}
+			res := strings.Split(strings.TrimSuffix(string(buffer), "\n"), "\n")
+			if len(buffer) == 0 {
+				res = []string{}
 			}
 
-			testhelper.AssertOutput(t, output, tt.wantOutput, err, tt.wantError)
+			testhelper.AssertOutput(t, res, tt.wantOutput, err, tt.wantError)
 		})
 	}
 }
@@ -151,13 +157,13 @@ func TestExec(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Create directory for commands to run in
-			gitDir := config.Viper(ctx).GetString(config.GitDirectory)
-			if err := os.MkdirAll(gitDir, 0755); err != nil {
-				t.Fatalf("Failed to create git directory: %v", err)
+			// Create repository directory for commands to run in
+			repoPath := utils.RepoPath(ctx, "test-repo")
+			if err := os.MkdirAll(repoPath, 0755); err != nil {
+				t.Fatalf("Failed to create repo directory: %v", err)
 			}
 			t.Cleanup(func() {
-				os.RemoveAll(gitDir)
+				os.RemoveAll(repoPath)
 			})
 
 			execFunc := Exec(tt.command, tt.args...)
@@ -165,14 +171,18 @@ func TestExec(t *testing.T) {
 				t.Fatal("Exec returned nil")
 			}
 
-			ch := make(chan string, 10)
-			err := execFunc(ctx, "", ch)
-			close(ch)
+			ch := output.NewChannel(ctx, "test-repo", nil, nil)
+			err := execFunc(ctx, ch)
+			ch.Close()
 
-			// Collect output
-			var output []string
-			for msg := range ch {
-				output = append(output, msg)
+			// Collect output - reconstruct lines from byte chunks
+			var buffer []byte
+			for msg := range ch.Out() {
+				buffer = append(buffer, msg...)
+			}
+			output := strings.Split(strings.TrimSuffix(string(buffer), "\n"), "\n")
+			if len(buffer) == 0 {
+				output = []string{}
 			}
 
 			testhelper.AssertOutput(t, output, tt.wantOutput, err, tt.wantError)

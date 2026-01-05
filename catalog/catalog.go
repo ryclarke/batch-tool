@@ -1,3 +1,4 @@
+// Package catalog provides repository catalog management for caching and querying repository metadata.
 package catalog
 
 import (
@@ -90,12 +91,23 @@ func GetRepository(ctx context.Context, repoName string) (*scm.Repository, bool)
 // GetProjectForRepo returns the project for a given repository name.
 // It checks the catalog first, then falls back to the default project.
 func GetProjectForRepo(ctx context.Context, repoName string) string {
-	if repo, exists := GetRepository(ctx, repoName); exists {
+	if repo, exists := GetRepository(ctx, repoName); exists && repo.Project != "" {
 		return repo.Project
 	}
 
 	// Fallback to default project if not in catalog
 	return config.Viper(ctx).GetString(config.GitProject)
+}
+
+// GetBranchForRepo returns the default branch for a given repository name.
+// It checks the catalog first, then falls back to the configured default.
+func GetBranchForRepo(ctx context.Context, repoName string) string {
+	if repo, exists := GetRepository(ctx, repoName); exists && repo.DefaultBranch != "" {
+		return repo.DefaultBranch
+	}
+
+	// Fallback to configured default branch if not in catalog
+	return config.Viper(ctx).GetString(config.DefaultBranch)
 }
 
 // RepositoryList returns the set of repository names matching the given filters.

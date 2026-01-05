@@ -63,7 +63,7 @@ func (b *Bitbucket) ListRepositories() ([]*scm.Repository, error) {
 		if err != nil {
 			// If we can't fetch the default branch, use the configured default
 			viper := config.Viper(b.ctx)
-			defaultBranch = viper.GetString(config.SourceBranch)
+			defaultBranch = viper.GetString(config.DefaultBranch)
 			fmt.Printf("Error fetching default branch for %s - falling back on configured default '%s': %v\n", repo.Name, defaultBranch, err)
 		}
 		repo.DefaultBranch = defaultBranch
@@ -98,7 +98,7 @@ func (b *Bitbucket) getLabels(repo string) ([]string, error) {
 }
 
 type defaultBranchResp struct {
-	DisplayId string `json:"displayId"`
+	DisplayID string `json:"displayId"`
 }
 
 func (b *Bitbucket) getDefaultBranch(repo string) (string, error) {
@@ -107,5 +107,5 @@ func (b *Bitbucket) getDefaultBranch(repo string) (string, error) {
 		return "", err
 	}
 
-	return resp.DisplayId, nil
+	return resp.DisplayID, nil
 }

@@ -1,0 +1,80 @@
+# $schema: https://golangci-lint.run/jsonschema/golangci.v2.7.jsonschema.json
+version: "2"
+
+run:
+  timeout: 5m
+  tests: true  # Lint test files but use exclusions below
+
+linters:
+  enable:
+    # Core linters
+    - errcheck        # Check for unchecked errors
+    - govet           # Vet examines Go source code
+    - ineffassign     # Detect ineffectual assignments
+    - staticcheck     # Go static analysis
+    - unused          # Check for unused code
+
+    # Style
+    - revive          # Fast, configurable, extensible, flexible, and beautiful linter
+
+    # Code quality
+    - dupl            # Code clone detection
+    - misspell        # Spell checker for comments
+    - unconvert       # Remove unnecessary type conversions
+    - unparam         # Report unused function parameters
+    - whitespace      # Detection of leading/trailing whitespace
+
+    # Error handling
+    - errorlint       # Find code that will cause problems with Go 1.13+ error wrapping
+    - errname         # Checks that sentinel errors are prefixed with Err
+
+    # Performance
+    - prealloc        # Find slice declarations that could potentially be pre-allocated
+
+  exclusions:
+    generated: strict
+    rules:
+      # Exclude unwanted linters from test files
+      - path: _test\.go|utils/testing/.*\.go
+        linters:
+          - dupl
+          - errcheck
+
+      # Exclude unwanted revive style rules from test files
+      - path: _test\.go|utils/testing/.*\.go
+        text: "context-as-argument|dot-imports"
+        linters:
+          - revive
+
+      # Exclude exhaustive comments for config key constants
+      - path: config/configurations\.go
+        text: "exported"
+        linters:
+          - revive
+
+      # Allow utils package to have its generic name
+      - path: utils/.*\.go
+        text: "avoid meaningless package names"
+        linters:
+          - revive
+
+      # Exclude common intentional error handling and test cleanup cases
+      - text: "Error return value of.*(Write(String)?|Fprint(f|ln)?|Close|RemoveAll|Set|MarkHidden|BindPFlag).* is not checked"
+        linters:
+          - errcheck
+
+formatters:
+  enable:
+    - gci        # Go imports formatter
+    - gofmt      # Check whether code was gofmt-ed
+  settings:
+    gci:
+      sections:
+        - standard                               # Standard section: captures all standard packages
+        - default                                # Default section: contains all imports that could not be matched to another section
+        - prefix(github.com/ryclarke/batch-tool) # Custom section: groups internal packages
+        - blank                                  # Blank imports section: captures all blank/underscore imports
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0

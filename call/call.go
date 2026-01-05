@@ -15,32 +15,32 @@ Package call provides helpers for managing and executing asynchronous work
 		list to ensure that the output isn't mixed, but the processing of each
 		repository's respective tasks is fully parallel in the background.
 
-		The `Exec` CallFunc builder should be sufficient for most commands, but
-		custom CallFunc instances can be defined for more complex scenarios. It
+		The `Exec` Func builder should be sufficient for most commands, but
+		custom Func instances can be defined for more complex scenarios. It
 		is also possible to define entire `Wrapper` instances if a specific use
 		case requires special handling distinct from the default behavior.
 */
 package call
 
 import (
-	"bufio"
 	"context"
 	"os/exec"
 
+	"github.com/ryclarke/batch-tool/output"
 	"github.com/ryclarke/batch-tool/utils"
 )
 
-// CallFunc defines an atomic unit of work on a repository. Output should
+// Func defines an atomic unit of work on a repository. Output should
 // be sent to the channel, which must remain open. Closing a channel from
-// within the context of a CallFunc will result in a panic.
-type CallFunc func(ctx context.Context, repo string, ch chan<- string) error
+// within the context of a Func will result in a panic.
+type Func func(ctx context.Context, ch output.Channel) error
 
-// Wrap each provided CallFunc into a new one that executes them order before terminating.
-func Wrap(calls ...CallFunc) CallFunc {
-	return func(ctx context.Context, repo string, ch chan<- string) error {
-		// execute each CallFunc, stopping if an error is encountered
+// Wrap each provided Func into a new one that executes them order before terminating.
+func Wrap(calls ...Func) Func {
+	return func(ctx context.Context, ch output.Channel) error {
+		// execute each Func, stopping if an error is encountered
 		for _, call := range calls {
-			if err := call(ctx, repo, ch); err != nil {
+			if err := call(ctx, ch); err != nil {
 				return err
 			}
 		}
@@ -49,36 +49,17 @@ func Wrap(calls ...CallFunc) CallFunc {
 	}
 }
 
-// Exec creates a new CallFunc to execute the given command and arguments,
+// Exec creates a new Func to execute the given command and arguments,
 // streaming Stdout and Stderr to the channel and returning error status.
-func Exec(command string, arguments ...string) CallFunc {
-	return func(ctx context.Context, repo string, ch chan<- string) error {
+func Exec(command string, arguments ...string) Func {
+	return func(ctx context.Context, ch output.Channel) error {
 		cmd := exec.CommandContext(ctx, command, arguments...)
-		cmd.Dir = utils.RepoPath(ctx, repo)
+		cmd.Dir = utils.RepoPath(ctx, ch.Name())
+		cmd.Env = utils.ExecEnv(ctx, ch.Name())
 
-		// Configure the pipe for stdout
-		pipe, err := cmd.StdoutPipe()
-		if err != nil {
-			return err
-		}
+		// Directly use channel as io.Writer
+		cmd.Stdout, cmd.Stderr = ch, ch
 
-		// Merge stderr to the stdout pipe
-		cmd.Stderr = cmd.Stdout
-
-		if err := cmd.Start(); err != nil {
-			return err
-		}
-
-		// stream output to the channel as it becomes available
-		scanner := bufio.NewScanner(pipe)
-		for scanner.Scan() {
-			ch <- scanner.Text()
-		}
-
-		if err := scanner.Err(); err != nil {
-			return err
-		}
-
-		return cmd.Wait()
+		return cmd.Run()
 	}
 }

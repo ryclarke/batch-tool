@@ -250,12 +250,10 @@ func TestNewCatalogStyles(t *testing.T) {
 
 func TestRepoWithMetadata(t *testing.T) {
 	repo := repoWithMetadata{
-		name:          "test-repo",
-		description:   "Test description",
-		project:       "test-project",
-		defaultBranch: "main",
-		labels:        []string{"label1", "label2"},
-		isPublic:      true,
+		name:        "test-repo",
+		description: "Test description",
+		labels:      []string{"label1", "label2"},
+		isPublic:    true,
 	}
 
 	if repo.name != "test-repo" {

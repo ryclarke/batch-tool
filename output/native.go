@@ -5,9 +5,10 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/spf13/cobra"
+
 	"github.com/ryclarke/batch-tool/catalog"
 	"github.com/ryclarke/batch-tool/config"
-	"github.com/spf13/cobra"
 )
 
 // NativeHandler is a simple output Handler that batches and prints output from each repository's channels in sequence.
@@ -15,11 +16,11 @@ import (
 func NativeHandler(cmd *cobra.Command, channels []Channel) {
 	for _, ch := range channels {
 		// print header with repository name
-		fmt.Fprintf(cmd.OutOrStdout(), "\n------ %s ------", ch.Name())
+		fmt.Fprintf(cmd.OutOrStdout(), "\n------ %s ------\n", ch.Name())
 
-		// print all output for this repo to Stdout
-		for msg := range ch.Out() {
-			fmt.Fprintln(cmd.OutOrStdout(), msg)
+		// Read bytes and drite directly to output
+		for data := range ch.Out() {
+			cmd.OutOrStdout().Write(data)
 		}
 
 		// print any errors for this repo to Stderr

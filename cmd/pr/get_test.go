@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/ryclarke/batch-tool/config"
-	testhelper "github.com/ryclarke/batch-tool/utils/test"
+	testhelper "github.com/ryclarke/batch-tool/utils/testing"
 )
 
 func TestAddGetCmd(t *testing.T) {
