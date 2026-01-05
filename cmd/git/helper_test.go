@@ -24,7 +24,7 @@ func setupTestGitContext(t *testing.T, reposPath string) context.Context {
 	viper.Set(config.GitDirectory, reposPath)
 	viper.Set(config.GitHost, "example.com")
 	viper.Set(config.GitProject, "test-project")
-	viper.Set(config.SourceBranch, "main")
+	viper.Set(config.DefaultBranch, "main")
 	viper.Set(config.MaxConcurrency, 1) // Serial execution for predictable test output
 	viper.Set(config.ChannelBuffer, 10)
 

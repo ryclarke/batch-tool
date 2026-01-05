@@ -8,7 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/ryclarke/batch-tool/config"
+	"github.com/ryclarke/batch-tool/catalog"
 	"github.com/ryclarke/batch-tool/output"
 	"github.com/ryclarke/batch-tool/utils"
 )
@@ -35,10 +35,8 @@ func Cmd() *cobra.Command {
 	return gitCmd
 }
 
-// ValidateBranch returns an error if the current git branch is the source branch
+// ValidateBranch returns an error if the current git branch is the default branch
 func ValidateBranch(ctx context.Context, ch output.Channel) error {
-	viper := config.Viper(ctx)
-
 	cmd := exec.Command("git", "rev-parse", "--abbrev-ref", "HEAD")
 	cmd.Dir = utils.RepoPath(ctx, ch.Name())
 	output, err := cmd.Output()
@@ -46,7 +44,7 @@ func ValidateBranch(ctx context.Context, ch output.Channel) error {
 		return err
 	}
 
-	if strings.TrimSpace(string(output)) == strings.TrimSpace(viper.GetString(config.SourceBranch)) {
+	if strings.TrimSpace(string(output)) == strings.TrimSpace(catalog.GetBranchForRepo(ctx, ch.Name())) {
 		return fmt.Errorf("skipping operation - %s is the source branch", output)
 	}
 

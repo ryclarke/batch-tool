@@ -7,7 +7,6 @@ import (
 
 	"github.com/ryclarke/batch-tool/call"
 	"github.com/ryclarke/batch-tool/catalog"
-	"github.com/ryclarke/batch-tool/config"
 	"github.com/ryclarke/batch-tool/output"
 )
 
@@ -28,8 +27,7 @@ func addUpdateCmd() *cobra.Command {
 
 // Update checks out the default branch and pulls the latest changes.
 func Update(ctx context.Context, ch output.Channel) error {
-	viper := config.Viper(ctx)
-	if err := call.Exec("git", "checkout", viper.GetString(config.SourceBranch))(ctx, ch); err != nil {
+	if err := call.Exec("git", "checkout", catalog.GetBranchForRepo(ctx, ch.Name()))(ctx, ch); err != nil {
 		return err
 	}
 

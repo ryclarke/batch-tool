@@ -219,7 +219,7 @@ func (b *Bitbucket) genPR(name, title, description string, reviewers []string) s
 			},
 		},
 		ToRef: prRef{
-			ID: fmt.Sprintf("refs/heads/%s", viper.GetString(config.SourceBranch)),
+			ID: fmt.Sprintf("refs/heads/%s", viper.GetString(config.DefaultBranch)),
 			Repository: prRefRepo{
 				Slug:    name,
 				Project: prRefRepoProj{Key: b.project},

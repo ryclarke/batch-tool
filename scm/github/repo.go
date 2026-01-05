@@ -32,7 +32,7 @@ func (g *Github) ListRepositories() ([]*scm.Repository, error) {
 		for _, repo := range repos {
 			if repo.GetDefaultBranch() == "" {
 				// fall back on configured default branch if it isn't set for the repo
-				defaultBranch := config.Viper(g.ctx).GetString(config.SourceBranch)
+				defaultBranch := config.Viper(g.ctx).GetString(config.DefaultBranch)
 				repo.DefaultBranch = &defaultBranch
 			}
 

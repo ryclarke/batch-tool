@@ -11,7 +11,7 @@ import (
 )
 
 // CatalogLookup is a function type for looking up project from catalog
-var CatalogLookup func(ctx context.Context, repoName string) string = defaultCatalogLookup
+var CatalogLookup = defaultCatalogLookup
 
 // ParseRepo splits a repo identifier into its component parts
 func ParseRepo(ctx context.Context, repo string) (host, project, name string) {

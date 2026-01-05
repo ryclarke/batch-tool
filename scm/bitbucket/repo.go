@@ -63,7 +63,7 @@ func (b *Bitbucket) ListRepositories() ([]*scm.Repository, error) {
 		if err != nil {
 			// If we can't fetch the default branch, use the configured default
 			viper := config.Viper(b.ctx)
-			defaultBranch = viper.GetString(config.SourceBranch)
+			defaultBranch = viper.GetString(config.DefaultBranch)
 			fmt.Printf("Error fetching default branch for %s - falling back on configured default '%s': %v\n", repo.Name, defaultBranch, err)
 		}
 		repo.DefaultBranch = defaultBranch

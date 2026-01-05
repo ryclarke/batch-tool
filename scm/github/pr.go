@@ -9,7 +9,6 @@ import (
 	"github.com/google/go-github/v74/github"
 
 	"github.com/ryclarke/batch-tool/catalog"
-	"github.com/ryclarke/batch-tool/config"
 	"github.com/ryclarke/batch-tool/scm"
 )
 
@@ -30,11 +29,8 @@ func (g *Github) OpenPullRequest(repo, branch, title, description string, review
 		return nil, fmt.Errorf("a pull request already exists for branch %s in repository %s", branch, repo)
 	}
 
-	// check default branch for the current repo, or use the fallback config
-	defaultBranch := catalog.Catalog[repo].DefaultBranch
-	if defaultBranch == "" {
-		defaultBranch = config.Viper(g.ctx).GetString(config.SourceBranch)
-	}
+	// check default branch for the current repo
+	defaultBranch := catalog.GetBranchForRepo(g.ctx, repo)
 
 	// if title is not specified, use the branch name
 	if title == "" {
