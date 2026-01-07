@@ -72,7 +72,7 @@ repos:
   # don't match repos containing the following topics unless explicitly added
   skip-unwanted: true
   unwanted-labels: deprecated,poc
-  
+
   # aliases act like custom topics for referencing and grouping repoistories
   aliases:
     myproject:
@@ -227,6 +227,16 @@ batch-tool make -t <make target> <repos...>
 ## (DANGEROUS - use with caution) ##
 batch-tool sh -c "command to execute" <repos...>
 
+# Execute a script file or executable binary across repositories
+## (DANGEROUS - use with caution) ##
+batch-tool sh -f /path/to/script.sh <repos...>
+
+# Pass arguments to the script using -a/--args flag (repeatable)
+batch-tool sh -f /path/to/script.sh -a arg1 -a arg2 <repos...>
+
+# Skip confirmation prompt with -y flag
+batch-tool sh -y -c "echo 'safe command'" <repos...>
+
 # Test repository filter rules against topics and local aliases
 batch-tool labels <repos...>
 
@@ -288,7 +298,7 @@ repos:
     - deprecated
     - poc
     - archived
-    
+
   aliases:                     # Group repositories under aliases
     frontend:
       - web-app
@@ -296,7 +306,7 @@ repos:
     backend:
       - api-server
       - worker-service
-      
+
   reviewers:                   # Default reviewers per repository
     web-app:
       - frontend-team
@@ -476,7 +486,7 @@ This project uses `golangci-lint` to enforce consistent code style. Key requirem
 
 - **Import Grouping**: Imports must be grouped in order:
   1. Standard library packages
-  2. Third-party dependencies  
+  2. Third-party dependencies
   3. Internal project packages (github.com/ryclarke/batch-tool/*)
 
 - **Error Handling**: All errors must be checked (use `_ =` to explicitly ignore)

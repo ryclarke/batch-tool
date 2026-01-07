@@ -15,7 +15,7 @@ import (
 )
 
 // List of flag names which should be included in the command display for context.
-var includeFlags = []string{"script", "branch"}
+var includeFlags = []string{"script", "file", "arg", "branch", "reviewer"}
 
 // TUIHandler is an OutputHandler that uses a TUI to provide a modern, interactive interface.
 // It displays repository progress with styled output, real-time updates, and a cleaner visual presentation.

@@ -34,7 +34,7 @@ func Cmd() *cobra.Command {
 
 	prCmd.PersistentFlags().StringP(prTitleFlag, "t", "", "pull request title")
 	prCmd.PersistentFlags().StringP(prDescriptionFlag, "d", "", "pull request description")
-	prCmd.PersistentFlags().StringSliceP(prReviewerFlag, "r", nil, "pull request reviewer (cecid)")
+	prCmd.PersistentFlags().StringSliceP(prReviewerFlag, "r", nil, "pull request reviewer, can be specified multiple times")
 
 	defaultCmd := addGetCmd()
 	prCmd.Run = defaultCmd.Run
