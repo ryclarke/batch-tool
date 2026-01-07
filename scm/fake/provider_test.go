@@ -111,7 +111,7 @@ func TestOpenPullRequest(t *testing.T) {
 	f := NewFake("test-project", testRepos)
 
 	reviewers := []string{"reviewer1", "reviewer2"}
-	pr, err := f.OpenPullRequest("repo-1", "feature-branch", "Test PR", "Test description", reviewers)
+	pr, err := f.OpenPullRequest("repo-1", "feature-branch", &scm.PROptions{Title: "Test PR", Description: "Test description", Reviewers: reviewers})
 	if err != nil {
 		t.Fatalf("Failed to open pull request: %v", err)
 	}
@@ -142,13 +142,13 @@ func TestOpenPullRequestDuplicate(t *testing.T) {
 	f := NewFake("test-project", testRepos)
 
 	// Open first PR
-	_, err := f.OpenPullRequest("repo-1", "feature-branch", "Test PR", "Test description", []string{})
+	_, err := f.OpenPullRequest("repo-1", "feature-branch", &scm.PROptions{Title: "Test PR", Description: "Test description", Reviewers: []string{}})
 	if err != nil {
 		t.Fatalf("Failed to open pull request: %v", err)
 	}
 
 	// Try to open duplicate PR
-	_, err = f.OpenPullRequest("repo-1", "feature-branch", "Test PR 2", "Test description 2", []string{})
+	_, err = f.OpenPullRequest("repo-1", "feature-branch", &scm.PROptions{Title: "Test PR 2", Description: "Test description 2", Reviewers: []string{}})
 	if err == nil {
 		t.Error("Expected error when opening duplicate pull request")
 	}
@@ -159,7 +159,7 @@ func TestGetPullRequest(t *testing.T) {
 	f := NewFake("test-project", testRepos)
 
 	// Open a PR first
-	originalPR, err := f.OpenPullRequest("repo-1", "feature-branch", "Test PR", "Test description", []string{"reviewer1"})
+	originalPR, err := f.OpenPullRequest("repo-1", "feature-branch", &scm.PROptions{Title: "Test PR", Description: "Test description", Reviewers: []string{"reviewer1"}})
 	if err != nil {
 		t.Fatalf("Failed to open pull request: %v", err)
 	}
@@ -194,13 +194,13 @@ func TestUpdatePullRequest(t *testing.T) {
 	f := NewFake("test-project", testRepos)
 
 	// Open a PR first
-	_, err := f.OpenPullRequest("repo-1", "feature-branch", "Test PR", "Test description", []string{"reviewer1"})
+	_, err := f.OpenPullRequest("repo-1", "feature-branch", &scm.PROptions{Title: "Test PR", Description: "Test description", Reviewers: []string{"reviewer1"}})
 	if err != nil {
 		t.Fatalf("Failed to open pull request: %v", err)
 	}
 
 	// Update the PR
-	updatedPR, err := f.UpdatePullRequest("repo-1", "feature-branch", "Updated PR", "Updated description", []string{"reviewer2"}, false)
+	updatedPR, err := f.UpdatePullRequest("repo-1", "feature-branch", &scm.PROptions{Title: "Updated PR", Description: "Updated description", Reviewers: []string{"reviewer2"}})
 	if err != nil {
 		t.Fatalf("Failed to update pull request: %v", err)
 	}
@@ -224,13 +224,13 @@ func TestUpdatePullRequestAppendReviewers(t *testing.T) {
 	f := NewFake("test-project", testRepos)
 
 	// Open a PR first
-	_, err := f.OpenPullRequest("repo-1", "feature-branch", "Test PR", "Test description", []string{"reviewer1"})
+	_, err := f.OpenPullRequest("repo-1", "feature-branch", &scm.PROptions{Title: "Test PR", Description: "Test description", Reviewers: []string{"reviewer1"}})
 	if err != nil {
 		t.Fatalf("Failed to open pull request: %v", err)
 	}
 
 	// Update the PR with append reviewers
-	updatedPR, err := f.UpdatePullRequest("repo-1", "feature-branch", "Updated PR", "Updated description", []string{"reviewer2", "reviewer1"}, true)
+	updatedPR, err := f.UpdatePullRequest("repo-1", "feature-branch", &scm.PROptions{Title: "Updated PR", Description: "Updated description", Reviewers: []string{"reviewer2", "reviewer1"}, AppendReviewers: true})
 	if err != nil {
 		t.Fatalf("Failed to update pull request: %v", err)
 	}
@@ -253,7 +253,7 @@ func TestMergePullRequest(t *testing.T) {
 	f := NewFake("test-project", testRepos)
 
 	// Open a PR first
-	_, err := f.OpenPullRequest("repo-1", "feature-branch", "Test PR", "Test description", []string{"reviewer1"})
+	_, err := f.OpenPullRequest("repo-1", "feature-branch", &scm.PROptions{Title: "Test PR", Description: "Test description", Reviewers: []string{"reviewer1"}})
 	if err != nil {
 		t.Fatalf("Failed to open pull request: %v", err)
 	}
@@ -274,7 +274,7 @@ func TestMergePullRequestAlreadyMerged(t *testing.T) {
 	f := NewFake("test-project", testRepos)
 
 	// Open and merge a PR
-	_, err := f.OpenPullRequest("repo-1", "feature-branch", "Test PR", "Test description", []string{"reviewer1"})
+	_, err := f.OpenPullRequest("repo-1", "feature-branch", &scm.PROptions{Title: "Test PR", Description: "Test description", Reviewers: []string{"reviewer1"}})
 	if err != nil {
 		t.Fatalf("Failed to open pull request: %v", err)
 	}
@@ -333,7 +333,7 @@ func TestMergePullRequestMergeability(t *testing.T) {
 			f := NewFake("test-project", testRepos)
 
 			// Open a PR
-			pr, err := f.OpenPullRequest("repo-1", "test-branch", "Test PR", "Test description", []string{"reviewer1"})
+			pr, err := f.OpenPullRequest("repo-1", "test-branch", &scm.PROptions{Title: "Test PR", Description: "Test description", Reviewers: []string{"reviewer1"}})
 			if err != nil {
 				t.Fatalf("Failed to open pull request: %v", err)
 			}
@@ -393,7 +393,7 @@ func TestMergePullRequestForceBypassesChecks(t *testing.T) {
 
 	// Scenario: Provider incorrectly reports PR as unmergeable (false negative)
 	// but we know it's actually fine and want to bypass the check
-	_, err := f.OpenPullRequest("repo-1", "hotfix-branch", "Critical Fix", "Emergency fix", []string{"reviewer1"})
+	_, err := f.OpenPullRequest("repo-1", "hotfix-branch", &scm.PROptions{Title: "Critical Fix", Description: "Emergency fix", Reviewers: []string{"reviewer1"}})
 	if err != nil {
 		t.Fatalf("Failed to open pull request: %v", err)
 	}
@@ -569,14 +569,14 @@ func TestErrorHandling(t *testing.T) {
 		{
 			"OpenPullRequest",
 			func() error {
-				_, err := f.OpenPullRequest("repo-1", "branch-1", "title", "desc", []string{})
+				_, err := f.OpenPullRequest("repo-1", "branch-1", &scm.PROptions{Title: "title", Description: "desc", Reviewers: []string{}})
 				return err
 			},
 		},
 		{
 			"UpdatePullRequest",
 			func() error {
-				_, err := f.UpdatePullRequest("repo-1", "branch-1", "title", "desc", []string{}, false)
+				_, err := f.UpdatePullRequest("repo-1", "branch-1", &scm.PROptions{Title: "title", Description: "desc", Reviewers: []string{}})
 				return err
 			},
 		},
@@ -616,7 +616,7 @@ func TestClear(t *testing.T) {
 	f := NewFake("test-project", testRepos)
 
 	// Add a pull request
-	_, err := f.OpenPullRequest("repo-1", "feature-branch", "Test PR", "Test description", []string{})
+	_, err := f.OpenPullRequest("repo-1", "feature-branch", &scm.PROptions{Title: "Test PR", Description: "Test description", Reviewers: []string{}})
 	if err != nil {
 		t.Fatalf("Failed to open pull request: %v", err)
 	}

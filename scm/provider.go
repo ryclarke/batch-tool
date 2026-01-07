@@ -18,11 +18,21 @@ type Provider interface {
 	// GetPullRequest retrieves a pull request by repository name and source branch.
 	GetPullRequest(repo, branch string) (*PullRequest, error)
 	// OpenPullRequest opens a new pull request in the specified repository.
-	OpenPullRequest(repo, branch, title, description string, reviewers []string) (*PullRequest, error)
+	OpenPullRequest(repo, branch string, opts *PROptions) (*PullRequest, error)
 	// UpdatePullRequest updates an existing pull request.
-	UpdatePullRequest(repo, branch, title, description string, reviewers []string, appendReviewers bool) (*PullRequest, error)
+	UpdatePullRequest(repo, branch string, opts *PROptions) (*PullRequest, error)
 	// MergePullRequest merges an existing pull request.
 	MergePullRequest(repo, branch string, force bool) (*PullRequest, error)
+}
+
+// PROptions holds options for creating or updating pull requests.
+type PROptions struct {
+	Title           string
+	Description     string
+	Reviewers       []string
+	AppendReviewers bool // bitbucket-specific option
+	BaseBranch      string
+	Draft           bool
 }
 
 // Get retrieves a registered SCM provider by name.

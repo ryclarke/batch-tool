@@ -23,25 +23,32 @@ func (g *Github) GetPullRequest(repo, branch string) (*scm.PullRequest, error) {
 }
 
 // OpenPullRequest opens a new pull request in the specified repository.
-func (g *Github) OpenPullRequest(repo, branch, title, description string, reviewers []string) (*scm.PullRequest, error) {
+func (g *Github) OpenPullRequest(repo, branch string, opts *scm.PROptions) (*scm.PullRequest, error) {
+	if opts == nil {
+		opts = &scm.PROptions{} // default options
+	}
+
 	// reads are less restrictive than a failed write, so check for existing PR first
 	if _, err := g.getPullRequest(context.TODO(), repo, branch); err == nil {
 		return nil, fmt.Errorf("a pull request already exists for branch %s in repository %s", branch, repo)
 	}
 
-	// check default branch for the current repo
-	defaultBranch := catalog.GetBranchForRepo(g.ctx, repo)
+	// check default branch for the current repo if base branch is not specified
+	if opts.BaseBranch == "" {
+		opts.BaseBranch = catalog.GetBranchForRepo(g.ctx, repo)
+	}
 
 	// if title is not specified, use the branch name
-	if title == "" {
-		title = branch
+	if opts.Title == "" {
+		opts.Title = branch
 	}
 
 	req := &github.NewPullRequest{
-		Title: github.Ptr(title),
-		Body:  github.Ptr(description),
 		Head:  github.Ptr(branch),
-		Base:  github.Ptr(defaultBranch),
+		Base:  github.Ptr(opts.BaseBranch),
+		Title: github.Ptr(opts.Title),
+		Body:  github.Ptr(opts.Description),
+		Draft: github.Ptr(opts.Draft),
 	}
 
 	resp, err := g.openPullRequest(context.TODO(), repo, req)
@@ -49,8 +56,8 @@ func (g *Github) OpenPullRequest(repo, branch, title, description string, review
 		return nil, err
 	}
 
-	if len(reviewers) > 0 {
-		if resp, err = g.requestReviewers(context.TODO(), repo, resp.GetNumber(), github.ReviewersRequest{Reviewers: reviewers}); err != nil {
+	if len(opts.Reviewers) > 0 {
+		if resp, err = g.requestReviewers(context.TODO(), repo, resp.GetNumber(), github.ReviewersRequest{Reviewers: opts.Reviewers}); err != nil {
 			return nil, err
 		}
 	}
@@ -59,16 +66,16 @@ func (g *Github) OpenPullRequest(repo, branch, title, description string, review
 }
 
 // UpdatePullRequest updates an existing pull request.
-func (g *Github) UpdatePullRequest(repo, branch, title, description string, reviewers []string, _ bool) (*scm.PullRequest, error) {
+func (g *Github) UpdatePullRequest(repo, branch string, opts *scm.PROptions) (*scm.PullRequest, error) {
 	pr, err := g.getPullRequest(context.TODO(), repo, branch)
 	if err != nil {
 		return nil, err
 	}
 
-	if title != "" || description != "" {
+	if opts.Title != "" || opts.Description != "" {
 		req := &github.PullRequest{
-			Title: &title,
-			Body:  &description,
+			Title: &opts.Title,
+			Body:  &opts.Description,
 		}
 
 		if pr, err = g.editPullRequest(context.TODO(), repo, pr.GetNumber(), req); err != nil {
@@ -76,8 +83,8 @@ func (g *Github) UpdatePullRequest(repo, branch, title, description string, revi
 		}
 	}
 
-	if len(reviewers) > 0 {
-		if pr, err = g.requestReviewers(context.TODO(), repo, pr.GetNumber(), github.ReviewersRequest{Reviewers: reviewers}); err != nil {
+	if len(opts.Reviewers) > 0 {
+		if pr, err = g.requestReviewers(context.TODO(), repo, pr.GetNumber(), github.ReviewersRequest{Reviewers: opts.Reviewers}); err != nil {
 			return nil, err
 		}
 	}

@@ -9,7 +9,6 @@ import (
 
 	"github.com/ryclarke/batch-tool/call"
 	"github.com/ryclarke/batch-tool/catalog"
-	"github.com/ryclarke/batch-tool/cmd/git"
 	"github.com/ryclarke/batch-tool/config"
 	"github.com/ryclarke/batch-tool/output"
 	"github.com/ryclarke/batch-tool/scm"
@@ -23,8 +22,54 @@ const (
 // addEditCmd initializes the pr edit command
 func addEditCmd() *cobra.Command {
 	editCmd := &cobra.Command{
-		Use:               "edit <repository>...",
-		Short:             "Update existing pull requests",
+		Use:   "edit [-t <title>] [-d <description>] [-r <reviewer>]... [flags] <repository>...",
+		Short: "Update existing pull requests",
+		Long: `Update existing pull requests for the current branch.
+
+This command updates PR details for existing pull requests using the SCM
+provider API. You can update:
+  - Title
+  - Description
+  - Reviewers
+  - Draft status
+
+The command:
+  1. Finds the existing PR for the current branch
+  2. Updates the specified fields
+  3. Manages reviewers (add or replace based on flags)
+  4. Displays the updated PR information
+
+Partial Updates:
+  You don't need to specify all fields. Only provided fields are updated:
+  - Just title: Only title changes
+  - Just reviewers: Only reviewers change
+  - Multiple fields: All specified fields update
+
+Branch Requirement:
+  Must be on a feature branch with an existing PR.
+
+Use Cases:
+  - Update PR title or description
+  - Add reviewers to existing PRs
+  - Replace reviewer list
+  - Correct PR information after creation`,
+		Example: `  # Update PR title
+  batch-tool pr edit -t "Updated title" repo1 repo2
+
+  # Update description
+  batch-tool pr edit -d "Updated description" repo1
+
+  # Add reviewers and mark as ready for review
+  batch-tool pr edit -r charlie --no-draft repo1
+
+  # Replace all reviewers (only supported on Bitbucket)
+  batch-tool pr edit -r alice -r bob --reset-reviewers repo1
+
+  # Update multiple fields
+  batch-tool pr edit -t "New title" -d "New desc" -r alice repo1
+
+  # Update PRs for backend services
+  batch-tool pr edit -t "Fix" ~backend`,
 		Args:              cobra.MinimumNArgs(1),
 		ValidArgsFunction: catalog.CompletionFunc(),
 		PreRunE: func(cmd *cobra.Command, _ []string) error {
@@ -35,7 +80,7 @@ func addEditCmd() *cobra.Command {
 			return nil
 		},
 		Run: func(cmd *cobra.Command, args []string) {
-			call.Do(cmd, args, call.Wrap(git.ValidateBranch, Edit))
+			call.Do(cmd, args, Edit)
 		},
 	}
 
@@ -57,8 +102,13 @@ func Edit(ctx context.Context, ch output.Channel) error {
 	project := catalog.GetProjectForRepo(ctx, ch.Name())
 	provider := scm.Get(ctx, viper.GetString(config.GitProvider), project)
 
-	pr, err := provider.UpdatePullRequest(ch.Name(), branch, viper.GetString(config.PrTitle), viper.GetString(config.PrDescription),
-		lookupReviewers(ctx, ch.Name()), !viper.GetBool(config.PrResetReviewers))
+	pr, err := provider.UpdatePullRequest(ch.Name(), branch, &scm.PROptions{
+		Title:           viper.GetString(config.PrTitle),
+		Description:     viper.GetString(config.PrDescription),
+		Draft:           viper.GetBool(config.PrDraft),
+		Reviewers:       lookupReviewers(ctx, ch.Name()),
+		AppendReviewers: !viper.GetBool(config.PrResetReviewers),
+	})
 	if err != nil {
 		return err
 	}

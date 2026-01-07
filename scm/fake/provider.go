@@ -112,7 +112,11 @@ func (f *Fake) GetPullRequest(repo, branch string) (*scm.PullRequest, error) {
 }
 
 // OpenPullRequest creates a new pull request
-func (f *Fake) OpenPullRequest(repo, branch, title, description string, reviewers []string) (*scm.PullRequest, error) {
+func (f *Fake) OpenPullRequest(repo, branch string, opts *scm.PROptions) (*scm.PullRequest, error) {
+	if opts == nil {
+		opts = &scm.PROptions{} // default options
+	}
+
 	if err := f.Errors["OpenPullRequest"]; err != nil {
 		return nil, err
 	}
@@ -129,11 +133,11 @@ func (f *Fake) OpenPullRequest(repo, branch, title, description string, reviewer
 	pr := &scm.PullRequest{
 		ID:          prID,
 		Version:     1,
-		Title:       title,
-		Description: description,
+		Title:       opts.Title,
+		Description: opts.Description,
 		Branch:      branch,
 		Repo:        repo,
-		Reviewers:   reviewers,
+		Reviewers:   opts.Reviewers,
 		Mergeable:   true, // Default to mergeable
 	}
 
@@ -144,7 +148,11 @@ func (f *Fake) OpenPullRequest(repo, branch, title, description string, reviewer
 }
 
 // UpdatePullRequest updates an existing pull request
-func (f *Fake) UpdatePullRequest(repo, branch, title, description string, reviewers []string, appendReviewers bool) (*scm.PullRequest, error) {
+func (f *Fake) UpdatePullRequest(repo, branch string, opts *scm.PROptions) (*scm.PullRequest, error) {
+	if opts == nil {
+		opts = &scm.PROptions{} // default options
+	}
+
 	if err := f.Errors["UpdatePullRequest"]; err != nil {
 		return nil, err
 	}
@@ -157,15 +165,15 @@ func (f *Fake) UpdatePullRequest(repo, branch, title, description string, review
 	}
 
 	// Update fields
-	pr.Title = title
-	pr.Description = description
+	pr.Title = opts.Title
+	pr.Description = opts.Description
 
 	// Increment version
 	pr.Version++
 
 	// Update reviewers
-	if appendReviewers {
-		allReviewers := append(pr.Reviewers, reviewers...)
+	if opts.AppendReviewers {
+		allReviewers := append(pr.Reviewers, opts.Reviewers...)
 
 		// Remove duplicates
 		reviewerSet := make(map[string]bool)
@@ -178,7 +186,7 @@ func (f *Fake) UpdatePullRequest(repo, branch, title, description string, review
 		}
 		pr.Reviewers = uniqueReviewers
 	} else {
-		pr.Reviewers = reviewers
+		pr.Reviewers = opts.Reviewers
 	}
 
 	// Return a copy

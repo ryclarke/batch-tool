@@ -22,8 +22,46 @@ const (
 func addCommitCmd() *cobra.Command {
 	// commitCmd represents the commit command
 	commitCmd := &cobra.Command{
-		Use:               "commit <repository>...",
-		Short:             "Commit code changes across repositories",
+		Use:   "commit -m <message> [flags] <repository>...",
+		Short: "Commit code changes across repositories",
+		Long: `Commit staged changes across multiple repositories.
+
+This command stages all changes and commits them with the specified message.
+It runs 'git add -A' followed by 'git commit' in each repository.
+
+Safety Features:
+  - Prevents committing on the default/primary branch (use a feature branch)
+  - Requires a commit message (unless using --amend)
+  - Optionally pushes changes after commit (configurable)
+
+Commit Modes:
+  Normal (-m):   Create a new commit with the specified message
+  Amend (--amend): Amend the previous commit (no message required)
+
+Push Behavior:
+  By default, commits are pushed to remote after committing (configurable).
+  Use --no-push to commit locally without pushing.
+  Push happens with -u flag to set upstream tracking.
+
+Use Cases:
+  - Commit related changes across multiple services
+  - Maintain consistent commit messages
+  - Streamline the commit and push workflow
+  - Amend previous commits across repositories`,
+		Example: `  # Commit with a message
+  batch-tool git commit -m "Add user authentication" repo1 repo2
+
+  # Commit all backend services
+  batch-tool git commit -m "Fix database query" ~backend
+
+  # Commit without pushing
+  batch-tool git commit -m "WIP: refactoring" --no-push repo1
+
+  # Amend the previous commit
+  batch-tool git commit --amend repo1 repo2
+
+  # Commit and push with force (for amended commits)
+  batch-tool git commit --amend --push repo1`,
 		Args:              cobra.MinimumNArgs(1),
 		ValidArgsFunction: catalog.CompletionFunc(),
 		PreRunE: func(cmd *cobra.Command, _ []string) error {
@@ -45,7 +83,7 @@ func addCommitCmd() *cobra.Command {
 			return utils.ValidateRequiredConfig(cmd.Context(), config.CommitMessage)
 		},
 		Run: func(cmd *cobra.Command, args []string) {
-			call.Do(cmd, args, call.Wrap(ValidateBranch, Commit))
+			call.Do(cmd, args, call.Wrap(ValidateBranch(), Commit))
 		},
 	}
 

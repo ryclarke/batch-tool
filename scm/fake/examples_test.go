@@ -35,7 +35,7 @@ func ExampleFake_basicUsage() {
 	println("Found", len(repos), "repositories")
 
 	// Create a pull request
-	pr, _ := fake.OpenPullRequest("repo-1", "feature-branch", "My Feature", "Description", []string{"reviewer1"})
+	pr, _ := fake.OpenPullRequest("repo-1", "feature-branch", &scm.PROptions{Title: "My Feature", Description: "Description", Reviewers: []string{"reviewer1"}})
 	println("Created PR with ID:", pr.ID)
 }
 
@@ -96,7 +96,7 @@ func TestExampleIntegration(t *testing.T) {
 	}
 
 	// Test scenario: Create and retrieve pull request
-	originalPR, err := fake.OpenPullRequest("repo-1", "feature-branch", "Test Feature", "Test Description", []string{"alice", "bob"})
+	originalPR, err := fake.OpenPullRequest("repo-1", "feature-branch", &scm.PROptions{Title: "Test Feature", Description: "Test Description", Reviewers: []string{"alice", "bob"}})
 	if err != nil {
 		t.Fatalf("Failed to create pull request: %v", err)
 	}
@@ -111,7 +111,7 @@ func TestExampleIntegration(t *testing.T) {
 	}
 
 	// Test scenario: Update pull request
-	updatedPR, err := fake.UpdatePullRequest("repo-1", "feature-branch", "Updated Feature", "Updated Description", []string{"charlie"}, true)
+	updatedPR, err := fake.UpdatePullRequest("repo-1", "feature-branch", &scm.PROptions{Title: "Updated Feature", Description: "Updated Description", Reviewers: []string{"charlie"}, AppendReviewers: true})
 	if err != nil {
 		t.Fatalf("Failed to update pull request: %v", err)
 	}
@@ -151,12 +151,12 @@ func TestErrorScenarios(t *testing.T) {
 	}
 
 	// Test duplicate resource errors
-	_, err = fake.OpenPullRequest("repo-1", "branch-1", "PR 1", "Description", []string{})
+	_, err = fake.OpenPullRequest("repo-1", "branch-1", &scm.PROptions{Title: "PR 1", Description: "Description", Reviewers: []string{}})
 	if err != nil {
 		t.Fatalf("Failed to create first PR: %v", err)
 	}
 
-	_, err = fake.OpenPullRequest("repo-1", "branch-1", "PR 2", "Description", []string{})
+	_, err = fake.OpenPullRequest("repo-1", "branch-1", &scm.PROptions{Title: "PR 2", Description: "Description", Reviewers: []string{}})
 	if err == nil {
 		t.Error("Expected error when creating duplicate pull request")
 	}
@@ -169,7 +169,7 @@ func TestDataIsolation(t *testing.T) {
 	fake2 := NewFake("project-2", CreateTestRepositories("project-2"))
 
 	// Add data to fake1
-	_, err := fake1.OpenPullRequest("repo-1", "branch-1", "PR in fake1", "Description", []string{})
+	_, err := fake1.OpenPullRequest("repo-1", "branch-1", &scm.PROptions{Title: "PR in fake1", Description: "Description", Reviewers: []string{}})
 	if err != nil {
 		t.Fatalf("Failed to create PR in fake1: %v", err)
 	}

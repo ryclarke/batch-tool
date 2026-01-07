@@ -65,7 +65,7 @@ Confirmation:
 
 	execCmd.Flags().StringP(scriptFlag, "c", "", "shell command to execute")
 	execCmd.Flags().StringP(fileFlag, "f", "", "path to an executable file to run")
-	execCmd.Flags().StringSliceP(argsFlag, "a", nil, "argument(s) to pass with the command, can be specified multiple times (only for --file|-f)")
+	execCmd.Flags().StringSliceP(argsFlag, "a", nil, "argument(s) to pass with the command (repeatable, requires -f|--file)")
 	execCmd.Flags().BoolP(forceFlag, "y", false, "execute command without asking for confirmation")
 
 	return execCmd

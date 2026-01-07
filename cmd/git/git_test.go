@@ -61,7 +61,7 @@ func TestValidateBranchSourceBranchMatch(t *testing.T) {
 	viper.Set(config.GitProject, "test-project")
 
 	ch := output.NewChannel(ctx, "test-repo", nil, nil)
-	err := ValidateBranch(ctx, ch)
+	err := ValidateBranch()(ctx, ch)
 	ch.Close()
 
 	if err == nil {

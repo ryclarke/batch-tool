@@ -75,9 +75,11 @@ const (
 	// pr
 	PrTitle          = "pr.args.title"
 	PrDescription    = "pr.args.description"
+	PrDraft          = "pr.args.draft"
 	PrReviewers      = "pr.args.reviewers"
 	PrResetReviewers = "pr.args.reset-reviewers"
 	PrAllReviewers   = "pr.args.all-reviewers"
+	PrBaseBranch     = "pr.args.base-branch"
 	PrForceMerge     = "pr.args.force-merge"
 
 	// make
