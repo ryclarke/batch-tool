@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/ryclarke/batch-tool/config"
+	"github.com/ryclarke/batch-tool/scm"
 	testhelper "github.com/ryclarke/batch-tool/utils/testing"
 )
 
@@ -91,7 +92,7 @@ func TestEditCommandRun(t *testing.T) {
 			testViper.Set(config.PrResetReviewers, tt.resetReviewers)
 
 			// Create PR using the provider
-			_, err := testProvider.OpenPullRequest("repo-1", "feature-branch", "Original Title", "Original Description", []string{"original-reviewer"})
+			_, err := testProvider.OpenPullRequest("repo-1", "feature-branch", &scm.PROptions{Title: "Original Title", Description: "Original Description", Reviewers: []string{"original-reviewer"}})
 			if err != nil {
 				t.Fatalf("Failed to create test PR: %v", err)
 			}

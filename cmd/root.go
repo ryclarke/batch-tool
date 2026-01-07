@@ -53,7 +53,37 @@ func RootCmd() *cobra.Command {
 		Long: `Batch tool for working across multiple git repositories
 
 This tool provides a collection of utility functions that facilitate work across
-multiple git repositories, including branch management and pull request creation.`,
+multiple git repositories, including branch management and pull request creation.
+
+Repository Selection:
+  Most commands accept repository arguments that can be specified in several ways.
+
+  Repository Names:
+    Repositories are tracked with project/name paths (e.g. myproject/repo1).
+    The project prefix can be omitted if it matches the configured default project.
+    Examples: repo1 repo2 myproject/repo3
+
+  Labels/Aliases (~ prefix):
+    Use SCM labels or configured local aliases to select groups of repositories.
+    Examples: ~backend ~frontend ~all
+
+    Note: ~all is an implicit alias that includes all tracked repositories.
+
+  Force Include (+ prefix):
+    Include repositories or labels that would normally be excluded/unwanted.
+    Examples: +excluded-repo +~unwanted-label
+
+  Exclude (! prefix):
+    Explicitly exclude specific repositories or labels from selection.
+    Examples: !problem-repo !~experimental
+
+  Combining Selectors:
+    Mix and match different selection methods in a single command.
+    Example: batch-tool git status repo1 ~backend +special !~experimental
+
+Shell Note:
+  Special characters (!, +, ~) may need escaping depending on your shell.
+  For Bash/Zsh, use quotes or backslashes: '!repo' or \!repo`,
 		PersistentPreRunE: func(cmd *cobra.Command, _ []string) error {
 			viper := config.Viper(cmd.Context())
 

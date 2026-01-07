@@ -17,28 +17,52 @@ import (
 
 const (
 	allReviewersFlag = "all-reviewers"
+	baseBranchFlag   = "base-branch"
 )
 
 // addNewCmd initializes the pr new command
 func addNewCmd() *cobra.Command {
 	newCmd := &cobra.Command{
-		Use:               "new <repository>...",
-		Short:             "Submit new pull requests",
+		Use:   "new [-t <title>] [-d <description>] [-r <reviewer>]... <repository>...",
+		Short: "Submit new pull requests",
+		Long: `Create new pull requests for the current branch in each repository.
+
+This command creates a new PR from the current branch to the default branch
+using the SCM provider API.
+
+Optional Information:
+  - Title: PR title (defaults to the feature branch name)
+  - Description: PR body/description text
+  - Reviewers: One or more reviewers to assign
+  - Base Branch: Target branch for the PR (defaults to repo default branch)
+
+Branch Validation:
+  PRs cannot be created from the default branch. Ensure you're not on
+  the default branch before running this command.`,
+		Example: `  # Create PR with description and multiple reviewers
+  batch-tool pr new -t "Fix bug" -d "Fixes issue #123" -r alice -r bob repo1 repo2
+
+  # Create draft PR
+  batch-tool pr new -t "WIP" --draft repo1 repo2`,
 		Args:              cobra.MinimumNArgs(1),
 		ValidArgsFunction: catalog.CompletionFunc(),
 		PreRunE: func(cmd *cobra.Command, _ []string) error {
 			viper := config.Viper(cmd.Context())
 
 			viper.BindPFlag(config.PrAllReviewers, cmd.Flags().Lookup(allReviewersFlag))
+			viper.BindPFlag(config.PrBaseBranch, cmd.Flags().Lookup(baseBranchFlag))
 
 			return nil
 		},
 		Run: func(cmd *cobra.Command, args []string) {
-			call.Do(cmd, args, call.Wrap(git.ValidateBranch, New))
+			viper := config.Viper(cmd.Context())
+
+			call.Do(cmd, args, call.Wrap(git.ValidateBranch(viper.GetString(config.PrBaseBranch)), New))
 		},
 	}
 
 	newCmd.Flags().BoolP(allReviewersFlag, "a", false, "use all provided reviewers for a new PR (default: only the first)")
+	newCmd.Flags().StringP(baseBranchFlag, "b", "", "base branch for the pull request (default: repository default branch)")
 
 	return newCmd
 }
@@ -66,7 +90,14 @@ func New(ctx context.Context, ch output.Channel) error {
 	// Get project from repository metadata in catalog, fall back to default
 	project := catalog.GetProjectForRepo(ctx, ch.Name())
 	provider := scm.Get(ctx, viper.GetString(config.GitProvider), project)
-	pr, err := provider.OpenPullRequest(ch.Name(), branch, viper.GetString(config.PrTitle), viper.GetString(config.PrDescription), reviewers)
+
+	pr, err := provider.OpenPullRequest(ch.Name(), branch, &scm.PROptions{
+		Title:       viper.GetString(config.PrTitle),
+		Description: viper.GetString(config.PrDescription),
+		BaseBranch:  viper.GetString(config.PrBaseBranch),
+		Draft:       viper.GetBool(config.PrDraft),
+		Reviewers:   reviewers,
+	})
 	if err != nil {
 		return err
 	}

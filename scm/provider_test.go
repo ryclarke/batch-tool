@@ -119,7 +119,7 @@ func TestProviderInterface(t *testing.T) {
 	})
 
 	// Test OpenPullRequest
-	pr, err := testProvider.OpenPullRequest("test-repo", "feature-branch", "Test PR", "Description", []string{"reviewer1"})
+	pr, err := testProvider.OpenPullRequest("test-repo", "feature-branch", &scm.PROptions{Title: "Test PR", Description: "Description", Reviewers: []string{"reviewer1"}})
 	if err != nil {
 		t.Errorf("OpenPullRequest failed: %v", err)
 	}
@@ -128,7 +128,7 @@ func TestProviderInterface(t *testing.T) {
 	}
 
 	// Test UpdatePullRequest
-	updatedPR, err := testProvider.UpdatePullRequest("test-repo", "feature-branch", "Updated Title", "Updated Description", []string{"reviewer2"}, false)
+	updatedPR, err := testProvider.UpdatePullRequest("test-repo", "feature-branch", &scm.PROptions{Title: "Updated Title", Description: "Updated Description", Reviewers: []string{"reviewer2"}})
 	if err != nil {
 		t.Errorf("UpdatePullRequest failed: %v", err)
 	}

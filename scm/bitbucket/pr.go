@@ -27,13 +27,17 @@ func (b *Bitbucket) GetPullRequest(repo, branch string) (*scm.PullRequest, error
 }
 
 // OpenPullRequest opens a new pull request in the specified repository.
-func (b *Bitbucket) OpenPullRequest(repo, branch, title, description string, reviewers []string) (*scm.PullRequest, error) {
-	// default PR title is branch name
-	if title == "" {
-		title = branch
+func (b *Bitbucket) OpenPullRequest(repo, branch string, opts *scm.PROptions) (*scm.PullRequest, error) {
+	if opts == nil {
+		opts = &scm.PROptions{} // default options
 	}
 
-	payload := b.genPR(repo, title, description, reviewers)
+	// default PR title is branch name
+	if opts.Title == "" {
+		opts.Title = branch
+	}
+
+	payload := b.genPR(repo, opts.Title, opts.Description, opts.Reviewers)
 
 	request, err := http.NewRequest(http.MethodPost, b.url(repo, nil, "pull-requests"), strings.NewReader(payload))
 	if err != nil {
@@ -46,22 +50,26 @@ func (b *Bitbucket) OpenPullRequest(repo, branch, title, description string, rev
 	}
 
 	// only ID is returned in response, so we need to set the rest of the fields for the return value
-	pr.Title = title
-	pr.Description = description
+	pr.Title = opts.Title
+	pr.Description = opts.Description
 	pr.FromRef = prRef{
 		ID: fmt.Sprintf("refs/heads/%s", branch),
 		Repository: prRefRepo{
 			Slug: repo, Project: prRefRepoProj{Key: b.project},
 		},
 	}
-	pr.SetReviewers(reviewers)
+	pr.SetReviewers(opts.Reviewers)
 
 	return parsePR(pr), nil
 }
 
 // UpdatePullRequest updates an existing pull request.
-func (b *Bitbucket) UpdatePullRequest(repo, branch, title, description string, reviewers []string, appendReviewers bool) (*scm.PullRequest, error) {
-	if title == "" && description == "" && len(reviewers) == 0 {
+func (b *Bitbucket) UpdatePullRequest(repo, branch string, opts *scm.PROptions) (*scm.PullRequest, error) {
+	if opts == nil {
+		opts = &scm.PROptions{} // default options
+	}
+
+	if opts.Title == "" && opts.Description == "" && len(opts.Reviewers) == 0 {
 		return nil, fmt.Errorf("no updates provided")
 	}
 
@@ -70,21 +78,21 @@ func (b *Bitbucket) UpdatePullRequest(repo, branch, title, description string, r
 		return nil, err
 	}
 
-	if title != "" {
-		pr.Title = title
+	if opts.Title != "" {
+		pr.Title = opts.Title
 	}
 
-	if description != "" {
-		pr.Description = description
+	if opts.Description != "" {
+		pr.Description = opts.Description
 	}
 
-	if len(reviewers) == 0 {
-		if appendReviewers {
-			pr.AddReviewers(reviewers)
+	if len(opts.Reviewers) == 0 {
+		if opts.AppendReviewers {
+			pr.AddReviewers(opts.Reviewers)
 		} else {
 			viper := config.Viper(b.ctx)
 			if len(viper.GetStringSlice(prReviewers)) > 0 {
-				pr.SetReviewers(reviewers)
+				pr.SetReviewers(opts.Reviewers)
 			}
 		}
 	}
