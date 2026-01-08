@@ -3,9 +3,9 @@ package github
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
+	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/google/go-github/v74/github"
 
 	"github.com/ryclarke/batch-tool/catalog"
@@ -84,8 +84,20 @@ func (g *Github) UpdatePullRequest(repo, branch string, opts *scm.PROptions) (*s
 	}
 
 	if len(opts.Reviewers) > 0 {
-		if pr, err = g.requestReviewers(context.TODO(), repo, pr.GetNumber(), github.ReviewersRequest{Reviewers: opts.Reviewers}); err != nil {
-			return nil, err
+		// If ResetReviewers is true, replace existing reviewers
+		if opts.ResetReviewers {
+			if err = g.replaceReviewers(context.TODO(), repo, pr.GetNumber(), opts.Reviewers); err != nil {
+				return nil, err
+			}
+			// Refresh PR to get updated reviewer list
+			if pr, err = g.getPullRequest(context.TODO(), repo, branch); err != nil {
+				return nil, err
+			}
+		} else {
+			// GitHub's RequestReviewers API appends to existing reviewers
+			if pr, err = g.requestReviewers(context.TODO(), repo, pr.GetNumber(), github.ReviewersRequest{Reviewers: opts.Reviewers}); err != nil {
+				return nil, err
+			}
 		}
 	}
 
@@ -121,17 +133,14 @@ func (g *Github) getPullRequest(ctx context.Context, repo, branch string) (*gith
 
 	resp, _, err := g.client.PullRequests.List(ctx, g.project, repo, opts)
 	if err != nil {
-		rateLimitError := &github.RateLimitError{}
-		if errors.As(err, &rateLimitError) {
-			return nil, fmt.Errorf("failed to get pull request: %w", err)
-		}
-		if rateErr := g.waitForRateLimit(ctx, true); rateErr != nil {
+		if retry, rateErr := g.handleRateLimitError(ctx, err, true); rateErr != nil {
 			return nil, fmt.Errorf("failed to get pull request: %w: %w", rateErr, err)
+		} else if !retry {
+			return nil, fmt.Errorf("failed to get pull request: %w", err)
 		}
 
 		// retry the request after waiting for the rate limit to reset
-		resp, _, err = g.client.PullRequests.List(ctx, g.project, repo, opts)
-		if err != nil {
+		if resp, _, err = g.client.PullRequests.List(ctx, g.project, repo, opts); err != nil {
 			return nil, fmt.Errorf("failed to get pull request after retry: %w", err)
 		}
 	}
@@ -149,17 +158,14 @@ func (g *Github) openPullRequest(ctx context.Context, repo string, req *github.N
 
 	resp, _, err := g.client.PullRequests.Create(ctx, g.project, repo, req)
 	if err != nil {
-		rateLimitError := &github.RateLimitError{}
-		if errors.As(err, &rateLimitError) {
-			return nil, fmt.Errorf("failed to open pull request: %w", err)
-		}
-		if rateErr := g.waitForRateLimit(ctx, false); rateErr != nil {
+		if retry, rateErr := g.handleRateLimitError(ctx, err, false); rateErr != nil {
 			return nil, fmt.Errorf("failed to open pull request: %w: %w", rateErr, err)
+		} else if !retry {
+			return nil, fmt.Errorf("failed to open pull request: %w", err)
 		}
 
 		// retry the request after waiting for the rate limit to reset
-		resp, _, err = g.client.PullRequests.Create(ctx, g.project, repo, req)
-		if err != nil {
+		if resp, _, err = g.client.PullRequests.Create(ctx, g.project, repo, req); err != nil {
 			return nil, fmt.Errorf("failed to open pull request after retry: %w", err)
 		}
 	}
@@ -173,12 +179,10 @@ func (g *Github) editPullRequest(ctx context.Context, repo string, prNumber int,
 
 	pr, _, err := g.client.PullRequests.Edit(ctx, g.project, repo, prNumber, req)
 	if err != nil {
-		rateLimitError := &github.RateLimitError{}
-		if errors.As(err, &rateLimitError) {
-			return nil, fmt.Errorf("failed to update pull request: %w", err)
-		}
-		if rateErr := g.waitForRateLimit(ctx, false); rateErr != nil {
+		if retry, rateErr := g.handleRateLimitError(ctx, err, false); rateErr != nil {
 			return nil, fmt.Errorf("failed to update pull request: %w: %w", rateErr, err)
+		} else if !retry {
+			return nil, fmt.Errorf("failed to update pull request: %w", err)
 		}
 
 		// retry the request after waiting for the rate limit to reset
@@ -196,12 +200,10 @@ func (g *Github) requestReviewers(ctx context.Context, repo string, prNumber int
 
 	resp, _, err := g.client.PullRequests.RequestReviewers(ctx, g.project, repo, prNumber, req)
 	if err != nil {
-		rateLimitError := &github.RateLimitError{}
-		if errors.As(err, &rateLimitError) {
-			return nil, fmt.Errorf("failed to request reviewers: %w", err)
-		}
-		if rateErr := g.waitForRateLimit(ctx, false); rateErr != nil {
+		if retry, rateErr := g.handleRateLimitError(ctx, err, false); rateErr != nil {
 			return nil, fmt.Errorf("failed to request reviewers: %w: %w", rateErr, err)
+		} else if !retry {
+			return nil, fmt.Errorf("failed to request reviewers: %w", err)
 		}
 
 		// retry the request after waiting for the rate limit to reset
@@ -213,18 +215,100 @@ func (g *Github) requestReviewers(ctx context.Context, repo string, prNumber int
 	return resp, nil
 }
 
+func (g *Github) listReviewers(ctx context.Context, repo string, prNumber int) ([]string, error) {
+	// acquire read lock (and release it when done)
+	defer g.readLock()()
+
+	reviewers, _, err := g.client.PullRequests.ListReviewers(ctx, g.project, repo, prNumber, nil)
+	if err != nil {
+		if retry, rateErr := g.handleRateLimitError(ctx, err, true); rateErr != nil {
+			return nil, fmt.Errorf("failed to list reviewers: %w: %w", rateErr, err)
+		} else if !retry {
+			return nil, fmt.Errorf("failed to list reviewers: %w", err)
+		}
+
+		// retry the request after waiting for the rate limit to reset
+		if reviewers, _, err = g.client.PullRequests.ListReviewers(ctx, g.project, repo, prNumber, nil); err != nil {
+			return nil, fmt.Errorf("failed to list reviewers after retry: %w", err)
+		}
+	}
+
+	result := make([]string, 0, len(reviewers.Users))
+	for _, user := range reviewers.Users {
+		result = append(result, user.GetLogin())
+	}
+
+	return result, nil
+}
+
+func (g *Github) removeReviewers(ctx context.Context, repo string, prNumber int, reviewers []string) error {
+	if len(reviewers) == 0 {
+		return nil
+	}
+
+	// acquire write lock (and release it when done)
+	defer g.writeLock()()
+
+	_, err := g.client.PullRequests.RemoveReviewers(ctx, g.project, repo, prNumber, github.ReviewersRequest{Reviewers: reviewers})
+	if err != nil {
+		if retry, rateErr := g.handleRateLimitError(ctx, err, false); rateErr != nil {
+			return fmt.Errorf("failed to remove reviewers: %w: %w", rateErr, err)
+		} else if !retry {
+			return fmt.Errorf("failed to remove reviewers: %w", err)
+		}
+
+		// retry the request after waiting for the rate limit to reset
+		if _, err = g.client.PullRequests.RemoveReviewers(ctx, g.project, repo, prNumber, github.ReviewersRequest{Reviewers: reviewers}); err != nil {
+			return fmt.Errorf("failed to remove reviewers after retry: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// replaceReviewers replaces the current reviewers with the provided list
+func (g *Github) replaceReviewers(ctx context.Context, repo string, prNumber int, newReviewers []string) error {
+	// Get current reviewers
+	currentReviewers, err := g.listReviewers(ctx, repo, prNumber)
+	if err != nil {
+		return err
+	}
+
+	// Build sets for comparison
+	currentSet := mapset.NewSet(currentReviewers...)
+	newSet := mapset.NewSet(newReviewers...)
+
+	// Find reviewers to add or remove
+	toRemove := currentSet.Difference(newSet)
+	toAdd := newSet.Difference(currentSet)
+
+	// Remove old reviewers
+	if toRemove.Cardinality() > 0 {
+		if err = g.removeReviewers(ctx, repo, prNumber, toRemove.ToSlice()); err != nil {
+			return err
+		}
+	}
+
+	// Add new reviewers
+	if toAdd.Cardinality() > 0 {
+		if _, err = g.requestReviewers(ctx, repo, prNumber, github.ReviewersRequest{Reviewers: toAdd.ToSlice()}); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 func (g *Github) mergePullRequest(ctx context.Context, repo string, prNumber int) error {
 	// acquire write lock (and release it when done)
 	defer g.writeLock()()
 
 	_, _, err := g.client.PullRequests.Merge(ctx, g.project, repo, prNumber, "", nil)
 	if err != nil {
-		rateLimitError := &github.RateLimitError{}
-		if errors.As(err, &rateLimitError) {
-			return fmt.Errorf("failed to merge pull request: %w", err)
-		}
-		if rateErr := g.waitForRateLimit(ctx, false); rateErr != nil {
+		if retry, rateErr := g.handleRateLimitError(ctx, err, false); rateErr != nil {
 			return fmt.Errorf("failed to merge pull request: %w: %w", rateErr, err)
+		} else if !retry {
+			return fmt.Errorf("failed to merge pull request: %w", err)
 		}
 
 		// retry the request after waiting for the rate limit to reset

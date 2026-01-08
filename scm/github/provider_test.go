@@ -70,3 +70,71 @@ func TestGithubProviderRegistration(t *testing.T) {
 		t.Errorf("Expected *Github provider, got %T", provider)
 	}
 }
+
+func TestHandleRateLimitError_NotRateLimitError(t *testing.T) {
+	ctx := loadFixture(t)
+	g := New(ctx, "test-project").(*Github)
+
+	// Regular error should not trigger retry
+	err := context.DeadlineExceeded
+	shouldRetry, retErr := g.handleRateLimitError(context.TODO(), err, false)
+
+	if shouldRetry {
+		t.Error("Should not retry on non-rate-limit error")
+	}
+	if retErr != nil {
+		t.Errorf("Expected nil retErr for non-rate-limit error, got %v", retErr)
+	}
+}
+
+func TestReadLock(t *testing.T) {
+	ctx := loadFixture(t)
+	g := New(ctx, "test-project").(*Github)
+
+	// Test acquiring and releasing read lock
+	done := g.readLock()
+	if done == nil {
+		t.Fatal("Expected non-nil done function")
+	}
+
+	// Release the lock
+	done()
+
+	// Should be able to acquire again
+	done2 := g.readLock()
+	if done2 == nil {
+		t.Fatal("Expected to acquire read lock again")
+	}
+	done2()
+}
+
+func TestWriteLock(t *testing.T) {
+	ctx := loadFixture(t)
+	g := New(ctx, "test-project").(*Github)
+
+	// Test acquiring and releasing write lock
+	done := g.writeLock()
+	if done == nil {
+		t.Fatal("Expected non-nil done function")
+	}
+
+	// Release the lock (note: will have a small delay due to write backoff)
+	done()
+}
+
+func TestReadWriteLockInteraction(t *testing.T) {
+	ctx := loadFixture(t)
+	g := New(ctx, "test-project").(*Github)
+
+	// Acquire multiple read locks (should be allowed)
+	done1 := g.readLock()
+	done2 := g.readLock()
+
+	// Release them
+	done1()
+	done2()
+
+	// Now acquire write lock
+	done3 := g.writeLock()
+	done3()
+}

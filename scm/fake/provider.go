@@ -172,7 +172,9 @@ func (f *Fake) UpdatePullRequest(repo, branch string, opts *scm.PROptions) (*scm
 	pr.Version++
 
 	// Update reviewers
-	if opts.AppendReviewers {
+	if opts.ResetReviewers {
+		pr.Reviewers = opts.Reviewers
+	} else {
 		allReviewers := append(pr.Reviewers, opts.Reviewers...)
 
 		// Remove duplicates
@@ -185,8 +187,6 @@ func (f *Fake) UpdatePullRequest(repo, branch string, opts *scm.PROptions) (*scm
 			}
 		}
 		pr.Reviewers = uniqueReviewers
-	} else {
-		pr.Reviewers = opts.Reviewers
 	}
 
 	// Return a copy

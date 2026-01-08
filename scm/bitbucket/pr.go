@@ -32,12 +32,17 @@ func (b *Bitbucket) OpenPullRequest(repo, branch string, opts *scm.PROptions) (*
 		opts = &scm.PROptions{} // default options
 	}
 
+	// check for existing PR first (reads are less restrictive than a failed write)
+	if _, err := b.getPullRequest(repo, branch); err == nil {
+		return nil, fmt.Errorf("a pull request already exists for branch %s in repository %s", branch, repo)
+	}
+
 	// default PR title is branch name
 	if opts.Title == "" {
 		opts.Title = branch
 	}
 
-	payload := b.genPR(repo, opts.Title, opts.Description, opts.Reviewers)
+	payload := b.genPR(repo, branch, opts.BaseBranch, opts.Title, opts.Description, opts.Reviewers)
 
 	request, err := http.NewRequest(http.MethodPost, b.url(repo, nil, "pull-requests"), strings.NewReader(payload))
 	if err != nil {
@@ -86,14 +91,11 @@ func (b *Bitbucket) UpdatePullRequest(repo, branch string, opts *scm.PROptions) 
 		pr.Description = opts.Description
 	}
 
-	if len(opts.Reviewers) == 0 {
-		if opts.AppendReviewers {
-			pr.AddReviewers(opts.Reviewers)
+	if len(opts.Reviewers) > 0 {
+		if opts.ResetReviewers {
+			pr.SetReviewers(opts.Reviewers)
 		} else {
-			viper := config.Viper(b.ctx)
-			if len(viper.GetStringSlice(prReviewers)) > 0 {
-				pr.SetReviewers(opts.Reviewers)
-			}
+			pr.AddReviewers(opts.Reviewers)
 		}
 	}
 
@@ -213,21 +215,26 @@ func (pr *prResp) SetReviewers(reviewers []string) {
 }
 
 // generate a PR payload for the Bitbucket API
-func (b *Bitbucket) genPR(name, title, description string, reviewers []string) string {
+func (b *Bitbucket) genPR(name, branch, baseBranch, title, description string, reviewers []string) string {
 	viper := config.Viper(b.ctx)
+
+	// use provided base branch or fall back to configured default
+	if baseBranch == "" {
+		baseBranch = viper.GetString(config.DefaultBranch)
+	}
 
 	pr := &prResp{
 		Title:       title,
 		Description: description,
 		FromRef: prRef{
-			ID: fmt.Sprintf("refs/heads/%s", viper.GetString(config.Branch)),
+			ID: fmt.Sprintf("refs/heads/%s", branch),
 			Repository: prRefRepo{
 				Slug:    name,
 				Project: prRefRepoProj{Key: b.project}, // Use provider's project
 			},
 		},
 		ToRef: prRef{
-			ID: fmt.Sprintf("refs/heads/%s", viper.GetString(config.DefaultBranch)),
+			ID: fmt.Sprintf("refs/heads/%s", baseBranch),
 			Repository: prRefRepo{
 				Slug:    name,
 				Project: prRefRepoProj{Key: b.project},
