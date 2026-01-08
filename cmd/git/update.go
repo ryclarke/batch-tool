@@ -18,42 +18,23 @@ func addUpdateCmd() *cobra.Command {
 		Long: `Update the primary/default branch to the latest from remote.
 
 This command performs two operations for each repository:
-  1. Checkout the default branch (main, master, develop, etc.)
-  2. Pull the latest changes from the remote
+  1. Stash uncommitted changes (if any)
+  2. Checkout the default branch (main, master, develop, etc.)
+  3. Pull the latest changes from the remote
+  4. Restore stashed changes (if applicable)
 
 The default branch name is determined from the repository catalog
 configuration, which typically reads it from the git repository's
-HEAD reference or uses a configured default.
-
-This is commonly used:
-  - Before starting new feature branches
-  - To sync local repositories with remote state
-  - After merging pull requests
-  - To ensure you have the latest baseline
-
-Note: This will fail if the working directory has uncommitted changes.
-Commit or stash changes before updating.
-
-Use Cases:
-  - Sync repositories before starting new work
-  - Update after PRs are merged remotely
-  - Ensure consistent baseline across repositories
-  - Prepare for creating new branches`,
+HEAD reference or uses a configured default.`,
 		Example: `  # Update specific repositories
   batch-tool git update repo1 repo2
 
-  # Update all backend services
-  batch-tool git update ~backend
-
   # Update all repositories
-  batch-tool git update ~all
-
-  # Update synchronously (one at a time)
-  batch-tool git update --sync repo1 repo2`,
+  batch-tool git update ~all`,
 		Args:              cobra.MinimumNArgs(1),
 		ValidArgsFunction: catalog.CompletionFunc(),
 		Run: func(cmd *cobra.Command, args []string) {
-			call.Do(cmd, args, Update)
+			call.Do(cmd, args, call.Wrap(StashPush, Update, StashPop))
 		},
 	}
 

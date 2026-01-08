@@ -22,54 +22,27 @@ const (
 // addEditCmd initializes the pr edit command
 func addEditCmd() *cobra.Command {
 	editCmd := &cobra.Command{
-		Use:   "edit [-t <title>] [-d <description>] [-r <reviewer>]... [flags] <repository>...",
+		Use:   "edit [--draft|--no-draft] [-t <title>] [-d <description>] [-r <reviewer>]... [--reset-reviewers] <repository>...",
 		Short: "Update existing pull requests",
 		Long: `Update existing pull requests for the current branch.
 
 This command updates PR details for existing pull requests using the SCM
-provider API. You can update:
+provider API. You can update one or more of the following fields:
   - Title
   - Description
   - Reviewers
   - Draft status
 
-The command:
-  1. Finds the existing PR for the current branch
-  2. Updates the specified fields
-  3. Manages reviewers (add or replace based on flags)
-  4. Displays the updated PR information
-
-Partial Updates:
-  You don't need to specify all fields. Only provided fields are updated:
-  - Just title: Only title changes
-  - Just reviewers: Only reviewers change
-  - Multiple fields: All specified fields update
-
 Branch Requirement:
-  Must be on a feature branch with an existing PR.
+  Must be on a feature branch with an existing PR.`,
+		Example: `  # Update PR title and description
+  batch-tool pr edit -t "Updated title" -d "Updated description" repo1 repo2
 
-Use Cases:
-  - Update PR title or description
-  - Add reviewers to existing PRs
-  - Replace reviewer list
-  - Correct PR information after creation`,
-		Example: `  # Update PR title
-  batch-tool pr edit -t "Updated title" repo1 repo2
-
-  # Update description
-  batch-tool pr edit -d "Updated description" repo1
-
-  # Add reviewers and mark as ready for review
+  # Add reviewer and mark as ready for review
   batch-tool pr edit -r charlie --no-draft repo1
 
   # Replace all reviewers (only supported on Bitbucket)
-  batch-tool pr edit -r alice -r bob --reset-reviewers repo1
-
-  # Update multiple fields
-  batch-tool pr edit -t "New title" -d "New desc" -r alice repo1
-
-  # Update PRs for backend services
-  batch-tool pr edit -t "Fix" ~backend`,
+  batch-tool pr edit -r alice -r bob --reset-reviewers repo1`,
 		Args:              cobra.MinimumNArgs(1),
 		ValidArgsFunction: catalog.CompletionFunc(),
 		PreRunE: func(cmd *cobra.Command, _ []string) error {

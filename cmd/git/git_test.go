@@ -16,8 +16,8 @@ func TestGitCmd(t *testing.T) {
 		t.Fatal("Cmd() returned nil")
 	}
 
-	if cmd.Use != "git [cmd] <repository>..." {
-		t.Errorf("Expected Use to be 'git [cmd] <repository>...', got %s", cmd.Use)
+	if cmd.Use != "git <command> [flags] <repository>..." {
+		t.Errorf("Expected Use to be 'git <command> [flags] <repository>...', got %s", cmd.Use)
 	}
 
 	if cmd.Short == "" {
@@ -65,8 +65,8 @@ func TestValidateBranchSourceBranchMatch(t *testing.T) {
 	ch.Close()
 
 	if err == nil {
-		t.Error("Expected error when current branch matches source branch")
-	} else if !strings.Contains(err.Error(), "source branch") {
-		t.Errorf("Error should mention source branch, got: %v", err)
+		t.Error("Expected error when current branch matches base branch")
+	} else if !strings.Contains(err.Error(), "base branch") {
+		t.Errorf("Error should mention base branch, got: %v", err)
 	}
 }

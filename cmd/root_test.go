@@ -53,7 +53,7 @@ func TestCatalogCommand(t *testing.T) {
 	// Find the catalog command
 	var catalogCmd *cobra.Command
 	for _, subcmd := range cmd.Commands() {
-		if subcmd.Use == "catalog" {
+		if subcmd.Use == "catalog [--flush]" {
 			catalogCmd = subcmd
 			break
 		}

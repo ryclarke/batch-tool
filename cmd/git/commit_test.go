@@ -17,8 +17,8 @@ func TestAddCommitCmd(t *testing.T) {
 		t.Fatal("addCommitCmd() returned nil")
 	}
 
-	if cmd.Use != "commit <repository>..." {
-		t.Errorf("Expected Use to be 'commit <repository>...', got %s", cmd.Use)
+	if cmd.Use != "commit {-m <message>|-a [-m <message>]} [--push] <repository>..." {
+		t.Errorf("Expected Use to be 'commit {-m <message>|-a [-m <message>]} [--push] <repository>...', got %s", cmd.Use)
 	}
 
 	if cmd.Short == "" {
@@ -145,9 +145,9 @@ func TestCommitCommandRun(t *testing.T) {
 			testViper := config.Viper(testCtx)
 
 			if tt.message != "" {
-				testViper.Set(config.CommitMessage, tt.message)
+				testViper.Set(config.GitCommitMessage, tt.message)
 			}
-			testViper.Set(config.CommitAmend, tt.amend)
+			testViper.Set(config.GitCommitAmend, tt.amend)
 
 			// Setup repository state
 			for _, repo := range tt.repos {
@@ -210,7 +210,7 @@ func TestCommitCommandRunOnMainBranch(t *testing.T) {
 	ctx := setupTestGitContext(t, reposPath)
 	viper := config.Viper(ctx)
 
-	viper.Set(config.CommitMessage, "Test commit")
+	viper.Set(config.GitCommitMessage, "Test commit")
 
 	cmd := addCommitCmd()
 
@@ -233,7 +233,7 @@ func TestCommitCommandRunWithNoPushFlag(t *testing.T) {
 	ctx := setupTestGitContext(t, reposPath)
 	viper := config.Viper(ctx)
 
-	viper.Set(config.CommitMessage, "Test commit")
+	viper.Set(config.GitCommitMessage, "Test commit")
 
 	// Setup feature branch
 	repoDir := filepath.Join(reposPath, "example.com", "test-project", "repo-1")

@@ -16,8 +16,8 @@ func TestAddEditCmd(t *testing.T) {
 		t.Fatal("addEditCmd() returned nil")
 	}
 
-	if cmd.Use != "edit <repository>..." {
-		t.Errorf("Expected Use to be 'edit <repository>...', got %s", cmd.Use)
+	if cmd.Use != "edit [--draft|--no-draft] [-t <title>] [-d <description>] [-r <reviewer>]... [--reset-reviewers] <repository>..." {
+		t.Errorf("Expected Use to be 'edit [--draft|--no-draft] [-t <title>] [-d <description>] [-r <reviewer>]... [--reset-reviewers] <repository>...', got %s", cmd.Use)
 	}
 
 	if cmd.Short == "" {
