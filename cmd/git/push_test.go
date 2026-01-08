@@ -15,8 +15,8 @@ func TestAddPushCmd(t *testing.T) {
 		t.Fatal("addPushCmd() returned nil")
 	}
 
-	if cmd.Use != "push <repository>..." {
-		t.Errorf("Expected Use to be 'push <repository>...', got %s", cmd.Use)
+	if cmd.Use != "push [-f] <repository>..." {
+		t.Errorf("Expected Use to be 'push [-f] <repository>...', got %s", cmd.Use)
 	}
 
 	if cmd.Short == "" {
@@ -83,7 +83,7 @@ func TestPushCommandRun(t *testing.T) {
 			testViper := config.Viper(testCtx)
 
 			if tt.force {
-				testViper.Set(config.CommitAmend, true)
+				testViper.Set(config.GitCommitAmend, true)
 			}
 
 			cmd := addPushCmd()
@@ -121,7 +121,7 @@ func TestPushCommandRunWithForce(t *testing.T) {
 	testViper := config.Viper(testCtx)
 
 	// Set force flag
-	testViper.Set(config.CommitAmend, true)
+	testViper.Set(config.GitCommitAmend, true)
 
 	cmd2 := addPushCmd()
 

@@ -22,14 +22,6 @@ func addGetCmd() *cobra.Command {
 		Short:   "Get pull request information",
 		Long: `Retrieve and display pull request information from the SCM provider.
 
-This command fetches PR details for the current branch in each specified
-repository, including:
-  - PR number
-  - Title
-  - Description
-  - Reviewers
-  - Status (if available)
-
 The command uses the SCM provider API to fetch real-time PR information.
 It requires:
   - An active pull request for the current branch
@@ -38,24 +30,9 @@ It requires:
 
 Branch Requirement:
   The command must be run when repositories are on a feature branch (not the
-  default branch). It looks up the PR associated with the current branch.
-
-Use Cases:
-  - Check PR status before merging
-  - Verify PR details and reviewers
-  - Get PR numbers for reference
-  - Review PR descriptions across repos`,
+  default branch). It looks up the PR associated with the current branch.`,
 		Example: `  # Get PR info for specific repositories
-  batch-tool pr get repo1 repo2
-
-  # Get PR info for all backend services
-  batch-tool pr get ~backend
-
-  # Using list alias
-  batch-tool pr list repo1 repo2
-
-  # Get PR with native output
-  batch-tool pr get -o native repo1`,
+  batch-tool pr get repo1 repo2`,
 		Args:              cobra.MinimumNArgs(1),
 		ValidArgsFunction: catalog.CompletionFunc(),
 		Run: func(cmd *cobra.Command, args []string) {

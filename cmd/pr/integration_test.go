@@ -42,8 +42,8 @@ func TestPRIntegrationWithFakeProvider(t *testing.T) {
 		cmd.SetErr(&output)
 
 		// We can't easily test execution without more setup, but we can test command structure
-		if cmd.Use != "new <repository>..." {
-			t.Errorf("Expected Use to be 'new <repository>...', got %s", cmd.Use)
+		if cmd.Use != "new [--draft] [-t <title>] [-d <description>] [-r <reviewer>]... [-a] [-b <base-branch>] <repository>..." {
+			t.Errorf("Expected Use to be 'new [--draft] [-t <title>] [-d <description>] [-r <reviewer>]... [-a] [-b <base-branch>] <repository>...', got %s", cmd.Use)
 		}
 
 		if cmd.Short == "" {
@@ -55,8 +55,8 @@ func TestPRIntegrationWithFakeProvider(t *testing.T) {
 	t.Run("EditCommand", func(t *testing.T) {
 		cmd := addEditCmd()
 
-		if cmd.Use != "edit <repository>..." {
-			t.Errorf("Expected Use to be 'edit <repository>...', got %s", cmd.Use)
+		if cmd.Use != "edit [--draft|--no-draft] [-t <title>] [-d <description>] [-r <reviewer>]... [--reset-reviewers] <repository>..." {
+			t.Errorf("Expected Use to be 'edit [--draft|--no-draft] [-t <title>] [-d <description>] [-r <reviewer>]... [--reset-reviewers] <repository>...', got %s", cmd.Use)
 		}
 
 		if cmd.Short == "" {
@@ -68,8 +68,8 @@ func TestPRIntegrationWithFakeProvider(t *testing.T) {
 	t.Run("MergeCommand", func(t *testing.T) {
 		cmd := addMergeCmd()
 
-		if cmd.Use != "merge <repository>..." {
-			t.Errorf("Expected Use to be 'merge <repository>...', got %s", cmd.Use)
+		if cmd.Use != "merge [-f] <repository>..." {
+			t.Errorf("Expected Use to be 'merge [-f] <repository>...', got %s", cmd.Use)
 		}
 
 		if cmd.Short == "" {
@@ -201,8 +201,8 @@ func TestPRRootCommand(t *testing.T) {
 
 	cmd := Cmd()
 
-	if cmd.Use != "pr [cmd] <repository>..." {
-		t.Errorf("Expected Use to be 'pr [cmd] <repository>...', got %s", cmd.Use)
+	if cmd.Use != "pr <repository>..." {
+		t.Errorf("Expected Use to be 'pr <repository>...', got %s", cmd.Use)
 	}
 
 	if cmd.Short == "" {
@@ -211,20 +211,20 @@ func TestPRRootCommand(t *testing.T) {
 
 	// Test that subcommands are added
 	subCommands := cmd.Commands()
-	expectedSubCommands := []string{"new", "edit", "merge"}
+	expectedSubCommands := []string{"new", "edit", "merge", "get"}
 
 	if len(subCommands) < len(expectedSubCommands) {
 		t.Errorf("Expected at least %d subcommands, got %d", len(expectedSubCommands), len(subCommands))
 	}
 
-	// Check that expected subcommands exist
+	// Check that expected subcommands exist by checking the command name (not full Use string)
 	foundCommands := make(map[string]bool)
 	for _, subCmd := range subCommands {
-		foundCommands[subCmd.Use] = true
+		foundCommands[subCmd.Name()] = true
 	}
 
 	for _, expectedCmd := range expectedSubCommands {
-		if !foundCommands[expectedCmd+" <repository>..."] {
+		if !foundCommands[expectedCmd] {
 			t.Errorf("Expected subcommand %s not found", expectedCmd)
 		}
 	}

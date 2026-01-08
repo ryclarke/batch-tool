@@ -7,10 +7,14 @@ import (
 	"github.com/ryclarke/batch-tool/catalog"
 )
 
+const (
+	cachedFlag = "cached"
+)
+
 func addDiffCmd() *cobra.Command {
 	// diffCmd represents the diff command
 	diffCmd := &cobra.Command{
-		Use:   "diff <repository>...",
+		Use:   "diff [--cached] <repository>...",
 		Short: "Git diff of each repository",
 		Long: `Show git diff for each specified repository.
 
@@ -19,30 +23,28 @@ This command runs 'git diff' in each repository, displaying:
   - Additions and deletions with color coding
   - File paths and change locations
 
-The diff shows unstaged changes in the working directory compared to the
-index (staging area). Staged changes are not shown unless committed.
-
-For reviewing staged changes, use 'git diff --cached' directly in the repo.
-
-Use Cases:
-  - Review changes before committing
-  - Compare working directory to last commit
-  - Identify what has changed across repositories
-  - Debug unexpected file modifications`,
+By default, the diff shows unstaged changes in the working directory
+compared to the index (staging area). Staged changes are shown instead
+if the --cached flag is used.`,
 		Example: `  # Show diff for specific repositories
   batch-tool git diff repo1 repo2
 
-  # Show diff for all backend services
-  batch-tool git diff ~backend
-
-  # Show diff with native output (for piping)
-  batch-tool git diff -o native repo1`,
+  # Show diff of staged changes
+  batch-tool git diff --cached ~backend`,
 		Args:              cobra.MinimumNArgs(1),
 		ValidArgsFunction: catalog.CompletionFunc(),
 		Run: func(cmd *cobra.Command, args []string) {
-			call.Do(cmd, args, call.Exec("git", "diff"))
+			gitArgs := []string{"diff"}
+
+			if cached, err := cmd.Flags().GetBool(cachedFlag); err == nil && cached {
+				gitArgs = append(gitArgs, "--cached")
+			}
+
+			call.Do(cmd, args, call.Exec("git", gitArgs...))
 		},
 	}
+
+	diffCmd.Flags().Bool(cachedFlag, false, "show diff of staged changes (cached)")
 
 	return diffCmd
 }

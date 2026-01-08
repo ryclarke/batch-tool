@@ -25,25 +25,17 @@ This command provides a suite of git operations that can be executed across
 multiple repositories simultaneously, including branch management, commits,
 pushes, and status checks.
 
-The default subcommand is 'status' if no subcommand is specified.
-
-Available Subcommands:
-  status   - Show git status for repositories
-  branch   - Create and checkout new branches
-  commit   - Commit changes across repositories
-  push     - Push commits to remote repositories
-  diff     - Show git diffs for repositories
-  update   - Update primary branch to latest`,
-		Example: `  # Check status of specific repositories
-  batch-tool git status repo1 repo2
-
-  # Check status of all backend repositories
+The default subcommand is 'status' if no subcommand is specified.`,
+		Example: `  # Check status of repositories (default command)
   batch-tool git ~backend
 
-  # Create a new branch across repositories
+  # Check status of repositories
+  batch-tool git status repo1 repo2
+
+  # Create new branches
   batch-tool git branch -b feature/new-api repo1 repo2
 
-  # Commit changes with a message
+  # Commit changes with a common message
   batch-tool git commit -m "Fix bug" ~backend
 
   # Push changes to remote
@@ -59,6 +51,7 @@ Available Subcommands:
 		addCommitCmd(),
 		addDiffCmd(),
 		addPushCmd(),
+		addStashCmd(),
 		addUpdateCmd(),
 	)
 
@@ -82,7 +75,7 @@ func ValidateBranch(branch ...string) call.Func {
 		}
 
 		if strings.TrimSpace(string(output)) == strings.TrimSpace(branch[0]) {
-			return fmt.Errorf("skipping operation - %s is the base branch", output)
+			return fmt.Errorf("skipping operation - %s is the base branch", strings.TrimSpace(string(output)))
 		}
 
 		return nil

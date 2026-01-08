@@ -15,8 +15,8 @@ func TestAddNewCmd(t *testing.T) {
 		t.Fatal("addNewCmd() returned nil")
 	}
 
-	if cmd.Use != "new <repository>..." {
-		t.Errorf("Expected Use to be 'new <repository>...', got %s", cmd.Use)
+	if cmd.Use != "new [--draft] [-t <title>] [-d <description>] [-r <reviewer>]... [-a] [-b <base-branch>] <repository>..." {
+		t.Errorf("Expected Use to be 'new [--draft] [-t <title>] [-d <description>] [-r <reviewer>]... [-a] [-b <base-branch>] <repository>...', got %s", cmd.Use)
 	}
 
 	if cmd.Short == "" {

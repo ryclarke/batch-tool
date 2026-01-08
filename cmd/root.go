@@ -102,7 +102,7 @@ Shell Note:
 			}
 
 			// Allow the `--sync` flag to override max-concurrency to 1
-			if sync, _ := cmd.Flags().GetBool(syncFlag); sync {
+			if sync, err := cmd.Flags().GetBool(syncFlag); err == nil && sync {
 				viper.Set(config.MaxConcurrency, 1)
 			}
 
@@ -189,9 +189,41 @@ func setTerminalWait(cmd *cobra.Command) error {
 // labelsCmd configures the labels command
 func labelsCmd() *cobra.Command {
 	labelsCmd := &cobra.Command{
-		Use:               "labels <repository|label>...",
-		Aliases:           []string{"label"},
-		Short:             "Inspect repository labels and test filters",
+		Use:     "labels [repository|label]...",
+		Aliases: []string{"label"},
+		Short:   "Inspect repository labels and test filters",
+		Long: `Inspect repository labels and test filter expressions.
+
+This command displays labels (topics and aliases) for specified repositories,
+helping you understand which repositories match your filter expressions. It's
+useful for testing repository selection before running commands that modify state.
+
+If run without any filter arguments, the command lists all labels and aliases.
+
+Label Types:
+  SCM Topics/Labels:
+    Labels assigned to repositories in your source control management system
+    (GitHub topics, Bitbucket labels, etc.). These are fetched from the API
+    and cached in the repository catalog.
+
+  Local Aliases:
+    Custom label aliases defined in your configuration file. These are merged
+	with discovered SCM labels if there's a name collision.
+
+Filter Testing:
+  Use this command to preview which repositories will be selected by your
+  filter expressions (labels, exclusions, force-includes) before executing
+  commands that make changes. This helps avoid mistakes when working with
+  repository selections.
+
+Verbose Mode:
+  The -v/--verbose flag expands label references to show all repositories
+  that would be included by each label in your filter expression.`,
+		Example: `# Test a label filter
+  batch-tool labels ~web ~db
+
+  # Test complex filter with exclusions and verbose output
+  batch-tool labels -v ~all !~experimental`,
 		Args:              cobra.ArbitraryArgs,
 		ValidArgsFunction: catalog.CompletionFunc(),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -217,11 +249,40 @@ func labelsCmd() *cobra.Command {
 // catalogCmd configures the catalog command
 func catalogCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "catalog",
+		Use:   "catalog [--flush]",
 		Short: "Print information on the cached repository catalog",
-		Args:  cobra.NoArgs,
+		Long: `Display the local repository catalog with metadata.
+
+This command shows all repositories tracked by batch-tool along with their
+metadata, including project names, default branches, visibility settings,
+descriptions, and assigned SCM labels.
+
+Catalog Source:
+  The catalog is built by querying your configured SCM provider and is
+  cached locally with a configurable TTL. The cache improves performance
+  by avoiding repeated API lookup calls.
+
+Catalog Contents:
+  For each repository, the catalog displays:
+    - Repository name
+    - Description
+    - Project namespace
+    - Default branch name
+    - Visibility (public/private)
+    - Associated SCM labels
+
+Cache Management:
+  The catalog cache is automatically refreshed when it expires (based on TTL).
+  Use the -f/--flush flag to force an immediate refresh, which is useful when
+  you've made changes to repository metadata in your SCM provider.`,
+		Example: `  # Display the catalog
+  batch-tool catalog
+
+  # Force refresh the catalog cache
+  batch-tool catalog -f`,
+		Args: cobra.NoArgs,
 		Run: func(cmd *cobra.Command, _ []string) {
-			if flush, _ := cmd.Flags().GetBool(catalogFlushFlag); flush {
+			if flush, err := cmd.Flags().GetBool(catalogFlushFlag); err == nil && flush {
 				// Flush and re-initialize the catalog even if the TTL has not expired
 				catalog.Init(cmd.Context(), true)
 			}

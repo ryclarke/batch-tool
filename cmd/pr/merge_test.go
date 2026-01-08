@@ -16,8 +16,8 @@ func TestAddMergeCmd(t *testing.T) {
 		t.Fatal("addMergeCmd() returned nil")
 	}
 
-	if cmd.Use != "merge <repository>..." {
-		t.Errorf("Expected Use to be 'merge <repository>...', got %s", cmd.Use)
+	if cmd.Use != "merge [-f] <repository>..." {
+		t.Errorf("Expected Use to be 'merge [-f] <repository>...', got %s", cmd.Use)
 	}
 
 	if cmd.Short == "" {

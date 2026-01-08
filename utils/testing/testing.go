@@ -68,3 +68,69 @@ func FakeCmd(t *testing.T, ctx context.Context, out io.Writer) *cobra.Command {
 
 	return cmd
 }
+
+// MockChannel implements output.Channel for testing purposes.
+// It provides a simple channel implementation that captures output
+// and can be used to test call.Func implementations directly.
+type MockChannel struct {
+	name   string
+	output []byte
+	err    error
+}
+
+// NewMockChannel creates a new MockChannel with the given name.
+func NewMockChannel(name string) *MockChannel {
+	return &MockChannel{name: name}
+}
+
+// Name returns the channel name.
+func (m *MockChannel) Name() string {
+	return m.name
+}
+
+// Out returns nil (not used in mock).
+func (m *MockChannel) Out() <-chan []byte {
+	return nil
+}
+
+// Err returns nil (not used in mock).
+func (m *MockChannel) Err() <-chan error {
+	return nil
+}
+
+// WriteString writes a string to the mock output.
+func (m *MockChannel) WriteString(s string) (int, error) {
+	m.output = append(m.output, []byte(s)...)
+	return len(s), nil
+}
+
+// Write writes bytes to the mock output.
+func (m *MockChannel) Write(p []byte) (int, error) {
+	m.output = append(m.output, p...)
+	return len(p), nil
+}
+
+// WriteError stores an error in the mock.
+func (m *MockChannel) WriteError(err error) {
+	m.err = err
+}
+
+// Start is a no-op for the mock.
+func (m *MockChannel) Start(_ int64) error {
+	return nil
+}
+
+// Close is a no-op for the mock.
+func (m *MockChannel) Close() error {
+	return nil
+}
+
+// Output returns the captured output.
+func (m *MockChannel) Output() []byte {
+	return m.output
+}
+
+// Error returns any captured error.
+func (m *MockChannel) Error() error {
+	return m.err
+}

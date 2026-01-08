@@ -34,13 +34,7 @@ Target Execution:
 Synchronous vs Concurrent:
   Some make targets (particularly those that modify files or run builds) may
   need to be run synchronously to avoid conflicts. Use the --sync flag to
-  execute one repository at a time.
-
-Use Cases:
-  - Format code across all repositories
-  - Run tests in multiple services
-  - Build all projects consistently
-  - Execute custom make targets uniformly`,
+  execute one repository at a time.`,
 		Example: `  # Run default make target
   batch-tool make repo1 repo2
 

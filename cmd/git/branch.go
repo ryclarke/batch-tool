@@ -14,13 +14,14 @@ import (
 )
 
 const (
-	branchFlag = "branch"
+	branchFlag  = "branch"
+	discardFlag = "discard"
 )
 
 func addBranchCmd() *cobra.Command {
 	// branchCmd represents the branch command
 	branchCmd := &cobra.Command{
-		Use:     "branch -b <branch-name> <repository>...",
+		Use:     "branch -b <branch-name> [--discard] <repository>...",
 		Aliases: []string{"checkout"},
 		Short:   "Checkout a new branch across repositories",
 		Long: `Create and checkout a new branch across multiple repositories.
@@ -29,31 +30,14 @@ This command runs 'git checkout -B <branch>' in each specified repository,
 which creates the branch if it doesn't exist, or resets it if it does.
 
 Before creating the branch, the command automatically:
-  1. Updates the primary/default branch to latest
-  2. Creates the new branch from that updated state
+  1. Stashes uncommitted changes (unless --discard is used)
+  2. Updates the primary/default branch to latest
+  3. Creates the new branch from that updated state
+  4. Restores stashed changes (if applicable)
 
-This ensures all repositories start from a consistent, up-to-date baseline.
-
-The -B flag (force create) means:
-  - If the branch exists, it will be reset to the current HEAD
-  - If the branch doesn't exist, it will be created
-  - This is safe for creating new feature branches
-
-Use Cases:
-  - Start new features across multiple services
-  - Create consistent branch names for related changes
-  - Ensure all repositories are on the same branch for coordination`,
+This ensures all new branches start from a consistent, up-to-date baseline.`,
 		Example: `  # Create a feature branch across repositories
-  batch-tool git branch -b feature/add-auth repo1 repo2
-
-  # Create a branch for all backend services
-  batch-tool git branch -b fix/database-query ~backend
-
-  # Create a release branch
-  batch-tool git branch -b release/v2.0 ~all
-
-  # Short form using checkout alias
-  batch-tool git checkout -b hotfix/urgent-fix repo1`,
+  batch-tool git branch -b feature/add-auth repo1 repo2`,
 		Args:              cobra.MinimumNArgs(1),
 		ValidArgsFunction: catalog.CompletionFunc(),
 		PreRunE: func(cmd *cobra.Command, _ []string) error {
@@ -64,11 +48,21 @@ Use Cases:
 			return utils.ValidateRequiredConfig(cmd.Context(), config.Branch)
 		},
 		Run: func(cmd *cobra.Command, args []string) {
-			call.Do(cmd, args, call.Wrap(Update, Branch))
+			var callFunc call.Func
+
+			// Determine whether to stash or discard uncommitted changes
+			if discard, err := cmd.Flags().GetBool(discardFlag); err == nil && discard {
+				callFunc = call.Wrap(Update, Branch)
+			} else {
+				callFunc = call.Wrap(StashPush, Update, Branch, StashPop)
+			}
+
+			call.Do(cmd, args, callFunc)
 		},
 	}
 
 	branchCmd.Flags().StringP(branchFlag, "b", "", "branch name (required)")
+	branchCmd.Flags().Bool(discardFlag, false, "discard uncommitted changes instead of stashing them")
 
 	return branchCmd
 }

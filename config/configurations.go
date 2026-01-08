@@ -68,9 +68,10 @@ const (
 	// == COMMAND FLAGS == //
 
 	// git
-	CommitMessage = "git.args.commit.message"
-	CommitAmend   = "git.args.commit.amend"
-	CommitPush    = "git.args.commit.push"
+	GitCommitMessage = "git.args.commit.message"
+	GitCommitAmend   = "git.args.commit.amend"
+	GitCommitPush    = "git.args.commit.push"
+	GitStashAllowAny = "git.args.stash.allow-any"
 
 	// pr
 	PrTitle          = "pr.args.title"

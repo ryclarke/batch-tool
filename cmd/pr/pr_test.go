@@ -15,8 +15,8 @@ func TestPrCmd(t *testing.T) {
 		t.Fatal("Cmd() returned nil")
 	}
 
-	if cmd.Use != "pr [cmd] <repository>..." {
-		t.Errorf("Expected Use to be 'pr [cmd] <repository>...', got %s", cmd.Use)
+	if cmd.Use != "pr <repository>..." {
+		t.Errorf("Expected Use to be 'pr <repository>...', got %s", cmd.Use)
 	}
 
 	if cmd.Short == "" {

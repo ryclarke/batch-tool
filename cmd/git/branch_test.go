@@ -15,8 +15,8 @@ func TestAddBranchCmd(t *testing.T) {
 		t.Fatal("addBranchCmd() returned nil")
 	}
 
-	if cmd.Use != "branch <repository>..." {
-		t.Errorf("Expected Use to be 'branch <repository>...', got %s", cmd.Use)
+	if cmd.Use != "branch -b <branch-name> [--discard] <repository>..." {
+		t.Errorf("Expected Use to be 'branch -b <branch-name> [--discard] <repository>...', got %s", cmd.Use)
 	}
 
 	// Test aliases

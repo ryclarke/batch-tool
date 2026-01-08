@@ -23,12 +23,12 @@ const (
 // addNewCmd initializes the pr new command
 func addNewCmd() *cobra.Command {
 	newCmd := &cobra.Command{
-		Use:   "new [-t <title>] [-d <description>] [-r <reviewer>]... <repository>...",
+		Use:   "new [--draft] [-t <title>] [-d <description>] [-r <reviewer>]... [-a] [-b <base-branch>] <repository>...",
 		Short: "Submit new pull requests",
 		Long: `Create new pull requests for the current branch in each repository.
 
 This command creates a new PR from the current branch to the default branch
-using the SCM provider API.
+(or specified base branch) using the SCM provider API.
 
 Optional Information:
   - Title: PR title (defaults to the feature branch name)
@@ -40,7 +40,7 @@ Branch Validation:
   PRs cannot be created from the default branch. Ensure you're not on
   the default branch before running this command.`,
 		Example: `  # Create PR with description and multiple reviewers
-  batch-tool pr new -t "Fix bug" -d "Fixes issue #123" -r alice -r bob repo1 repo2
+  batch-tool pr new -t "Fix bug" -d "Fixes issue #123" -a -r alice -r bob repo1 repo2
 
   # Create draft PR
   batch-tool pr new -t "WIP" --draft repo1 repo2`,
