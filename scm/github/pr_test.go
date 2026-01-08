@@ -1,6 +1,7 @@
 package github
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -585,5 +586,474 @@ func TestParsePR(t *testing.T) {
 				t.Errorf("Expected %d reviewers, got %d", len(tc.expected.Reviewers), len(result.Reviewers))
 			}
 		})
+	}
+}
+
+func TestUpdatePullRequest_ResetReviewers(t *testing.T) {
+	requestPhase := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestPhase++
+
+		// Phase 1: Get existing PR
+		if requestPhase == 1 && r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/pulls") {
+			prs := []map[string]interface{}{
+				mockPRResponse(12345, 42, "Title", "", "feature-branch", true, []string{"alice", "bob"}),
+			}
+			json.NewEncoder(w).Encode(prs)
+			return
+		}
+
+		// Phase 2: List current reviewers
+		if requestPhase == 2 && r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/requested_reviewers") {
+			reviewers := map[string]interface{}{
+				"users": []map[string]interface{}{
+					{"login": "alice"},
+					{"login": "bob"},
+				},
+			}
+			json.NewEncoder(w).Encode(reviewers)
+			return
+		}
+
+		// Phase 3: Remove old reviewers
+		if requestPhase == 3 && r.Method == http.MethodDelete && strings.Contains(r.URL.Path, "/requested_reviewers") {
+			var req github.ReviewersRequest
+			json.NewDecoder(r.Body).Decode(&req)
+
+			// Should remove alice (not in new list)
+			if len(req.Reviewers) != 1 || req.Reviewers[0] != "alice" {
+				t.Errorf("Expected to remove 'alice', got %v", req.Reviewers)
+			}
+
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+
+		// Phase 4: Add new reviewers
+		if requestPhase == 4 && r.Method == http.MethodPost && strings.Contains(r.URL.Path, "/requested_reviewers") {
+			var req github.ReviewersRequest
+			json.NewDecoder(r.Body).Decode(&req)
+
+			// Should add charlie (not in old list)
+			if len(req.Reviewers) != 1 || req.Reviewers[0] != "charlie" {
+				t.Errorf("Expected to add 'charlie', got %v", req.Reviewers)
+			}
+
+			pr := mockPRResponse(12345, 42, "Title", "", "feature-branch", true, []string{"bob", "charlie"})
+			json.NewEncoder(w).Encode(pr)
+			return
+		}
+
+		// Phase 5: Refresh PR to get updated reviewers
+		if requestPhase == 5 && r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/pulls") {
+			prs := []map[string]interface{}{
+				mockPRResponse(12345, 42, "Title", "", "feature-branch", true, []string{"bob", "charlie"}),
+			}
+			json.NewEncoder(w).Encode(prs)
+			return
+		}
+
+		t.Errorf("Unexpected request phase %d: %s %s", requestPhase, r.Method, r.URL.Path)
+	}))
+	defer server.Close()
+
+	g := newTestGithub(t, server)
+	pr, err := g.UpdatePullRequest("test-repo", "feature-branch", &scm.PROptions{
+		Reviewers:      []string{"bob", "charlie"}, // Keep bob, remove alice, add charlie
+		ResetReviewers: true,
+	})
+
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+
+	if len(pr.Reviewers) != 2 {
+		t.Errorf("Expected 2 reviewers, got %d", len(pr.Reviewers))
+	}
+}
+
+func TestUpdatePullRequest_AppendReviewers(t *testing.T) {
+	requestPhase := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestPhase++
+
+		// Phase 1: Get existing PR with existing reviewers
+		if requestPhase == 1 && r.Method == http.MethodGet {
+			prs := []map[string]interface{}{
+				mockPRResponse(12345, 42, "Title", "", "feature-branch", true, []string{"alice"}),
+			}
+			json.NewEncoder(w).Encode(prs)
+			return
+		}
+
+		// Phase 2: Append reviewers (should NOT list/remove, just add)
+		if requestPhase == 2 && r.Method == http.MethodPost && strings.Contains(r.URL.Path, "/requested_reviewers") {
+			var req github.ReviewersRequest
+			json.NewDecoder(r.Body).Decode(&req)
+
+			if len(req.Reviewers) != 1 || req.Reviewers[0] != "bob" {
+				t.Errorf("Expected to append 'bob', got %v", req.Reviewers)
+			}
+
+			// Return PR with both reviewers
+			pr := mockPRResponse(12345, 42, "Title", "", "feature-branch", true, []string{"alice", "bob"})
+			json.NewEncoder(w).Encode(pr)
+			return
+		}
+
+		t.Errorf("Unexpected request phase %d: %s %s", requestPhase, r.Method, r.URL.Path)
+	}))
+	defer server.Close()
+
+	g := newTestGithub(t, server)
+	pr, err := g.UpdatePullRequest("test-repo", "feature-branch", &scm.PROptions{
+		Reviewers:      []string{"bob"}, // Append bob to existing alice
+		ResetReviewers: false,           // Default behavior: append
+	})
+
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+
+	if len(pr.Reviewers) != 2 {
+		t.Errorf("Expected 2 reviewers after append, got %d", len(pr.Reviewers))
+	}
+}
+
+func TestReplaceReviewers_AllNew(t *testing.T) {
+	requestPhase := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestPhase++
+
+		// Phase 1: List current reviewers
+		if requestPhase == 1 && strings.Contains(r.URL.Path, "/requested_reviewers") {
+			reviewers := map[string]interface{}{
+				"users": []map[string]interface{}{
+					{"login": "alice"},
+					{"login": "bob"},
+				},
+			}
+			json.NewEncoder(w).Encode(reviewers)
+			return
+		}
+
+		// Phase 2: Remove all old reviewers
+		if requestPhase == 2 && r.Method == http.MethodDelete {
+			var req github.ReviewersRequest
+			json.NewDecoder(r.Body).Decode(&req)
+
+			if len(req.Reviewers) != 2 {
+				t.Errorf("Expected to remove 2 reviewers, got %d", len(req.Reviewers))
+			}
+
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+
+		// Phase 3: Add all new reviewers
+		if requestPhase == 3 && r.Method == http.MethodPost {
+			var req github.ReviewersRequest
+			json.NewDecoder(r.Body).Decode(&req)
+
+			if len(req.Reviewers) != 2 {
+				t.Errorf("Expected to add 2 reviewers, got %d", len(req.Reviewers))
+			}
+
+			pr := mockPRResponse(12345, 42, "Title", "", "branch", true, req.Reviewers)
+			json.NewEncoder(w).Encode(pr)
+			return
+		}
+	}))
+	defer server.Close()
+
+	g := newTestGithub(t, server)
+	ctx := context.TODO()
+
+	err := g.replaceReviewers(ctx, "test-repo", 42, []string{"charlie", "david"})
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+}
+
+func TestReplaceReviewers_PartialOverlap(t *testing.T) {
+	requestPhase := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestPhase++
+
+		// Phase 1: List current reviewers
+		if requestPhase == 1 {
+			reviewers := map[string]interface{}{
+				"users": []map[string]interface{}{
+					{"login": "alice"},
+					{"login": "bob"},
+				},
+			}
+			json.NewEncoder(w).Encode(reviewers)
+			return
+		}
+
+		// Phase 2: Remove alice (not in new list)
+		if requestPhase == 2 && r.Method == http.MethodDelete {
+			var req github.ReviewersRequest
+			json.NewDecoder(r.Body).Decode(&req)
+
+			if len(req.Reviewers) != 1 || req.Reviewers[0] != "alice" {
+				t.Errorf("Expected to remove 'alice', got %v", req.Reviewers)
+			}
+
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+
+		// Phase 3: Add charlie (not in old list)
+		if requestPhase == 3 && r.Method == http.MethodPost {
+			var req github.ReviewersRequest
+			json.NewDecoder(r.Body).Decode(&req)
+
+			if len(req.Reviewers) != 1 || req.Reviewers[0] != "charlie" {
+				t.Errorf("Expected to add 'charlie', got %v", req.Reviewers)
+			}
+
+			pr := mockPRResponse(12345, 42, "Title", "", "branch", true, []string{"bob", "charlie"})
+			json.NewEncoder(w).Encode(pr)
+			return
+		}
+	}))
+	defer server.Close()
+
+	g := newTestGithub(t, server)
+	ctx := context.TODO()
+
+	// Replace alice,bob with bob,charlie (keep bob, remove alice, add charlie)
+	err := g.replaceReviewers(ctx, "test-repo", 42, []string{"bob", "charlie"})
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+}
+
+func TestReplaceReviewers_SameReviewers(t *testing.T) {
+	requestPhase := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestPhase++
+
+		// Phase 1: List current reviewers
+		if requestPhase == 1 {
+			reviewers := map[string]interface{}{
+				"users": []map[string]interface{}{
+					{"login": "alice"},
+					{"login": "bob"},
+				},
+			}
+			json.NewEncoder(w).Encode(reviewers)
+			return
+		}
+
+		// Should not make any add/remove requests since reviewers are the same
+		t.Errorf("Unexpected request phase %d: %s %s", requestPhase, r.Method, r.URL.Path)
+	}))
+	defer server.Close()
+
+	g := newTestGithub(t, server)
+	ctx := context.TODO()
+
+	// Same reviewers - no changes needed
+	err := g.replaceReviewers(ctx, "test-repo", 42, []string{"alice", "bob"})
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+
+	if requestPhase != 1 {
+		t.Errorf("Expected only 1 request (list), got %d", requestPhase)
+	}
+}
+
+func TestListReviewers(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.Contains(r.URL.Path, "/requested_reviewers") {
+			t.Errorf("Unexpected path: %s", r.URL.Path)
+		}
+
+		reviewers := map[string]interface{}{
+			"users": []map[string]interface{}{
+				{"login": "alice"},
+				{"login": "bob"},
+				{"login": "charlie"},
+			},
+		}
+		json.NewEncoder(w).Encode(reviewers)
+	}))
+	defer server.Close()
+
+	g := newTestGithub(t, server)
+	reviewers, err := g.listReviewers(context.TODO(), "test-repo", 42)
+
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+
+	if len(reviewers) != 3 {
+		t.Errorf("Expected 3 reviewers, got %d", len(reviewers))
+	}
+
+	expected := []string{"alice", "bob", "charlie"}
+	for i, r := range reviewers {
+		if r != expected[i] {
+			t.Errorf("Expected reviewer %s at index %d, got %s", expected[i], i, r)
+		}
+	}
+}
+
+func TestListReviewers_Empty(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		reviewers := map[string]interface{}{
+			"users": []map[string]interface{}{},
+		}
+		json.NewEncoder(w).Encode(reviewers)
+	}))
+	defer server.Close()
+
+	g := newTestGithub(t, server)
+	reviewers, err := g.listReviewers(context.TODO(), "test-repo", 42)
+
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+
+	if len(reviewers) != 0 {
+		t.Errorf("Expected 0 reviewers, got %d", len(reviewers))
+	}
+}
+
+func TestRemoveReviewers(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodDelete {
+			t.Errorf("Expected DELETE request, got %s", r.Method)
+		}
+
+		var req github.ReviewersRequest
+		json.NewDecoder(r.Body).Decode(&req)
+
+		if len(req.Reviewers) != 2 {
+			t.Errorf("Expected 2 reviewers to remove, got %d", len(req.Reviewers))
+		}
+
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer server.Close()
+
+	g := newTestGithub(t, server)
+	err := g.removeReviewers(context.TODO(), "test-repo", 42, []string{"alice", "bob"})
+
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+}
+
+func TestRemoveReviewers_Empty(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Error("Should not make any request when removing empty reviewer list")
+	}))
+	defer server.Close()
+
+	g := newTestGithub(t, server)
+	err := g.removeReviewers(context.TODO(), "test-repo", 42, []string{})
+
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+}
+
+func TestRemoveReviewers_APIError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"message": "Internal error"})
+	}))
+	defer server.Close()
+
+	g := newTestGithub(t, server)
+	err := g.removeReviewers(context.TODO(), "test-repo", 42, []string{"alice"})
+
+	if err == nil {
+		t.Fatal("Expected error for API failure")
+	}
+}
+
+func TestListReviewers_APIError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"message": "Internal error"})
+	}))
+	defer server.Close()
+
+	g := newTestGithub(t, server)
+	_, err := g.listReviewers(context.TODO(), "test-repo", 42)
+
+	if err == nil {
+		t.Fatal("Expected error for API failure")
+	}
+}
+
+func TestRequestReviewers_APIError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnprocessableEntity)
+		json.NewEncoder(w).Encode(map[string]string{"message": "Invalid reviewers"})
+	}))
+	defer server.Close()
+
+	g := newTestGithub(t, server)
+	_, err := g.requestReviewers(context.TODO(), "test-repo", 42, github.ReviewersRequest{Reviewers: []string{"invalid"}})
+
+	if err == nil {
+		t.Fatal("Expected error for API failure")
+	}
+}
+
+func TestEditPullRequest_APIError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode(map[string]string{"message": "PR not found"})
+	}))
+	defer server.Close()
+
+	g := newTestGithub(t, server)
+	_, err := g.editPullRequest(context.TODO(), "test-repo", 42, &github.PullRequest{Title: github.Ptr("Test")})
+
+	if err == nil {
+		t.Fatal("Expected error for API failure")
+	}
+}
+
+func TestOpenPullRequest_APIError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnprocessableEntity)
+		json.NewEncoder(w).Encode(map[string]string{"message": "Validation failed"})
+	}))
+	defer server.Close()
+
+	g := newTestGithub(t, server)
+	req := &github.NewPullRequest{
+		Head:  github.Ptr("feature"),
+		Base:  github.Ptr("main"),
+		Title: github.Ptr("Test"),
+	}
+	_, err := g.openPullRequest(context.TODO(), "test-repo", req)
+
+	if err == nil {
+		t.Fatal("Expected error for API failure")
+	}
+}
+
+func TestMergePullRequest_APIError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		json.NewEncoder(w).Encode(map[string]string{"message": "Cannot merge"})
+	}))
+	defer server.Close()
+
+	g := newTestGithub(t, server)
+	err := g.mergePullRequest(context.TODO(), "test-repo", 42)
+
+	if err == nil {
+		t.Fatal("Expected error for API failure")
 	}
 }

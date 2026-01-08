@@ -278,24 +278,36 @@ func TestGetPullRequest_APIError(t *testing.T) {
 }
 
 func TestOpenPullRequest(t *testing.T) {
+	requestPhase := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			t.Errorf("Expected POST request, got %s", r.Method)
+		requestPhase++
+
+		// Phase 1: Check if PR exists (should return empty)
+		if requestPhase == 1 && r.Method == http.MethodGet {
+			resp := map[string]interface{}{
+				"values": []map[string]interface{}{},
+			}
+			json.NewEncoder(w).Encode(resp)
+			return
 		}
 
-		// Verify request body
-		var req prResp
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			t.Errorf("Failed to decode request: %v", err)
-		}
+		// Phase 2: Create PR
+		if requestPhase == 2 && r.Method == http.MethodPost {
+			// Verify request body
+			var req prResp
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				t.Errorf("Failed to decode request: %v", err)
+			}
 
-		if req.Title != "New Feature" {
-			t.Errorf("Expected title 'New Feature', got '%s'", req.Title)
-		}
+			if req.Title != "New Feature" {
+				t.Errorf("Expected title 'New Feature', got '%s'", req.Title)
+			}
 
-		// Return created PR
-		pr := mockBitbucketPRResponse(100, "New Feature", "Feature description", "feature-branch", nil)
-		json.NewEncoder(w).Encode(pr)
+			// Return created PR
+			pr := mockBitbucketPRResponse(100, "New Feature", "Feature description", "feature-branch", nil)
+			json.NewEncoder(w).Encode(pr)
+			return
+		}
 	}))
 	defer server.Close()
 
@@ -315,16 +327,32 @@ func TestOpenPullRequest(t *testing.T) {
 }
 
 func TestOpenPullRequest_WithReviewers(t *testing.T) {
+	requestPhase := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var req prResp
-		json.NewDecoder(r.Body).Decode(&req)
+		requestPhase++
 
-		if len(req.Reviewers) != 2 {
-			t.Errorf("Expected 2 reviewers in request, got %d", len(req.Reviewers))
+		// Phase 1: Check if PR exists (should return empty)
+		if requestPhase == 1 && r.Method == http.MethodGet {
+			resp := map[string]interface{}{
+				"values": []map[string]interface{}{},
+			}
+			json.NewEncoder(w).Encode(resp)
+			return
 		}
 
-		pr := mockBitbucketPRResponse(100, "New Feature", "", "feature-branch", []string{"alice", "bob"})
-		json.NewEncoder(w).Encode(pr)
+		// Phase 2: Create PR with reviewers
+		if requestPhase == 2 && r.Method == http.MethodPost {
+			var req prResp
+			json.NewDecoder(r.Body).Decode(&req)
+
+			if len(req.Reviewers) != 2 {
+				t.Errorf("Expected 2 reviewers in request, got %d", len(req.Reviewers))
+			}
+
+			pr := mockBitbucketPRResponse(100, "New Feature", "", "feature-branch", []string{"alice", "bob"})
+			json.NewEncoder(w).Encode(pr)
+			return
+		}
 	}))
 	defer server.Close()
 
@@ -344,17 +372,33 @@ func TestOpenPullRequest_WithReviewers(t *testing.T) {
 }
 
 func TestOpenPullRequest_NilOptions(t *testing.T) {
+	requestPhase := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var req prResp
-		json.NewDecoder(r.Body).Decode(&req)
+		requestPhase++
 
-		// Title should default to branch name
-		if req.Title != "feature-branch" {
-			t.Errorf("Expected default title 'feature-branch', got '%s'", req.Title)
+		// Phase 1: Check if PR exists (should return empty)
+		if requestPhase == 1 && r.Method == http.MethodGet {
+			resp := map[string]interface{}{
+				"values": []map[string]interface{}{},
+			}
+			json.NewEncoder(w).Encode(resp)
+			return
 		}
 
-		pr := mockBitbucketPRResponse(100, "feature-branch", "", "feature-branch", nil)
-		json.NewEncoder(w).Encode(pr)
+		// Phase 2: Create PR
+		if requestPhase == 2 && r.Method == http.MethodPost {
+			var req prResp
+			json.NewDecoder(r.Body).Decode(&req)
+
+			// Title should default to branch name
+			if req.Title != "feature-branch" {
+				t.Errorf("Expected default title 'feature-branch', got '%s'", req.Title)
+			}
+
+			pr := mockBitbucketPRResponse(100, "feature-branch", "", "feature-branch", nil)
+			json.NewEncoder(w).Encode(pr)
+			return
+		}
 	}))
 	defer server.Close()
 
@@ -367,6 +411,31 @@ func TestOpenPullRequest_NilOptions(t *testing.T) {
 
 	if pr.Title != "feature-branch" {
 		t.Errorf("Expected title to default to branch name, got '%s'", pr.Title)
+	}
+}
+
+func TestOpenPullRequest_AlreadyExists(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Return existing PR
+		resp := map[string]interface{}{
+			"values": []map[string]interface{}{
+				mockBitbucketPRResponse(42, "Existing PR", "", "feature-branch", nil),
+			},
+		}
+		json.NewEncoder(w).Encode(resp)
+	}))
+	defer server.Close()
+
+	b := newTestBitbucket(t, server)
+	_, err := b.OpenPullRequest("test-repo", "feature-branch", &scm.PROptions{
+		Title: "New Feature",
+	})
+
+	if err == nil {
+		t.Fatal("Expected error for existing PR")
+	}
+	if !strings.Contains(err.Error(), "already exists") {
+		t.Errorf("Expected 'already exists' error, got: %v", err)
 	}
 }
 
@@ -581,7 +650,7 @@ func TestGenPR(t *testing.T) {
 		ctx:     ctx,
 	}
 
-	payload := b.genPR("test-repo", "Test Title", "Test Description", []string{"alice", "bob"})
+	payload := b.genPR("test-repo", "feature-branch", "main", "Test Title", "Test Description", []string{"alice", "bob"})
 
 	if payload == "" {
 		t.Fatal("Expected non-empty payload")
@@ -601,5 +670,32 @@ func TestGenPR(t *testing.T) {
 	}
 	if len(pr.Reviewers) != 2 {
 		t.Errorf("Expected 2 reviewers, got %d", len(pr.Reviewers))
+	}
+	if pr.FromRef.ID != "refs/heads/feature-branch" {
+		t.Errorf("Expected fromRef 'refs/heads/feature-branch', got '%s'", pr.FromRef.ID)
+	}
+	if pr.ToRef.ID != "refs/heads/main" {
+		t.Errorf("Expected toRef 'refs/heads/main', got '%s'", pr.ToRef.ID)
+	}
+}
+
+func TestGenPR_DefaultBaseBranch(t *testing.T) {
+	ctx := loadFixture(t)
+	b := &Bitbucket{
+		project: "TEST",
+		ctx:     ctx,
+	}
+
+	// Empty baseBranch should use configured default
+	payload := b.genPR("test-repo", "feature-branch", "", "Test Title", "", nil)
+
+	var pr prResp
+	if err := json.Unmarshal([]byte(payload), &pr); err != nil {
+		t.Fatalf("Failed to unmarshal payload: %v", err)
+	}
+
+	// Should fall back to configured default branch (from fixture)
+	if pr.ToRef.ID == "" {
+		t.Error("Expected toRef to have default branch")
 	}
 }

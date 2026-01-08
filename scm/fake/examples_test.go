@@ -110,8 +110,8 @@ func TestExampleIntegration(t *testing.T) {
 		t.Errorf("PR ID mismatch: expected %d, got %d", originalPR.ID, retrievedPR.ID)
 	}
 
-	// Test scenario: Update pull request
-	updatedPR, err := fake.UpdatePullRequest("repo-1", "feature-branch", &scm.PROptions{Title: "Updated Feature", Description: "Updated Description", Reviewers: []string{"charlie"}, AppendReviewers: true})
+	// Test scenario: Update pull request (ResetReviewers: false means append)
+	updatedPR, err := fake.UpdatePullRequest("repo-1", "feature-branch", &scm.PROptions{Title: "Updated Feature", Description: "Updated Description", Reviewers: []string{"charlie"}, ResetReviewers: false})
 	if err != nil {
 		t.Fatalf("Failed to update pull request: %v", err)
 	}

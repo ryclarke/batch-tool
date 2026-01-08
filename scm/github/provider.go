@@ -2,6 +2,7 @@ package github
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -46,6 +47,24 @@ type Github struct {
 	client  *github.Client
 	project string
 	ctx     context.Context
+}
+
+// handleRateLimitError checks if the error is a rate limit error and waits for the limit to reset.
+// Returns true if a retry should be attempted, false if the error is not rate-limit related.
+// The search parameter indicates whether to check search rate limits (true) or core rate limits (false).
+func (g *Github) handleRateLimitError(ctx context.Context, err error, search bool) (shouldRetry bool, retErr error) {
+	rateLimitError := &github.RateLimitError{}
+	if !errors.As(err, &rateLimitError) {
+		// Not a rate limit error, don't retry
+		return false, nil
+	}
+
+	// It's a rate limit error, wait for reset
+	if rateErr := g.waitForRateLimit(ctx, search); rateErr != nil {
+		return false, rateErr
+	}
+
+	return true, nil
 }
 
 func (g *Github) waitForRateLimit(ctx context.Context, search bool) error {

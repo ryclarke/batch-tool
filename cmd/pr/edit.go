@@ -41,7 +41,7 @@ Branch Requirement:
   # Add reviewer and mark as ready for review
   batch-tool pr edit -r charlie --no-draft repo1
 
-  # Replace all reviewers (only supported on Bitbucket)
+  # Replace existing reviewers with new list
   batch-tool pr edit -r alice -r bob --reset-reviewers repo1`,
 		Args:              cobra.MinimumNArgs(1),
 		ValidArgsFunction: catalog.CompletionFunc(),
@@ -76,11 +76,11 @@ func Edit(ctx context.Context, ch output.Channel) error {
 	provider := scm.Get(ctx, viper.GetString(config.GitProvider), project)
 
 	pr, err := provider.UpdatePullRequest(ch.Name(), branch, &scm.PROptions{
-		Title:           viper.GetString(config.PrTitle),
-		Description:     viper.GetString(config.PrDescription),
-		Draft:           viper.GetBool(config.PrDraft),
-		Reviewers:       lookupReviewers(ctx, ch.Name()),
-		AppendReviewers: !viper.GetBool(config.PrResetReviewers),
+		Title:          viper.GetString(config.PrTitle),
+		Description:    viper.GetString(config.PrDescription),
+		Draft:          viper.GetBool(config.PrDraft),
+		Reviewers:      lookupReviewers(ctx, ch.Name()),
+		ResetReviewers: viper.GetBool(config.PrResetReviewers),
 	})
 	if err != nil {
 		return err

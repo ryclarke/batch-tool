@@ -199,8 +199,8 @@ func TestUpdatePullRequest(t *testing.T) {
 		t.Fatalf("Failed to open pull request: %v", err)
 	}
 
-	// Update the PR
-	updatedPR, err := f.UpdatePullRequest("repo-1", "feature-branch", &scm.PROptions{Title: "Updated PR", Description: "Updated description", Reviewers: []string{"reviewer2"}})
+	// Update the PR with ResetReviewers: true to replace existing reviewers
+	updatedPR, err := f.UpdatePullRequest("repo-1", "feature-branch", &scm.PROptions{Title: "Updated PR", Description: "Updated description", Reviewers: []string{"reviewer2"}, ResetReviewers: true})
 	if err != nil {
 		t.Fatalf("Failed to update pull request: %v", err)
 	}
@@ -229,8 +229,8 @@ func TestUpdatePullRequestAppendReviewers(t *testing.T) {
 		t.Fatalf("Failed to open pull request: %v", err)
 	}
 
-	// Update the PR with append reviewers
-	updatedPR, err := f.UpdatePullRequest("repo-1", "feature-branch", &scm.PROptions{Title: "Updated PR", Description: "Updated description", Reviewers: []string{"reviewer2", "reviewer1"}, AppendReviewers: true})
+	// Update the PR with append reviewers (ResetReviewers: false means append)
+	updatedPR, err := f.UpdatePullRequest("repo-1", "feature-branch", &scm.PROptions{Title: "Updated PR", Description: "Updated description", Reviewers: []string{"reviewer2", "reviewer1"}, ResetReviewers: false})
 	if err != nil {
 		t.Fatalf("Failed to update pull request: %v", err)
 	}

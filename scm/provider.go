@@ -27,12 +27,12 @@ type Provider interface {
 
 // PROptions holds options for creating or updating pull requests.
 type PROptions struct {
-	Title           string
-	Description     string
-	Reviewers       []string
-	AppendReviewers bool // bitbucket-specific option
-	BaseBranch      string
-	Draft           bool
+	Title          string
+	Description    string
+	Reviewers      []string
+	ResetReviewers bool
+	BaseBranch     string
+	Draft          bool
 }
 
 // Get retrieves a registered SCM provider by name.
