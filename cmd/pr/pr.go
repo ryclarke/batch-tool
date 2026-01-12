@@ -5,7 +5,9 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/ryclarke/batch-tool/catalog"
 	"github.com/ryclarke/batch-tool/config"
+	"github.com/ryclarke/batch-tool/scm"
 	"github.com/ryclarke/batch-tool/utils"
 )
 
@@ -82,15 +84,41 @@ Branch Validation:
 	return prCmd
 }
 
-// lookupReviewers returns the list of reviewers for the given repository
-func lookupReviewers(ctx context.Context, name string) []string {
+func prOptions(ctx context.Context, name string) scm.PROptions {
 	viper := config.Viper(ctx)
 
-	// Use the provided list of reviewers
-	if revs := viper.GetStringSlice(config.PrReviewers); len(revs) > 0 {
-		return revs
+	o := viper.Get(config.PrOptions)
+	if o == nil {
+		return scm.PROptions{}
 	}
 
-	// Use default reviewers for the given repository
-	return viper.GetStringMapStringSlice(config.DefaultReviewers)[name]
+	opts, ok := o.(scm.PROptions)
+	if !ok {
+		return scm.PROptions{}
+	}
+
+	opts.BaseBranch = catalog.GetBranchForRepo(ctx, name)
+
+	return opts
+}
+
+func buildPROptions(cmd *cobra.Command) {
+	viper := config.Viper(cmd.Context())
+
+	// Build PR options from flags and config
+	opts := scm.PROptions{
+		Title:       viper.GetString(config.PrTitle),
+		Description: viper.GetString(config.PrDescription),
+
+		Reviewers:      viper.GetStringSlice(config.PrReviewers),
+		ResetReviewers: viper.GetBool(config.PrResetReviewers),
+	}
+
+	// Set draft option if flag was explicitly provided
+	if cmd.Flags().Changed(prDraftFlag) || cmd.Flags().Changed(prNoDraftFlag) {
+		draft := viper.GetBool(config.PrDraft)
+		opts.Draft = &draft
+	}
+
+	viper.Set(config.PrOptions, opts)
 }

@@ -20,7 +20,8 @@ type PullRequest struct {
 	Reviewers   []string `json:"reviewers"`
 	Mergeable   bool     `json:"mergeable"`
 
-	ID      int `json:"id"`
-	Number  int `json:"number"`
-	Version int `json:"version,omitempty"`
+	ID      int  `json:"id"`
+	Number  int  `json:"number"`
+	Version int  `json:"version,omitempty"`
+	Draft   bool `json:"draft,omitempty"`
 }

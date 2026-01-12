@@ -32,7 +32,7 @@ type PROptions struct {
 	Reviewers      []string
 	ResetReviewers bool
 	BaseBranch     string
-	Draft          bool
+	Draft          *bool
 }
 
 // Get retrieves a registered SCM provider by name.

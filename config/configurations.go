@@ -74,6 +74,7 @@ const (
 	GitStashAllowAny = "git.args.stash.allow-any"
 
 	// pr
+	PrOptions        = "pr.args.options"
 	PrTitle          = "pr.args.title"
 	PrDescription    = "pr.args.description"
 	PrDraft          = "pr.args.draft"

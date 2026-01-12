@@ -163,3 +163,53 @@ func TestNewCommandRunWithoutReviewers(t *testing.T) {
 		t.Errorf("Expected output to contain 'New pull request', got: %s", output)
 	}
 }
+
+func TestLookupReviewers(t *testing.T) {
+	ctx := loadFixture(t)
+	viper := config.Viper(ctx)
+
+	// Test with command-line reviewers (always returns all, regardless of allReviewers flag)
+	viper.Set(config.PrReviewers, []string{"reviewer1", "reviewer2"})
+	viper.Set(config.PrAllReviewers, false) // Flag doesn't affect manually-provided reviewers
+	reviewers := lookupReviewers(ctx, "test-repo")
+
+	if len(reviewers) != 2 {
+		t.Errorf("Expected 2 manually-provided reviewers, got %d", len(reviewers))
+	}
+	if reviewers[0] != "reviewer1" || reviewers[1] != "reviewer2" {
+		t.Errorf("Expected [reviewer1, reviewer2], got %v", reviewers)
+	}
+
+	// Test with default reviewers - limited to first unless allReviewers is set
+	viper.Set(config.PrReviewers, []string{}) // Clear command-line reviewers
+	defaultReviewers := map[string][]string{
+		"test-repo":  {"default1", "default2"},
+		"other-repo": {"other1"},
+	}
+	viper.Set(config.DefaultReviewers, defaultReviewers)
+	viper.Set(config.PrAllReviewers, false)
+
+	reviewers = lookupReviewers(ctx, "test-repo")
+	if len(reviewers) != 1 {
+		t.Errorf("Expected 1 default reviewer (limited), got %d", len(reviewers))
+	}
+	if reviewers[0] != "default1" {
+		t.Errorf("Expected [default1], got %v", reviewers)
+	}
+
+	// Test with default reviewers and allReviewers flag set
+	viper.Set(config.PrAllReviewers, true)
+	reviewers = lookupReviewers(ctx, "test-repo")
+	if len(reviewers) != 2 {
+		t.Errorf("Expected 2 default reviewers (with allReviewers flag), got %d", len(reviewers))
+	}
+	if reviewers[0] != "default1" || reviewers[1] != "default2" {
+		t.Errorf("Expected [default1, default2], got %v", reviewers)
+	}
+
+	// Test with non-existent repository
+	reviewers = lookupReviewers(ctx, "nonexistent-repo")
+	if len(reviewers) != 0 {
+		t.Errorf("Expected 0 reviewers for nonexistent repo, got %d", len(reviewers))
+	}
+}

@@ -8,7 +8,6 @@ import (
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/google/go-github/v74/github"
 
-	"github.com/ryclarke/batch-tool/catalog"
 	"github.com/ryclarke/batch-tool/scm"
 )
 
@@ -33,11 +32,6 @@ func (g *Github) OpenPullRequest(repo, branch string, opts *scm.PROptions) (*scm
 		return nil, fmt.Errorf("a pull request already exists for branch %s in repository %s", branch, repo)
 	}
 
-	// check default branch for the current repo if base branch is not specified
-	if opts.BaseBranch == "" {
-		opts.BaseBranch = catalog.GetBranchForRepo(g.ctx, repo)
-	}
-
 	// if title is not specified, use the branch name
 	if opts.Title == "" {
 		opts.Title = branch
@@ -48,7 +42,11 @@ func (g *Github) OpenPullRequest(repo, branch string, opts *scm.PROptions) (*scm
 		Base:  github.Ptr(opts.BaseBranch),
 		Title: github.Ptr(opts.Title),
 		Body:  github.Ptr(opts.Description),
-		Draft: github.Ptr(opts.Draft),
+	}
+
+	// if Draft status is specified, apply it to the PR
+	if opts.Draft != nil {
+		req.Draft = github.Ptr(*opts.Draft)
 	}
 
 	resp, err := g.openPullRequest(context.TODO(), repo, req)
@@ -57,7 +55,7 @@ func (g *Github) OpenPullRequest(repo, branch string, opts *scm.PROptions) (*scm
 	}
 
 	if len(opts.Reviewers) > 0 {
-		if resp, err = g.requestReviewers(context.TODO(), repo, resp.GetNumber(), github.ReviewersRequest{Reviewers: opts.Reviewers}); err != nil {
+		if resp, err = g.requestReviewers(context.TODO(), repo, resp.GetNumber(), opts.Reviewers); err != nil {
 			return nil, err
 		}
 	}
@@ -72,30 +70,22 @@ func (g *Github) UpdatePullRequest(repo, branch string, opts *scm.PROptions) (*s
 		return nil, err
 	}
 
-	if opts.Title != "" || opts.Description != "" {
-		req := &github.PullRequest{
-			Title: &opts.Title,
-			Body:  &opts.Description,
-		}
-
+	req, changes := g.processChanges(opts)
+	if changes {
 		if pr, err = g.editPullRequest(context.TODO(), repo, pr.GetNumber(), req); err != nil {
 			return nil, err
 		}
 	}
 
 	if len(opts.Reviewers) > 0 {
-		// If ResetReviewers is true, replace existing reviewers
+		// If ResetReviewers is true, replace existing reviewers with the provided list (default behavior is to append)
 		if opts.ResetReviewers {
-			if err = g.replaceReviewers(context.TODO(), repo, pr.GetNumber(), opts.Reviewers); err != nil {
-				return nil, err
-			}
-			// Refresh PR to get updated reviewer list
-			if pr, err = g.getPullRequest(context.TODO(), repo, branch); err != nil {
+			if pr, err = g.replaceReviewers(context.TODO(), repo, pr.GetNumber(), opts.Reviewers); err != nil {
 				return nil, err
 			}
 		} else {
 			// GitHub's RequestReviewers API appends to existing reviewers
-			if pr, err = g.requestReviewers(context.TODO(), repo, pr.GetNumber(), github.ReviewersRequest{Reviewers: opts.Reviewers}); err != nil {
+			if pr, err = g.requestReviewers(context.TODO(), repo, pr.GetNumber(), opts.Reviewers); err != nil {
 				return nil, err
 			}
 		}
@@ -152,6 +142,27 @@ func (g *Github) getPullRequest(ctx context.Context, repo, branch string) (*gith
 	return resp[0], nil
 }
 
+func (g *Github) getPullRequestByNumber(ctx context.Context, repo string, prNumber int) (*github.PullRequest, error) {
+	// acquire read lock (and release it when done)
+	defer g.readLock()()
+
+	resp, _, err := g.client.PullRequests.Get(ctx, g.project, repo, prNumber)
+	if err != nil {
+		if retry, rateErr := g.handleRateLimitError(ctx, err, true); rateErr != nil {
+			return nil, fmt.Errorf("failed to get pull request: %w: %w", rateErr, err)
+		} else if !retry {
+			return nil, fmt.Errorf("failed to get pull request: %w", err)
+		}
+
+		// retry the request after waiting for the rate limit to reset
+		if resp, _, err = g.client.PullRequests.Get(ctx, g.project, repo, prNumber); err != nil {
+			return nil, fmt.Errorf("failed to get pull request after retry: %w", err)
+		}
+	}
+
+	return resp, nil
+}
+
 func (g *Github) openPullRequest(ctx context.Context, repo string, req *github.NewPullRequest) (*github.PullRequest, error) {
 	// acquire write lock (and release it when done)
 	defer g.writeLock()()
@@ -194,9 +205,54 @@ func (g *Github) editPullRequest(ctx context.Context, repo string, prNumber int,
 	return pr, nil
 }
 
-func (g *Github) requestReviewers(ctx context.Context, repo string, prNumber int, req github.ReviewersRequest) (*github.PullRequest, error) {
+func (g *Github) mergePullRequest(ctx context.Context, repo string, prNumber int) error {
 	// acquire write lock (and release it when done)
 	defer g.writeLock()()
+
+	_, _, err := g.client.PullRequests.Merge(ctx, g.project, repo, prNumber, "", nil)
+	if err != nil {
+		if retry, rateErr := g.handleRateLimitError(ctx, err, false); rateErr != nil {
+			return fmt.Errorf("failed to merge pull request: %w: %w", rateErr, err)
+		} else if !retry {
+			return fmt.Errorf("failed to merge pull request: %w", err)
+		}
+
+		// retry the request after waiting for the rate limit to reset
+		if _, _, err = g.client.PullRequests.Merge(ctx, g.project, repo, prNumber, "", nil); err != nil {
+			return fmt.Errorf("failed to merge pull request after retry: %w", err)
+		}
+	}
+
+	return nil
+}
+
+func (g *Github) processChanges(opts *scm.PROptions) (req *github.PullRequest, changed bool) {
+	req = &github.PullRequest{}
+
+	if opts.Title != "" {
+		req.Title = github.Ptr(opts.Title)
+		changed = true
+	}
+
+	if opts.Description != "" {
+		req.Body = github.Ptr(opts.Description)
+		changed = true
+	}
+
+	if opts.Draft != nil {
+		req.Draft = github.Ptr(*opts.Draft)
+		changed = true
+	}
+
+	return req, changed
+}
+
+func (g *Github) requestReviewers(ctx context.Context, repo string, prNumber int, reviewers []string) (*github.PullRequest, error) {
+	// acquire write lock (and release it when done)
+	defer g.writeLock()()
+
+	// TODO: add support for team reviewers
+	req := github.ReviewersRequest{Reviewers: reviewers}
 
 	resp, _, err := g.client.PullRequests.RequestReviewers(ctx, g.project, repo, prNumber, req)
 	if err != nil {
@@ -213,6 +269,40 @@ func (g *Github) requestReviewers(ctx context.Context, repo string, prNumber int
 	}
 
 	return resp, nil
+}
+
+// replaceReviewers replaces the current reviewers with the provided list
+func (g *Github) replaceReviewers(ctx context.Context, repo string, prNumber int, newReviewers []string) (*github.PullRequest, error) {
+	// Get current reviewers
+	currentReviewers, err := g.listReviewers(ctx, repo, prNumber)
+	if err != nil {
+		return nil, err
+	}
+
+	// Build sets for comparison
+	currentSet := mapset.NewSet(currentReviewers...)
+	newSet := mapset.NewSet(newReviewers...)
+
+	// Find reviewers to add or remove
+	toRemove := currentSet.Difference(newSet)
+	toAdd := newSet.Difference(currentSet)
+
+	// Remove old reviewers
+	if toRemove.Cardinality() > 0 {
+		if err = g.removeReviewers(ctx, repo, prNumber, toRemove.ToSlice()); err != nil {
+			return nil, err
+		}
+	}
+
+	// Add new reviewers
+	if toAdd.Cardinality() > 0 {
+		if _, err = g.requestReviewers(ctx, repo, prNumber, toAdd.ToSlice()); err != nil {
+			return nil, err
+		}
+	}
+
+	// Refresh PR to get updated reviewer list
+	return g.getPullRequestByNumber(ctx, repo, prNumber)
 }
 
 func (g *Github) listReviewers(ctx context.Context, repo string, prNumber int) ([]string, error) {
@@ -266,60 +356,6 @@ func (g *Github) removeReviewers(ctx context.Context, repo string, prNumber int,
 	return nil
 }
 
-// replaceReviewers replaces the current reviewers with the provided list
-func (g *Github) replaceReviewers(ctx context.Context, repo string, prNumber int, newReviewers []string) error {
-	// Get current reviewers
-	currentReviewers, err := g.listReviewers(ctx, repo, prNumber)
-	if err != nil {
-		return err
-	}
-
-	// Build sets for comparison
-	currentSet := mapset.NewSet(currentReviewers...)
-	newSet := mapset.NewSet(newReviewers...)
-
-	// Find reviewers to add or remove
-	toRemove := currentSet.Difference(newSet)
-	toAdd := newSet.Difference(currentSet)
-
-	// Remove old reviewers
-	if toRemove.Cardinality() > 0 {
-		if err = g.removeReviewers(ctx, repo, prNumber, toRemove.ToSlice()); err != nil {
-			return err
-		}
-	}
-
-	// Add new reviewers
-	if toAdd.Cardinality() > 0 {
-		if _, err = g.requestReviewers(ctx, repo, prNumber, github.ReviewersRequest{Reviewers: toAdd.ToSlice()}); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func (g *Github) mergePullRequest(ctx context.Context, repo string, prNumber int) error {
-	// acquire write lock (and release it when done)
-	defer g.writeLock()()
-
-	_, _, err := g.client.PullRequests.Merge(ctx, g.project, repo, prNumber, "", nil)
-	if err != nil {
-		if retry, rateErr := g.handleRateLimitError(ctx, err, false); rateErr != nil {
-			return fmt.Errorf("failed to merge pull request: %w: %w", rateErr, err)
-		} else if !retry {
-			return fmt.Errorf("failed to merge pull request: %w", err)
-		}
-
-		// retry the request after waiting for the rate limit to reset
-		if _, _, err = g.client.PullRequests.Merge(ctx, g.project, repo, prNumber, "", nil); err != nil {
-			return fmt.Errorf("failed to merge pull request after retry: %w", err)
-		}
-	}
-
-	return nil
-}
-
 func parsePR(resp *github.PullRequest) *scm.PullRequest {
 	pr := &scm.PullRequest{
 		ID:          int(resp.GetID()),
@@ -327,6 +363,7 @@ func parsePR(resp *github.PullRequest) *scm.PullRequest {
 		Title:       resp.GetTitle(),
 		Description: resp.GetBody(),
 		Reviewers:   make([]string, 0, len(resp.RequestedReviewers)),
+		Draft:       resp.GetDraft(),
 	}
 
 	for _, reviewer := range resp.RequestedReviewers {

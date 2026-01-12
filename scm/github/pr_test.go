@@ -644,12 +644,10 @@ func TestUpdatePullRequest_ResetReviewers(t *testing.T) {
 			return
 		}
 
-		// Phase 5: Refresh PR to get updated reviewers
-		if requestPhase == 5 && r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/pulls") {
-			prs := []map[string]interface{}{
-				mockPRResponse(12345, 42, "Title", "", "feature-branch", true, []string{"bob", "charlie"}),
-			}
-			json.NewEncoder(w).Encode(prs)
+		// Phase 5: Refresh PR by number to get updated reviewers
+		if requestPhase == 5 && r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/pulls/42") {
+			pr := mockPRResponse(12345, 42, "Title", "", "feature-branch", true, []string{"bob", "charlie"})
+			json.NewEncoder(w).Encode(pr)
 			return
 		}
 
@@ -769,7 +767,7 @@ func TestReplaceReviewers_AllNew(t *testing.T) {
 	g := newTestGithub(t, server)
 	ctx := context.TODO()
 
-	err := g.replaceReviewers(ctx, "test-repo", 42, []string{"charlie", "david"})
+	_, err := g.replaceReviewers(ctx, "test-repo", 42, []string{"charlie", "david"})
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
 	}
@@ -825,7 +823,7 @@ func TestReplaceReviewers_PartialOverlap(t *testing.T) {
 	ctx := context.TODO()
 
 	// Replace alice,bob with bob,charlie (keep bob, remove alice, add charlie)
-	err := g.replaceReviewers(ctx, "test-repo", 42, []string{"bob", "charlie"})
+	_, err := g.replaceReviewers(ctx, "test-repo", 42, []string{"bob", "charlie"})
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
 	}
@@ -848,6 +846,13 @@ func TestReplaceReviewers_SameReviewers(t *testing.T) {
 			return
 		}
 
+		// Phase 2: Get PR by number (no changes made, so just return current state)
+		if requestPhase == 2 && strings.Contains(r.URL.Path, "/pulls/42") {
+			pr := mockPRResponse(12345, 42, "Title", "", "branch", true, []string{"alice", "bob"})
+			json.NewEncoder(w).Encode(pr)
+			return
+		}
+
 		// Should not make any add/remove requests since reviewers are the same
 		t.Errorf("Unexpected request phase %d: %s %s", requestPhase, r.Method, r.URL.Path)
 	}))
@@ -857,13 +862,13 @@ func TestReplaceReviewers_SameReviewers(t *testing.T) {
 	ctx := context.TODO()
 
 	// Same reviewers - no changes needed
-	err := g.replaceReviewers(ctx, "test-repo", 42, []string{"alice", "bob"})
+	_, err := g.replaceReviewers(ctx, "test-repo", 42, []string{"alice", "bob"})
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
 	}
 
-	if requestPhase != 1 {
-		t.Errorf("Expected only 1 request (list), got %d", requestPhase)
+	if requestPhase != 2 {
+		t.Errorf("Expected 2 requests (list + get), got %d", requestPhase)
 	}
 }
 
@@ -1001,7 +1006,7 @@ func TestRequestReviewers_APIError(t *testing.T) {
 	defer server.Close()
 
 	g := newTestGithub(t, server)
-	_, err := g.requestReviewers(context.TODO(), "test-repo", 42, github.ReviewersRequest{Reviewers: []string{"invalid"}})
+	_, err := g.requestReviewers(context.TODO(), "test-repo", 42, []string{"invalid"})
 
 	if err == nil {
 		t.Fatal("Expected error for API failure")

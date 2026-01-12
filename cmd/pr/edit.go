@@ -53,6 +53,8 @@ Branch Requirement:
 			return nil
 		},
 		Run: func(cmd *cobra.Command, args []string) {
+			buildPROptions(cmd)
+
 			call.Do(cmd, args, Edit)
 		},
 	}
@@ -66,22 +68,19 @@ Branch Requirement:
 func Edit(ctx context.Context, ch output.Channel) error {
 	viper := config.Viper(ctx)
 
+	// Get project from repository metadata in catalog, fall back to default
+	project := catalog.GetProjectForRepo(ctx, ch.Name())
+	provider := scm.Get(ctx, viper.GetString(config.GitProvider), project)
+
 	branch, err := utils.LookupBranch(ctx, ch.Name())
 	if err != nil {
 		return fmt.Errorf("failed to lookup branch for %s: %w", ch.Name(), err)
 	}
 
-	// Get project from repository metadata in catalog, fall back to default
-	project := catalog.GetProjectForRepo(ctx, ch.Name())
-	provider := scm.Get(ctx, viper.GetString(config.GitProvider), project)
+	// load PR options from config
+	opts := prOptions(ctx, ch.Name())
 
-	pr, err := provider.UpdatePullRequest(ch.Name(), branch, &scm.PROptions{
-		Title:          viper.GetString(config.PrTitle),
-		Description:    viper.GetString(config.PrDescription),
-		Draft:          viper.GetBool(config.PrDraft),
-		Reviewers:      lookupReviewers(ctx, ch.Name()),
-		ResetReviewers: viper.GetBool(config.PrResetReviewers),
-	})
+	pr, err := provider.UpdatePullRequest(ch.Name(), branch, &opts)
 	if err != nil {
 		return err
 	}

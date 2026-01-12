@@ -242,8 +242,10 @@ func TestLookupReviewersWithSCMRepositories(t *testing.T) {
 	})
 
 	t.Run("LookupDefaultReviewers", func(t *testing.T) {
+		// Default reviewers are limited to first one unless allReviewers flag is set
+		viper.Set(config.PrAllReviewers, false)
 		reviewers := lookupReviewers(ctx, "repo-1")
-		expected := []string{"alice", "bob"}
+		expected := []string{"alice"}
 
 		if len(reviewers) != len(expected) {
 			t.Errorf("Expected %d reviewers, got %d", len(expected), len(reviewers))
@@ -254,11 +256,28 @@ func TestLookupReviewersWithSCMRepositories(t *testing.T) {
 				t.Errorf("Expected reviewer %s at position %d, got %s", expected[i], i, reviewer)
 			}
 		}
+
+		// With allReviewers flag, should return all default reviewers
+		viper.Set(config.PrAllReviewers, true)
+		reviewers = lookupReviewers(ctx, "repo-1")
+		expectedAll := []string{"alice", "bob"}
+
+		if len(reviewers) != len(expectedAll) {
+			t.Errorf("Expected %d reviewers with allReviewers flag, got %d", len(expectedAll), len(reviewers))
+		}
+
+		for i, reviewer := range reviewers {
+			if reviewer != expectedAll[i] {
+				t.Errorf("Expected reviewer %s at position %d, got %s", expectedAll[i], i, reviewer)
+			}
+		}
 	})
 
 	t.Run("LookupGlobalReviewers", func(t *testing.T) {
 		// Set global reviewers (should override default)
+		// Manually-provided reviewers always return all, regardless of allReviewers flag
 		viper.Set(config.PrReviewers, []string{"global1", "global2"})
+		viper.Set(config.PrAllReviewers, false) // Flag doesn't affect manually-provided reviewers
 
 		reviewers := lookupReviewers(ctx, "repo-1")
 		expected := []string{"global1", "global2"}

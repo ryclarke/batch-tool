@@ -57,6 +57,8 @@ Branch Validation:
 		Run: func(cmd *cobra.Command, args []string) {
 			viper := config.Viper(cmd.Context())
 
+			buildPROptions(cmd)
+
 			call.Do(cmd, args, call.Wrap(git.ValidateBranch(viper.GetString(config.PrBaseBranch)), New))
 		},
 	}
@@ -71,33 +73,22 @@ Branch Validation:
 func New(ctx context.Context, ch output.Channel) error {
 	viper := config.Viper(ctx)
 
+	// Get project from repository metadata in catalog, fall back to default
+	project := catalog.GetProjectForRepo(ctx, ch.Name())
+	provider := scm.Get(ctx, viper.GetString(config.GitProvider), project)
+
 	branch, err := utils.LookupBranch(ctx, ch.Name())
 	if err != nil {
 		return err
 	}
 
-	reviewers := lookupReviewers(ctx, ch.Name())
-	if len(reviewers) == 0 {
-		// append placeholder to prevent NPE below
-		reviewers = append(reviewers, "")
-	}
+	// load PR options from config
+	opts := prOptions(ctx, ch.Name())
 
-	// remove all but the first reviewer by default
-	if !viper.GetBool(config.PrAllReviewers) && len(reviewers) > 1 {
-		reviewers = reviewers[:1]
-	}
+	// get reviewers from config if not set via flags
+	opts.Reviewers = lookupReviewers(ctx, ch.Name())
 
-	// Get project from repository metadata in catalog, fall back to default
-	project := catalog.GetProjectForRepo(ctx, ch.Name())
-	provider := scm.Get(ctx, viper.GetString(config.GitProvider), project)
-
-	pr, err := provider.OpenPullRequest(ch.Name(), branch, &scm.PROptions{
-		Title:       viper.GetString(config.PrTitle),
-		Description: viper.GetString(config.PrDescription),
-		BaseBranch:  viper.GetString(config.PrBaseBranch),
-		Draft:       viper.GetBool(config.PrDraft),
-		Reviewers:   reviewers,
-	})
+	pr, err := provider.OpenPullRequest(ch.Name(), branch, &opts)
 	if err != nil {
 		return err
 	}
@@ -105,4 +96,24 @@ func New(ctx context.Context, ch output.Channel) error {
 	fmt.Fprintf(ch, "New pull request (#%d) %s %v\n", pr.Number, pr.Branch, pr.Reviewers)
 
 	return nil
+}
+
+// lookupReviewers returns the list of reviewers for the given repository
+func lookupReviewers(ctx context.Context, name string) []string {
+	viper := config.Viper(ctx)
+
+	// Use the provided list of reviewers
+	if revs := viper.GetStringSlice(config.PrReviewers); len(revs) > 0 {
+		return revs
+	}
+
+	// Use default reviewers for the given repository
+	revs := viper.GetStringMapStringSlice(config.DefaultReviewers)[name]
+
+	// Only use the first reviewer from the default list unless allReviewers is set
+	if !viper.GetBool(config.PrAllReviewers) && len(revs) > 1 {
+		revs = []string{revs[0]}
+	}
+
+	return revs
 }
