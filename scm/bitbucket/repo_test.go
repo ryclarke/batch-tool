@@ -9,20 +9,20 @@ import (
 )
 
 // mockBitbucketRepoResponse creates a mock repository response
-func mockBitbucketRepoResponse(name, description string, public bool, projectKey string) map[string]interface{} {
-	return map[string]interface{}{
+func mockBitbucketRepoResponse(name, description string, public bool) map[string]any {
+	return map[string]any{
 		"slug":        name,
 		"name":        name,
 		"description": description,
 		"public":      public,
-		"project": map[string]interface{}{
-			"key":  projectKey,
-			"name": projectKey + " Project",
+		"project": map[string]any{
+			"key":  "TEST",
+			"name": "TEST Project",
 		},
-		"links": map[string]interface{}{
-			"clone": []map[string]interface{}{
+		"links": map[string]any{
+			"clone": []map[string]any{
 				{
-					"href": "ssh://git@bitbucket.example.com/" + strings.ToLower(projectKey) + "/" + name + ".git",
+					"href": "ssh://git@bitbucket.example.com/test/" + name + ".git",
 					"name": "ssh",
 				},
 			},
@@ -31,20 +31,20 @@ func mockBitbucketRepoResponse(name, description string, public bool, projectKey
 }
 
 // mockLabelsResponse creates a mock labels response
-func mockLabelsResponse(labels ...string) map[string]interface{} {
-	values := make([]map[string]interface{}, len(labels))
+func mockLabelsResponse(labels ...string) map[string]any {
+	values := make([]map[string]any, len(labels))
 	for i, label := range labels {
-		values[i] = map[string]interface{}{"name": label}
+		values[i] = map[string]any{"name": label}
 	}
-	return map[string]interface{}{
+	return map[string]any{
 		"values":     values,
 		"isLastPage": true,
 	}
 }
 
 // mockDefaultBranchResponse creates a mock default branch response
-func mockDefaultBranchResponse(branchName string) map[string]interface{} {
-	return map[string]interface{}{
+func mockDefaultBranchResponse(branchName string) map[string]any {
+	return map[string]any{
 		"displayId": branchName,
 		"id":        "refs/heads/" + branchName,
 		"isDefault": true,
@@ -57,10 +57,10 @@ func TestListRepositories(t *testing.T) {
 		switch {
 		case strings.HasSuffix(r.URL.Path, "/repos"):
 			// Repository list request
-			resp := map[string]interface{}{
-				"values": []map[string]interface{}{
-					mockBitbucketRepoResponse("repo-one", "First repository", false, "TEST"),
-					mockBitbucketRepoResponse("repo-two", "Second repository", true, "TEST"),
+			resp := map[string]any{
+				"values": []map[string]any{
+					mockBitbucketRepoResponse("repo-one", "First repository", false),
+					mockBitbucketRepoResponse("repo-two", "Second repository", true),
 				},
 				"isLastPage": true,
 			}
@@ -125,10 +125,10 @@ func TestListRepositories_LargeLimit(t *testing.T) {
 			if limit != "1000" {
 				t.Errorf("Expected limit=1000, got limit=%s", limit)
 			}
-			resp := map[string]interface{}{
-				"values": []map[string]interface{}{
-					mockBitbucketRepoResponse("repo-one", "", false, "TEST"),
-					mockBitbucketRepoResponse("repo-two", "", false, "TEST"),
+			resp := map[string]any{
+				"values": []map[string]any{
+					mockBitbucketRepoResponse("repo-one", "", false),
+					mockBitbucketRepoResponse("repo-two", "", false),
 				},
 				"isLastPage": true,
 			}
@@ -156,8 +156,8 @@ func TestListRepositories_LargeLimit(t *testing.T) {
 func TestListRepositories_EmptyResponse(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasSuffix(r.URL.Path, "/repos") {
-			resp := map[string]interface{}{
-				"values":     []map[string]interface{}{},
+			resp := map[string]any{
+				"values":     []map[string]any{},
 				"isLastPage": true,
 			}
 			json.NewEncoder(w).Encode(resp)
@@ -181,9 +181,9 @@ func TestListRepositories_LabelsFail(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case strings.HasSuffix(r.URL.Path, "/repos"):
-			resp := map[string]interface{}{
-				"values": []map[string]interface{}{
-					mockBitbucketRepoResponse("repo-one", "", false, "TEST"),
+			resp := map[string]any{
+				"values": []map[string]any{
+					mockBitbucketRepoResponse("repo-one", "", false),
 				},
 				"isLastPage": true,
 			}
@@ -211,9 +211,9 @@ func TestListRepositories_DefaultBranchFail(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case strings.HasSuffix(r.URL.Path, "/repos"):
-			resp := map[string]interface{}{
-				"values": []map[string]interface{}{
-					mockBitbucketRepoResponse("repo-one", "", false, "TEST"),
+			resp := map[string]any{
+				"values": []map[string]any{
+					mockBitbucketRepoResponse("repo-one", "", false),
 				},
 				"isLastPage": true,
 			}
@@ -242,7 +242,7 @@ func TestListRepositories_DefaultBranchFail(t *testing.T) {
 }
 
 func TestListRepositories_APIError(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte(`{"errors": [{"message": "Internal Server Error"}]}`))
 	}))
@@ -286,7 +286,7 @@ func TestGetLabels(t *testing.T) {
 }
 
 func TestGetLabels_Empty(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		json.NewEncoder(w).Encode(mockLabelsResponse())
 	}))
 	defer server.Close()
@@ -326,7 +326,7 @@ func TestGetDefaultBranch(t *testing.T) {
 }
 
 func TestGetDefaultBranch_Error(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
 	}))
 	defer server.Close()

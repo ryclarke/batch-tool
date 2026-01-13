@@ -154,14 +154,14 @@ func newTestBitbucket(t *testing.T, server *httptest.Server) *Bitbucket {
 }
 
 // mockBitbucketPRResponse creates a Bitbucket PR API response
-func mockBitbucketPRResponse(id float64, title, description, branch string, reviewers []string) map[string]interface{} {
+func mockBitbucketPRResponse(id float64, title, description string, reviewers []string) map[string]interface{} {
 	pr := map[string]interface{}{
 		"id":          id,
 		"version":     float64(1),
 		"title":       title,
 		"description": description,
 		"fromRef": map[string]interface{}{
-			"id": "refs/heads/" + branch,
+			"id": "refs/heads/feature-branch",
 			"repository": map[string]interface{}{
 				"slug": "test-repo",
 				"project": map[string]interface{}{
@@ -213,7 +213,7 @@ func TestGetPullRequest(t *testing.T) {
 		// Return mock response
 		resp := map[string]interface{}{
 			"values": []map[string]interface{}{
-				mockBitbucketPRResponse(42, "Test PR", "PR description", "feature-branch", []string{"alice", "bob"}),
+				mockBitbucketPRResponse(42, "Test PR", "PR description", []string{"alice", "bob"}),
 			},
 		}
 		json.NewEncoder(w).Encode(resp)
@@ -242,7 +242,7 @@ func TestGetPullRequest(t *testing.T) {
 }
 
 func TestGetPullRequest_NotFound(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		// Return empty list
 		resp := map[string]interface{}{
 			"values": []map[string]interface{}{},
@@ -263,7 +263,7 @@ func TestGetPullRequest_NotFound(t *testing.T) {
 }
 
 func TestGetPullRequest_APIError(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte(`{"errors": [{"message": "Internal Server Error"}]}`))
 	}))
@@ -304,7 +304,7 @@ func TestOpenPullRequest(t *testing.T) {
 			}
 
 			// Return created PR
-			pr := mockBitbucketPRResponse(100, "New Feature", "Feature description", "feature-branch", nil)
+			pr := mockBitbucketPRResponse(100, "New Feature", "Feature description", nil)
 			json.NewEncoder(w).Encode(pr)
 			return
 		}
@@ -349,7 +349,7 @@ func TestOpenPullRequest_WithReviewers(t *testing.T) {
 				t.Errorf("Expected 2 reviewers in request, got %d", len(req.Reviewers))
 			}
 
-			pr := mockBitbucketPRResponse(100, "New Feature", "", "feature-branch", []string{"alice", "bob"})
+			pr := mockBitbucketPRResponse(100, "New Feature", "", []string{"alice", "bob"})
 			json.NewEncoder(w).Encode(pr)
 			return
 		}
@@ -395,7 +395,7 @@ func TestOpenPullRequest_NilOptions(t *testing.T) {
 				t.Errorf("Expected default title 'feature-branch', got '%s'", req.Title)
 			}
 
-			pr := mockBitbucketPRResponse(100, "feature-branch", "", "feature-branch", nil)
+			pr := mockBitbucketPRResponse(100, "feature-branch", "", nil)
 			json.NewEncoder(w).Encode(pr)
 			return
 		}
@@ -415,11 +415,11 @@ func TestOpenPullRequest_NilOptions(t *testing.T) {
 }
 
 func TestOpenPullRequest_AlreadyExists(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		// Return existing PR
 		resp := map[string]interface{}{
 			"values": []map[string]interface{}{
-				mockBitbucketPRResponse(42, "Existing PR", "", "feature-branch", nil),
+				mockBitbucketPRResponse(42, "Existing PR", "", nil),
 			},
 		}
 		json.NewEncoder(w).Encode(resp)
@@ -448,7 +448,7 @@ func TestUpdatePullRequest(t *testing.T) {
 		if requestPhase == 1 && r.Method == http.MethodGet {
 			resp := map[string]interface{}{
 				"values": []map[string]interface{}{
-					mockBitbucketPRResponse(42, "Old Title", "Old description", "feature-branch", nil),
+					mockBitbucketPRResponse(42, "Old Title", "Old description", nil),
 				},
 			}
 			json.NewEncoder(w).Encode(resp)
@@ -464,7 +464,7 @@ func TestUpdatePullRequest(t *testing.T) {
 				t.Errorf("Expected title 'Updated Title', got '%s'", req.Title)
 			}
 
-			pr := mockBitbucketPRResponse(42, "Updated Title", "Updated description", "feature-branch", nil)
+			pr := mockBitbucketPRResponse(42, "Updated Title", "Updated description", nil)
 			json.NewEncoder(w).Encode(pr)
 			return
 		}
@@ -502,7 +502,7 @@ func TestUpdatePullRequest_NoChanges(t *testing.T) {
 }
 
 func TestUpdatePullRequest_NotFound(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		resp := map[string]interface{}{
 			"values": []map[string]interface{}{},
 		}
@@ -529,7 +529,7 @@ func TestMergePullRequest(t *testing.T) {
 		if requestPhase == 1 && r.Method == http.MethodGet {
 			resp := map[string]interface{}{
 				"values": []map[string]interface{}{
-					mockBitbucketPRResponse(42, "PR to Merge", "", "feature-branch", nil),
+					mockBitbucketPRResponse(42, "PR to Merge", "", nil),
 				},
 			}
 			json.NewEncoder(w).Encode(resp)
@@ -565,7 +565,7 @@ func TestMergePullRequest(t *testing.T) {
 }
 
 func TestMergePullRequest_NotFound(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		resp := map[string]interface{}{
 			"values": []map[string]interface{}{},
 		}

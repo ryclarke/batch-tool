@@ -162,28 +162,24 @@ func Execute() {
 func setTerminalWait(cmd *cobra.Command) error {
 	viper := config.Viper(cmd.Context())
 
+	// Check for print flag and auto-detect non-interactive environments BEFORE binding flags
+	// This allows these conditions to influence the default value before BindBoolFlags applies it
+	if !cmd.Flags().Changed(waitFlag) && !cmd.Flags().Changed(noWaitFlag) {
+		// If printing is requested without explicit wait/no-wait, disable wait by default
+		if shouldPrint, err := cmd.Flags().GetBool(printFlag); err == nil && shouldPrint {
+			viper.Set(config.WaitOnExit, false)
+		}
+
+		// Auto-detect environment type if no flags are explicitly set
+		// This prevents hanging in pipes, redirects, and CI/CD environments
+		if !term.IsTerminal(int(os.Stdout.Fd())) {
+			viper.Set(config.WaitOnExit, false)
+		}
+	}
+
 	// Bind the wait/no-wait flag pair configuration
-	if err := utils.BindBoolFlags(cmd, config.WaitOnExit, waitFlag, noWaitFlag); err != nil {
-		return err
-	}
-
-	// Explicit --wait or --no-wait takes precedence over auto-detection
-	if cmd.Flags().Changed(waitFlag) || cmd.Flags().Changed(noWaitFlag) {
-		return nil
-	}
-
-	// If printing is requested without explicit wait/no-wait, disable wait by default regardless of terminal state
-	if shouldPrint, err := cmd.Flags().GetBool(printFlag); err == nil && shouldPrint {
-		viper.Set(config.WaitOnExit, false)
-	}
-
-	// Auto-detect environment type if neither flag is explicitly set
-	// This prevents hanging in pipes, redirects, and CI/CD environments
-	if !term.IsTerminal(int(os.Stdout.Fd())) {
-		viper.Set(config.WaitOnExit, false)
-	}
-
-	return nil
+	// Explicit flags will override any auto-detection done above
+	return utils.BindBoolFlags(cmd, config.WaitOnExit, waitFlag, noWaitFlag)
 }
 
 // labelsCmd configures the labels command

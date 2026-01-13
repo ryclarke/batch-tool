@@ -13,8 +13,6 @@ import (
 	"github.com/ryclarke/batch-tool/scm"
 )
 
-const prReviewers = "pr.reviewers"
-
 // GetPullRequest retrieves a pull request by repository name and source branch.
 func (b *Bitbucket) GetPullRequest(repo, branch string) (*scm.PullRequest, error) {
 	resp, err := b.getPullRequest(repo, branch)

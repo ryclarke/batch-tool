@@ -23,9 +23,7 @@ func Cmd() *cobra.Command {
 
 This command provides a suite of git operations that can be executed across
 multiple repositories simultaneously, including branch management, commits,
-pushes, and status checks.
-
-The default subcommand is 'status' if no subcommand is specified.`,
+pushes, and status checks.`,
 		Example: `  # Check status of repositories (default command)
   batch-tool git ~backend
 
@@ -43,10 +41,8 @@ The default subcommand is 'status' if no subcommand is specified.`,
 		Args: cobra.MinimumNArgs(1),
 	}
 
-	defaultCmd := addStatusCmd()
-	gitCmd.Run = defaultCmd.Run
 	gitCmd.AddCommand(
-		defaultCmd,
+		addStatusCmd(),
 		addBranchCmd(),
 		addCommitCmd(),
 		addDiffCmd(),

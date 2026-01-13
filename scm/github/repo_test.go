@@ -114,7 +114,7 @@ func TestListRepositories_UserFallback(t *testing.T) {
 }
 
 func TestListRepositories_EmptyDefaultBranch(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		repos := []map[string]interface{}{
 			{
 				"name":           "empty-branch-repo",
@@ -142,7 +142,7 @@ func TestListRepositories_EmptyDefaultBranch(t *testing.T) {
 }
 
 func TestListRepositories_APIError(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(map[string]string{"message": "Internal Server Error"})
 	}))
@@ -157,7 +157,7 @@ func TestListRepositories_APIError(t *testing.T) {
 }
 
 func TestListRepositories_EmptyResponse(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		json.NewEncoder(w).Encode([]map[string]interface{}{})
 	}))
 	defer server.Close()
@@ -175,7 +175,7 @@ func TestListRepositories_EmptyResponse(t *testing.T) {
 }
 
 func TestListRepositories_ProjectAssignment(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		repos := []map[string]interface{}{
 			mockRepoResponse("test-repo", "", false, "main", nil),
 		}
@@ -244,7 +244,7 @@ func TestListRepositories_Pagination(t *testing.T) {
 }
 
 func TestListRepositories_TopicsMapping(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		repos := []map[string]interface{}{
 			mockRepoResponse("labeled-repo", "", false, "main", []string{"backend", "api", "golang"}),
 		}

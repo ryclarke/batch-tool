@@ -18,7 +18,7 @@ func RunProviderContract(t *testing.T, name string, provider Provider) {
 		}
 
 		// Verify it implements the Provider interface
-		var _ Provider = provider
+		var _ = provider
 	})
 }
 

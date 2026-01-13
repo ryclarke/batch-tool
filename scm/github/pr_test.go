@@ -104,7 +104,7 @@ func TestGetPullRequest(t *testing.T) {
 }
 
 func TestGetPullRequest_NotFound(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		// Return empty list (no PRs found)
 		json.NewEncoder(w).Encode([]map[string]interface{}{})
 	}))
@@ -122,7 +122,7 @@ func TestGetPullRequest_NotFound(t *testing.T) {
 }
 
 func TestGetPullRequest_APIError(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(map[string]string{"message": "Internal Server Error"})
 	}))
@@ -189,7 +189,7 @@ func TestOpenPullRequest(t *testing.T) {
 }
 
 func TestOpenPullRequest_AlreadyExists(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		// Return existing PR
 		prs := []map[string]interface{}{
 			mockPRResponse(12345, 42, "Existing PR", "description", "feature-branch", true, nil),
@@ -384,7 +384,7 @@ func TestUpdatePullRequest_WithReviewers(t *testing.T) {
 }
 
 func TestUpdatePullRequest_NotFound(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		json.NewEncoder(w).Encode([]map[string]interface{}{})
 	}))
 	defer server.Close()
@@ -439,7 +439,7 @@ func TestMergePullRequest(t *testing.T) {
 }
 
 func TestMergePullRequest_NotMergeable(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		prs := []map[string]interface{}{
 			mockPRResponse(12345, 42, "PR", "", "feature-branch", false, nil),
 		}
@@ -498,7 +498,7 @@ func TestMergePullRequest_ForceNonMergeable(t *testing.T) {
 }
 
 func TestMergePullRequest_NotFound(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		json.NewEncoder(w).Encode([]map[string]interface{}{})
 	}))
 	defer server.Close()
@@ -909,7 +909,7 @@ func TestListReviewers(t *testing.T) {
 }
 
 func TestListReviewers_Empty(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		reviewers := map[string]interface{}{
 			"users": []map[string]interface{}{},
 		}
@@ -955,7 +955,7 @@ func TestRemoveReviewers(t *testing.T) {
 }
 
 func TestRemoveReviewers_Empty(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
 		t.Error("Should not make any request when removing empty reviewer list")
 	}))
 	defer server.Close()
@@ -969,7 +969,7 @@ func TestRemoveReviewers_Empty(t *testing.T) {
 }
 
 func TestRemoveReviewers_APIError(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(map[string]string{"message": "Internal error"})
 	}))
@@ -984,7 +984,7 @@ func TestRemoveReviewers_APIError(t *testing.T) {
 }
 
 func TestListReviewers_APIError(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(map[string]string{"message": "Internal error"})
 	}))
@@ -999,7 +999,7 @@ func TestListReviewers_APIError(t *testing.T) {
 }
 
 func TestRequestReviewers_APIError(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusUnprocessableEntity)
 		json.NewEncoder(w).Encode(map[string]string{"message": "Invalid reviewers"})
 	}))
@@ -1014,7 +1014,7 @@ func TestRequestReviewers_APIError(t *testing.T) {
 }
 
 func TestEditPullRequest_APIError(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
 		json.NewEncoder(w).Encode(map[string]string{"message": "PR not found"})
 	}))
@@ -1029,7 +1029,7 @@ func TestEditPullRequest_APIError(t *testing.T) {
 }
 
 func TestOpenPullRequest_APIError(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusUnprocessableEntity)
 		json.NewEncoder(w).Encode(map[string]string{"message": "Validation failed"})
 	}))
@@ -1049,7 +1049,7 @@ func TestOpenPullRequest_APIError(t *testing.T) {
 }
 
 func TestMergePullRequest_APIError(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		json.NewEncoder(w).Encode(map[string]string{"message": "Cannot merge"})
 	}))

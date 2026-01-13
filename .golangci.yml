@@ -34,6 +34,12 @@ linters:
   exclusions:
     generated: strict
     rules:
+      # Exclude nil dereference checks in test files (staticcheck has false positives with t.Fatal)
+      - path: _test\.go
+        text: SA5011
+        linters:
+          - staticcheck
+
       # Exclude unwanted linters from test files
       - path: _test\.go|utils/testing/.*\.go
         linters:

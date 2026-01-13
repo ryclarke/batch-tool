@@ -27,8 +27,7 @@ func Cmd() *cobra.Command {
 		Long: `Manage pull requests across multiple repositories using SCM provider APIs.
 
 This command provides pull request management operations that integrate with
-your source control management (SCM) provider. If run without a subcommand it
-defaults to 'pr get' to retrieve pull request information.
+your source control management (SCM) provider.
 
 The active provider is configured in your batch-tool configuration file along with
 authentication tokens. GitHub and Bitbucket are currently supported.
@@ -52,7 +51,14 @@ Branch Validation:
   # Merge approved PRs
   batch-tool pr merge repo1 repo2`,
 		Args: cobra.MinimumNArgs(1),
-		PersistentPreRunE: func(cmd *cobra.Command, _ []string) error {
+		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+			// Call root's persistent pre-run to initialize global flags for nested subcommands
+			if cmd != cmd.Root() && cmd.Root().PersistentPreRunE != nil {
+				if err := cmd.Root().PersistentPreRunE(cmd, args); err != nil {
+					return err
+				}
+			}
+
 			viper := config.Viper(cmd.Context())
 
 			viper.BindPFlag(config.PrTitle, cmd.Flags().Lookup(prTitleFlag))
@@ -72,10 +78,8 @@ Branch Validation:
 	prCmd.PersistentFlags().StringSliceP(prReviewerFlag, "r", nil, "pull request reviewer (repeatable)")
 	utils.BuildBoolFlags(prCmd, prDraftFlag, "", prNoDraftFlag, "", "mark pull request as a draft")
 
-	defaultCmd := addGetCmd()
-	prCmd.Run = defaultCmd.Run
 	prCmd.AddCommand(
-		defaultCmd,
+		addGetCmd(),
 		addNewCmd(),
 		addEditCmd(),
 		addMergeCmd(),

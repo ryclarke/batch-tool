@@ -154,6 +154,7 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault(CatalogCachePath, "") // empty means use default: gitdir/host/.batch-tool-cache.json
 	v.SetDefault(CatalogCacheTTL, "24h")
 	v.SetDefault(OutputStyle, "tui")
+	v.SetDefault(WaitOnExit, true) // Wait for user input after completion by default
 	v.SetDefault(ChannelBuffer, 100)
 	v.SetDefault(MaxConcurrency, runtime.NumCPU()) // Default to number of logical CPUs
 	v.SetDefault(WriteBackoff, "1s")

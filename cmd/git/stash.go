@@ -154,13 +154,13 @@ func ValidateStash(ctx context.Context, ch output.Channel) error {
 	}
 
 	if message == "" {
-		return fmt.Errorf("No stash found to pop")
+		return fmt.Errorf("no stash found to pop")
 	}
 
 	// Check if the latest stash is a batch-tool stash (unless overridden)
 	// Note: git stash list format may include branch prefix like "On main: message"
 	if !config.Viper(ctx).GetBool(config.GitStashAllowAny) && !strings.Contains(message, stashMessagePrefix) {
-		return fmt.Errorf("Latest stash is not a batch-tool stash: %s", message)
+		return fmt.Errorf("latest stash is not a batch-tool stash: %s", message)
 	}
 
 	setStashState(ctx, ch.Name(), true)
