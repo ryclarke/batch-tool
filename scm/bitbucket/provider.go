@@ -12,6 +12,12 @@ import (
 	"github.com/ryclarke/batch-tool/scm"
 )
 
+var caps = &scm.Capabilities{
+	TeamReviewers:  false,
+	ResetReviewers: true,
+	Draft:          false,
+}
+
 var _ scm.Provider = new(Bitbucket)
 
 func init() {
@@ -38,6 +44,11 @@ type Bitbucket struct {
 	host    string
 	project string
 	ctx     context.Context
+}
+
+// CheckCapabilities validates that the provided PR options are supported by Bitbucket.
+func (b *Bitbucket) CheckCapabilities(opts *scm.PROptions) error {
+	return scm.ValidatePROptions(caps, opts)
 }
 
 // constructs the base URL for the Bitbucket API endpoint.

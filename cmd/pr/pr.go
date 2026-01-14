@@ -12,11 +12,12 @@ import (
 )
 
 const (
-	prTitleFlag       = "title"
-	prDescriptionFlag = "description"
-	prReviewerFlag    = "reviewer"
-	prDraftFlag       = "draft"
-	prNoDraftFlag     = "no-" + prDraftFlag
+	prTitleFlag        = "title"
+	prDescriptionFlag  = "description"
+	prReviewerFlag     = "reviewer"
+	prTeamReviewerFlag = "team-reviewer"
+	prDraftFlag        = "draft"
+	prNoDraftFlag      = "no-" + prDraftFlag
 )
 
 // Cmd configures the root pr command along with all subcommands and flags
@@ -76,6 +77,7 @@ Branch Validation:
 	prCmd.PersistentFlags().StringP(prTitleFlag, "t", "", "pull request title")
 	prCmd.PersistentFlags().StringP(prDescriptionFlag, "d", "", "pull request description")
 	prCmd.PersistentFlags().StringSliceP(prReviewerFlag, "r", nil, "pull request reviewer (repeatable)")
+	prCmd.PersistentFlags().StringSliceP(prTeamReviewerFlag, "R", nil, "pull request team reviewer (repeatable)")
 	utils.BuildBoolFlags(prCmd, prDraftFlag, "", prNoDraftFlag, "", "mark pull request as a draft")
 
 	prCmd.AddCommand(
@@ -115,6 +117,7 @@ func buildPROptions(cmd *cobra.Command) {
 		Description: viper.GetString(config.PrDescription),
 
 		Reviewers:      viper.GetStringSlice(config.PrReviewers),
+		TeamReviewers:  viper.GetStringSlice(config.PrTeamReviewers),
 		ResetReviewers: viper.GetBool(config.PrResetReviewers),
 	}
 

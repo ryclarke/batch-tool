@@ -662,3 +662,146 @@ func TestCreateTestRepositories(t *testing.T) {
 		}
 	}
 }
+
+// TestOpenPullRequestWithTeamReviewers tests opening a PR with team reviewers
+func TestOpenPullRequestWithTeamReviewers(t *testing.T) {
+	f := NewFake("test-project", []*scm.Repository{
+		{Name: "test-repo", Project: "test-project", DefaultBranch: "main"},
+	})
+
+	opts := &scm.PROptions{
+		Title:         "Test PR with team reviewers",
+		Description:   "Testing team reviewers",
+		Reviewers:     []string{"user1", "user2"},
+		TeamReviewers: []string{"org/backend-team", "org/frontend-team"},
+		BaseBranch:    "main",
+	}
+
+	pr, err := f.OpenPullRequest("test-repo", "feature/test", opts)
+	if err != nil {
+		t.Fatalf("OpenPullRequest failed: %v", err)
+	}
+
+	if pr == nil {
+		t.Fatal("expected PR, got nil")
+	}
+
+	if pr.Title != opts.Title {
+		t.Errorf("Title: got %q, want %q", pr.Title, opts.Title)
+	}
+
+	if len(pr.Reviewers) != 2 {
+		t.Errorf("Reviewers count: got %d, want 2", len(pr.Reviewers))
+	}
+
+	if len(pr.TeamReviewers) != 2 {
+		t.Errorf("TeamReviewers count: got %d, want 2", len(pr.TeamReviewers))
+	}
+
+	// Verify team reviewers are stored correctly
+	if pr.TeamReviewers[0] != "org/backend-team" || pr.TeamReviewers[1] != "org/frontend-team" {
+		t.Errorf("TeamReviewers: got %v, want [org/backend-team org/frontend-team]", pr.TeamReviewers)
+	}
+}
+
+// TestUpdatePullRequestAppendTeamReviewers tests appending team reviewers to a PR
+func TestUpdatePullRequestAppendTeamReviewers(t *testing.T) {
+	f := NewFake("test-project", []*scm.Repository{
+		{Name: "test-repo", Project: "test-project", DefaultBranch: "main"},
+	})
+
+	// Create initial PR
+	initialOpts := &scm.PROptions{
+		Title:         "Initial PR",
+		TeamReviewers: []string{"org/team1"},
+	}
+	_, err := f.OpenPullRequest("test-repo", "feature/test", initialOpts)
+	if err != nil {
+		t.Fatalf("OpenPullRequest failed: %v", err)
+	}
+
+	// Update to append more team reviewers
+	updateOpts := &scm.PROptions{
+		TeamReviewers:  []string{"org/team2"},
+		ResetReviewers: false,
+	}
+	pr, err := f.UpdatePullRequest("test-repo", "feature/test", updateOpts)
+	if err != nil {
+		t.Fatalf("UpdatePullRequest failed: %v", err)
+	}
+
+	if len(pr.TeamReviewers) != 2 {
+		t.Errorf("TeamReviewers count: got %d, want 2", len(pr.TeamReviewers))
+	}
+}
+
+// TestUpdatePullRequestResetTeamReviewers tests replacing team reviewers on a PR
+func TestUpdatePullRequestResetTeamReviewers(t *testing.T) {
+	f := NewFake("test-project", []*scm.Repository{
+		{Name: "test-repo", Project: "test-project", DefaultBranch: "main"},
+	})
+
+	// Create initial PR with team reviewers
+	initialOpts := &scm.PROptions{
+		Title:         "Initial PR",
+		TeamReviewers: []string{"org/team1", "org/team2"},
+	}
+	_, err := f.OpenPullRequest("test-repo", "feature/test", initialOpts)
+	if err != nil {
+		t.Fatalf("OpenPullRequest failed: %v", err)
+	}
+
+	// Update to replace team reviewers
+	updateOpts := &scm.PROptions{
+		TeamReviewers:  []string{"org/new-team"},
+		ResetReviewers: true,
+	}
+	pr, err := f.UpdatePullRequest("test-repo", "feature/test", updateOpts)
+	if err != nil {
+		t.Fatalf("UpdatePullRequest failed: %v", err)
+	}
+
+	if len(pr.TeamReviewers) != 1 {
+		t.Errorf("TeamReviewers count: got %d, want 1", len(pr.TeamReviewers))
+	}
+
+	if pr.TeamReviewers[0] != "org/new-team" {
+		t.Errorf("TeamReviewers: got %v, want [org/new-team]", pr.TeamReviewers)
+	}
+}
+
+// TestGetPullRequestWithTeamReviewers tests retrieving a PR with team reviewers
+func TestGetPullRequestWithTeamReviewers(t *testing.T) {
+	f := NewFake("test-project", []*scm.Repository{
+		{Name: "test-repo", Project: "test-project", DefaultBranch: "main"},
+	})
+
+	opts := &scm.PROptions{
+		Title:         "Test PR",
+		TeamReviewers: []string{"org/team1"},
+		Reviewers:     []string{"user1"},
+	}
+
+	_, err := f.OpenPullRequest("test-repo", "feature/test", opts)
+	if err != nil {
+		t.Fatalf("OpenPullRequest failed: %v", err)
+	}
+
+	// Retrieve the PR
+	pr, err := f.GetPullRequest("test-repo", "feature/test")
+	if err != nil {
+		t.Fatalf("GetPullRequest failed: %v", err)
+	}
+
+	if pr == nil {
+		t.Fatal("expected PR, got nil")
+	}
+
+	if len(pr.TeamReviewers) != 1 {
+		t.Errorf("TeamReviewers count: got %d, want 1", len(pr.TeamReviewers))
+	}
+
+	if pr.TeamReviewers[0] != "org/team1" {
+		t.Errorf("TeamReviewers: got %v, want [org/team1]", pr.TeamReviewers)
+	}
+}

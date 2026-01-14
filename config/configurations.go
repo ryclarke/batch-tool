@@ -80,6 +80,7 @@ const (
 	PrDescription    = "pr.args.description"
 	PrDraft          = "pr.args.draft"
 	PrReviewers      = "pr.args.reviewers"
+	PrTeamReviewers  = "pr.args.team-reviewers"
 	PrResetReviewers = "pr.args.reset-reviewers"
 	PrAllReviewers   = "pr.args.all-reviewers"
 	PrBaseBranch     = "pr.args.base-branch"

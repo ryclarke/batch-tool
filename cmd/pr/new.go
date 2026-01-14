@@ -84,6 +84,9 @@ func New(ctx context.Context, ch output.Channel) error {
 
 	// load PR options from config
 	opts := prOptions(ctx, ch.Name())
+	if err := provider.CheckCapabilities(&opts); err != nil {
+		return err
+	}
 
 	// get reviewers from config if not set via flags
 	opts.Reviewers = lookupReviewers(ctx, ch.Name())

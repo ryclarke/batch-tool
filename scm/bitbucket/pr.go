@@ -72,7 +72,7 @@ func (b *Bitbucket) UpdatePullRequest(repo, branch string, opts *scm.PROptions) 
 		opts = &scm.PROptions{} // default options
 	}
 
-	if opts.Title == "" && opts.Description == "" && len(opts.Reviewers) == 0 {
+	if opts.Title == "" && opts.Description == "" && len(opts.Reviewers) == 0 && len(opts.TeamReviewers) == 0 {
 		return nil, fmt.Errorf("no updates provided")
 	}
 

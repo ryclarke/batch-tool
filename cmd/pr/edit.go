@@ -79,6 +79,9 @@ func Edit(ctx context.Context, ch output.Channel) error {
 
 	// load PR options from config
 	opts := prOptions(ctx, ch.Name())
+	if err := provider.CheckCapabilities(&opts); err != nil {
+		return err
+	}
 
 	pr, err := provider.UpdatePullRequest(ch.Name(), branch, &opts)
 	if err != nil {

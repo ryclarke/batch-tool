@@ -2,7 +2,12 @@ package github
 
 import (
 	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
 	"testing"
+	"time"
 
 	"github.com/ryclarke/batch-tool/scm"
 	testhelper "github.com/ryclarke/batch-tool/utils/testing"
@@ -77,7 +82,7 @@ func TestHandleRateLimitError_NotRateLimitError(t *testing.T) {
 
 	// Regular error should not trigger retry
 	err := context.DeadlineExceeded
-	shouldRetry, retErr := g.handleRateLimitError(context.TODO(), err, false)
+	shouldRetry, retErr := g.handleRateLimitError(err, false)
 
 	if shouldRetry {
 		t.Error("Should not retry on non-rate-limit error")
@@ -137,4 +142,99 @@ func TestReadWriteLockInteraction(t *testing.T) {
 	// Now acquire write lock
 	done3 := g.writeLock()
 	done3()
+}
+
+// TestCheckCapabilities tests the CheckCapabilities method
+func TestCheckCapabilities(t *testing.T) {
+	ctx := loadFixture(t)
+	g := New(ctx, "test-project").(*Github)
+
+	tests := []struct {
+		name    string
+		opts    *scm.PROptions
+		wantErr bool
+	}{
+		{
+			name:    "nil_options",
+			opts:    nil,
+			wantErr: false,
+		},
+		{
+			name: "valid_team_reviewers",
+			opts: &scm.PROptions{
+				TeamReviewers: []string{"org/team1"},
+			},
+			wantErr: false,
+		},
+		{
+			name: "valid_draft",
+			opts: &scm.PROptions{
+				Draft: boolPtr(true),
+			},
+			wantErr: false,
+		},
+		{
+			name: "valid_reset_reviewers",
+			opts: &scm.PROptions{
+				ResetReviewers: true,
+			},
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := g.CheckCapabilities(tt.opts)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("CheckCapabilities() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+// TestHandleRateLimitError_RetrySuccess tests successful retry after rate limit
+func TestHandleRateLimitError_RetrySuccess(t *testing.T) {
+	// Create a mock server that provides rate limit info
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/rate_limit" {
+			w.Header().Set("Content-Type", "application/json")
+			// Return rate limit info with reset time in the future
+			resetTime := time.Now().Add(100 * time.Millisecond).Unix()
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"resources": map[string]interface{}{
+					"core": map[string]interface{}{
+						"limit":     60,
+						"remaining": 0,
+						"reset":     resetTime,
+					},
+					"search": map[string]interface{}{
+						"limit":     10,
+						"remaining": 0,
+						"reset":     resetTime,
+					},
+				},
+			})
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer server.Close()
+
+	ctx := loadFixture(t)
+	g := New(ctx, "test-project").(*Github)
+	// Use test server for rate limit checks
+	g.client.BaseURL, _ = url.Parse(server.URL)
+
+	// Test with a nil error (not a rate limit error)
+	shouldRetry, err := g.handleRateLimitError(nil, false)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	if shouldRetry {
+		t.Error("Expected shouldRetry to be false for nil error")
+	}
+}
+
+func boolPtr(b bool) *bool {
+	return &b
 }

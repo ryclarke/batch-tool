@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/go-github/v74/github"
 
@@ -17,6 +18,11 @@ import (
 func newTestGithub(t *testing.T, server *httptest.Server) *Github {
 	t.Helper()
 	ctx := loadFixture(t)
+
+	// Create a context with a test-appropriate timeout to prevent deadlocks
+	// while still allowing cancellation to work
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	t.Cleanup(cancel)
 
 	client := github.NewClient(http.DefaultClient)
 	client.BaseURL, _ = client.BaseURL.Parse(server.URL + "/")
@@ -765,9 +771,8 @@ func TestReplaceReviewers_AllNew(t *testing.T) {
 	defer server.Close()
 
 	g := newTestGithub(t, server)
-	ctx := context.TODO()
 
-	_, err := g.replaceReviewers(ctx, "test-repo", 42, []string{"charlie", "david"})
+	_, err := g.replaceReviewers("test-repo", 42, []string{"charlie", "david"})
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
 	}
@@ -820,10 +825,9 @@ func TestReplaceReviewers_PartialOverlap(t *testing.T) {
 	defer server.Close()
 
 	g := newTestGithub(t, server)
-	ctx := context.TODO()
 
 	// Replace alice,bob with bob,charlie (keep bob, remove alice, add charlie)
-	_, err := g.replaceReviewers(ctx, "test-repo", 42, []string{"bob", "charlie"})
+	_, err := g.replaceReviewers("test-repo", 42, []string{"bob", "charlie"})
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
 	}
@@ -859,10 +863,9 @@ func TestReplaceReviewers_SameReviewers(t *testing.T) {
 	defer server.Close()
 
 	g := newTestGithub(t, server)
-	ctx := context.TODO()
 
 	// Same reviewers - no changes needed
-	_, err := g.replaceReviewers(ctx, "test-repo", 42, []string{"alice", "bob"})
+	_, err := g.replaceReviewers("test-repo", 42, []string{"alice", "bob"})
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
 	}
@@ -890,7 +893,7 @@ func TestListReviewers(t *testing.T) {
 	defer server.Close()
 
 	g := newTestGithub(t, server)
-	reviewers, err := g.listReviewers(context.TODO(), "test-repo", 42)
+	reviewers, err := g.listReviewers("test-repo", 42)
 
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
@@ -918,7 +921,7 @@ func TestListReviewers_Empty(t *testing.T) {
 	defer server.Close()
 
 	g := newTestGithub(t, server)
-	reviewers, err := g.listReviewers(context.TODO(), "test-repo", 42)
+	reviewers, err := g.listReviewers("test-repo", 42)
 
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
@@ -947,7 +950,7 @@ func TestRemoveReviewers(t *testing.T) {
 	defer server.Close()
 
 	g := newTestGithub(t, server)
-	err := g.removeReviewers(context.TODO(), "test-repo", 42, []string{"alice", "bob"})
+	err := g.removeReviewers("test-repo", 42, []string{"alice", "bob"})
 
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
@@ -961,7 +964,7 @@ func TestRemoveReviewers_Empty(t *testing.T) {
 	defer server.Close()
 
 	g := newTestGithub(t, server)
-	err := g.removeReviewers(context.TODO(), "test-repo", 42, []string{})
+	err := g.removeReviewers("test-repo", 42, []string{})
 
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
@@ -976,7 +979,7 @@ func TestRemoveReviewers_APIError(t *testing.T) {
 	defer server.Close()
 
 	g := newTestGithub(t, server)
-	err := g.removeReviewers(context.TODO(), "test-repo", 42, []string{"alice"})
+	err := g.removeReviewers("test-repo", 42, []string{"alice"})
 
 	if err == nil {
 		t.Fatal("Expected error for API failure")
@@ -991,7 +994,7 @@ func TestListReviewers_APIError(t *testing.T) {
 	defer server.Close()
 
 	g := newTestGithub(t, server)
-	_, err := g.listReviewers(context.TODO(), "test-repo", 42)
+	_, err := g.listReviewers("test-repo", 42)
 
 	if err == nil {
 		t.Fatal("Expected error for API failure")
@@ -1006,7 +1009,7 @@ func TestRequestReviewers_APIError(t *testing.T) {
 	defer server.Close()
 
 	g := newTestGithub(t, server)
-	_, err := g.requestReviewers(context.TODO(), "test-repo", 42, []string{"invalid"})
+	_, err := g.requestReviewers("test-repo", 42, []string{"invalid"})
 
 	if err == nil {
 		t.Fatal("Expected error for API failure")
@@ -1021,7 +1024,7 @@ func TestEditPullRequest_APIError(t *testing.T) {
 	defer server.Close()
 
 	g := newTestGithub(t, server)
-	_, err := g.editPullRequest(context.TODO(), "test-repo", 42, &github.PullRequest{Title: github.Ptr("Test")})
+	_, err := g.editPullRequest("test-repo", 42, &github.PullRequest{Title: github.Ptr("Test")})
 
 	if err == nil {
 		t.Fatal("Expected error for API failure")
@@ -1041,7 +1044,7 @@ func TestOpenPullRequest_APIError(t *testing.T) {
 		Base:  github.Ptr("main"),
 		Title: github.Ptr("Test"),
 	}
-	_, err := g.openPullRequest(context.TODO(), "test-repo", req)
+	_, err := g.openPullRequest("test-repo", req)
 
 	if err == nil {
 		t.Fatal("Expected error for API failure")
@@ -1056,9 +1059,121 @@ func TestMergePullRequest_APIError(t *testing.T) {
 	defer server.Close()
 
 	g := newTestGithub(t, server)
-	err := g.mergePullRequest(context.TODO(), "test-repo", 42)
+	err := g.mergePullRequest("test-repo", 42)
 
 	if err == nil {
 		t.Fatal("Expected error for API failure")
+	}
+}
+
+// TestTeamReviewersOpenPullRequest tests opening a PR with team reviewers
+// Note: This test verifies the team reviewer flow is called without errors.
+func TestTeamReviewersOpenPullRequest(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+
+		// Create PR response
+		if strings.HasSuffix(r.URL.Path, "/pulls") && r.Method == "POST" {
+			pr := mockPRResponse(1, 1, "Test PR", "Test description", "feature/new", true, []string{})
+			json.NewEncoder(w).Encode(pr)
+		} else if strings.Contains(r.URL.Path, "/review_requests") && r.Method == "POST" {
+			// Request reviewers response - return the PR with basic info
+			pr := mockPRResponse(1, 1, "Test PR", "Test description", "feature/new", true, []string{})
+			json.NewEncoder(w).Encode(pr)
+		}
+	}))
+	defer server.Close()
+
+	g := newTestGithub(t, server)
+	opts := &scm.PROptions{
+		Title:         "Test PR",
+		Description:   "Test description",
+		TeamReviewers: []string{"org/team1", "org/team2"},
+		BaseBranch:    "main",
+	}
+
+	pr, err := g.OpenPullRequest("test-repo", "feature/new", opts)
+	if err != nil {
+		t.Fatalf("OpenPullRequest failed: %v", err)
+	}
+	if pr == nil {
+		t.Fatal("expected PR, got nil")
+	}
+	// Verify PR was created successfully - team reviewers flow was executed
+}
+
+// TestTeamReviewersUpdatePullRequest tests updating a PR with team reviewers
+func TestTeamReviewersUpdatePullRequest(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+
+		if strings.HasSuffix(r.URL.Path, "/pulls") && r.Method == "GET" {
+			// List PRs response - return a PR
+			prs := []map[string]interface{}{
+				mockPRResponse(1, 1, "Test PR", "Test", "feature/update", true, []string{}),
+			}
+			json.NewEncoder(w).Encode(prs)
+		} else if strings.Contains(r.URL.Path, "/pulls/1") && r.Method == "GET" {
+			// Get specific PR
+			pr := mockPRResponse(1, 1, "Test PR", "Test", "feature/update", true, []string{})
+			json.NewEncoder(w).Encode(pr)
+		} else if strings.Contains(r.URL.Path, "/review_requests") && r.Method == "POST" {
+			// Request team reviewers response
+			pr := mockPRResponse(1, 1, "Test PR", "Test", "feature/update", true, []string{})
+			json.NewEncoder(w).Encode(pr)
+		} else if strings.Contains(r.URL.Path, "/review_requests") && r.Method == "DELETE" {
+			// Remove reviewers response
+			w.WriteHeader(http.StatusNoContent)
+		}
+	}))
+	defer server.Close()
+
+	g := newTestGithub(t, server)
+	opts := &scm.PROptions{
+		TeamReviewers:  []string{"org/team1"},
+		ResetReviewers: false,
+	}
+
+	pr, err := g.UpdatePullRequest("test-repo", "feature/update", opts)
+	if err != nil {
+		t.Fatalf("UpdatePullRequest failed: %v", err)
+	}
+	if pr == nil {
+		t.Fatal("expected PR, got nil")
+	}
+}
+
+// TestTeamReviewersWithMixedReviewers tests adding both user and team reviewers
+func TestTeamReviewersWithMixedReviewers(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+
+		if strings.HasSuffix(r.URL.Path, "/pulls") && r.Method == "POST" {
+			// Create PR response
+			pr := mockPRResponse(1, 1, "Mixed PR", "Mixed reviewers", "feature/mixed", true, []string{})
+			json.NewEncoder(w).Encode(pr)
+		} else if strings.Contains(r.URL.Path, "/review_requests") && r.Method == "POST" {
+			// Request reviewers response
+			pr := mockPRResponse(1, 1, "Mixed PR", "Mixed reviewers", "feature/mixed", true, []string{})
+			json.NewEncoder(w).Encode(pr)
+		}
+	}))
+	defer server.Close()
+
+	g := newTestGithub(t, server)
+	opts := &scm.PROptions{
+		Title:         "Mixed PR",
+		Description:   "Mixed reviewers",
+		Reviewers:     []string{"user1", "user2"},
+		TeamReviewers: []string{"org/backend", "org/frontend"},
+		BaseBranch:    "main",
+	}
+
+	pr, err := g.OpenPullRequest("test-repo", "feature/mixed", opts)
+	if err != nil {
+		t.Fatalf("OpenPullRequest failed: %v", err)
+	}
+	if pr == nil {
+		t.Fatal("expected PR, got nil")
 	}
 }

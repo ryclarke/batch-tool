@@ -84,8 +84,6 @@ func TestExampleIntegration(t *testing.T) {
 
 	// Setup: Create fake provider with test data
 	fake := NewFake("test-project", CreateTestRepositories("test-project"))
-
-	// Test scenario: List repositories and verify count
 	repos, err := fake.ListRepositories()
 	if err != nil {
 		t.Fatalf("Failed to list repositories: %v", err)
