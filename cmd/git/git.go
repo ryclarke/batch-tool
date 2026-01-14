@@ -65,6 +65,8 @@ func ValidateBranch(branch ...string) call.Func {
 
 		cmd := exec.Command("git", "rev-parse", "--abbrev-ref", "HEAD")
 		cmd.Dir = utils.RepoPath(ctx, ch.Name())
+		cmd.Env = utils.ExecEnv(ctx, ch.Name())
+
 		output, err := cmd.Output()
 		if err != nil {
 			return err

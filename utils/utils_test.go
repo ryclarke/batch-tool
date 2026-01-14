@@ -1,6 +1,7 @@
 package utils_test
 
 import (
+	"context"
 	"strings"
 	"testing"
 
@@ -195,6 +196,135 @@ func TestValidateEnumConfig(t *testing.T) {
 				if err != nil {
 					t.Errorf("Unexpected error: %v", err)
 				}
+			}
+		})
+	}
+}
+
+func TestExecEnv(t *testing.T) {
+	tests := []struct {
+		name     string
+		repo     string
+		setup    func(t *testing.T, ctx context.Context)
+		validate func(t *testing.T, env []string)
+	}{
+		{
+			name: "basic repo environment variables",
+			repo: "test-repo",
+			setup: func(t *testing.T, ctx context.Context) {
+				viper := config.Viper(ctx)
+				viper.Set(config.GitProject, "default-project")
+				viper.Set(config.Branch, "main")
+				// Setup repo directory for LookupBranch
+				testhelper.SetupDirs(t, ctx, []string{"test-repo"})
+			},
+			validate: func(t *testing.T, env []string) {
+				testhelper.AssertContains(t, env, "REPO_NAME=test-repo")
+				testhelper.AssertContains(t, env, "GIT_BRANCH=main")
+				testhelper.AssertContains(t, env, "GIT_PROJECT=default-project")
+			},
+		},
+		{
+			name: "includes system environment variables",
+			repo: "my-app",
+			setup: func(t *testing.T, ctx context.Context) {
+				viper := config.Viper(ctx)
+				viper.Set(config.GitProject, "my-project")
+				viper.Set(config.Branch, "develop")
+				testhelper.SetupDirs(t, ctx, []string{"my-app"})
+			},
+			validate: func(t *testing.T, env []string) {
+				// Verify the environment contains at least the system PATH
+				found := false
+				for _, e := range env {
+					if strings.HasPrefix(e, "PATH=") {
+						found = true
+						break
+					}
+				}
+				if !found {
+					t.Error("environment should include system variables like PATH")
+				}
+			},
+		},
+		{
+			name: "with custom environment variables",
+			repo: "service",
+			setup: func(t *testing.T, ctx context.Context) {
+				viper := config.Viper(ctx)
+				viper.Set(config.GitProject, "backend")
+				viper.Set(config.Branch, "feature/test")
+				viper.Set(config.CmdEnv, []string{"CUSTOM_VAR=custom-value", "DEBUG=true"})
+				testhelper.SetupDirs(t, ctx, []string{"service"})
+			},
+			validate: func(t *testing.T, env []string) {
+				testhelper.AssertContains(t, env, "REPO_NAME=service")
+				testhelper.AssertContains(t, env, "GIT_BRANCH=feature/test")
+				testhelper.AssertContains(t, env, "GIT_PROJECT=backend")
+				testhelper.AssertContains(t, env, "CUSTOM_VAR=custom-value")
+				testhelper.AssertContains(t, env, "DEBUG=true")
+			},
+		},
+		{
+			name: "multiple custom environment variables",
+			repo: "another-repo",
+			setup: func(t *testing.T, ctx context.Context) {
+				viper := config.Viper(ctx)
+				viper.Set(config.GitProject, "test-project")
+				viper.Set(config.Branch, "main")
+				viper.Set(config.CmdEnv, []string{
+					"ENV_A=value-a",
+					"ENV_B=value-b",
+					"ENV_C=value-c",
+				})
+				testhelper.SetupDirs(t, ctx, []string{"another-repo"})
+			},
+			validate: func(t *testing.T, env []string) {
+				testhelper.AssertContains(t, env, "ENV_A=value-a")
+				testhelper.AssertContains(t, env, "ENV_B=value-b")
+				testhelper.AssertContains(t, env, "ENV_C=value-c")
+			},
+		},
+		{
+			name: "no custom environment variables",
+			repo: "simple",
+			setup: func(t *testing.T, ctx context.Context) {
+				viper := config.Viper(ctx)
+				viper.Set(config.GitProject, "proj")
+				viper.Set(config.Branch, "master")
+				// Don't set CmdEnv - should be empty or not set
+				testhelper.SetupDirs(t, ctx, []string{"simple"})
+			},
+			validate: func(t *testing.T, env []string) {
+				testhelper.AssertContains(t, env, "REPO_NAME=simple")
+				testhelper.AssertContains(t, env, "GIT_BRANCH=master")
+				testhelper.AssertContains(t, env, "GIT_PROJECT=proj")
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := loadFixture(t)
+			if tt.setup != nil {
+				tt.setup(t, ctx)
+			}
+
+			env := utils.ExecEnv(ctx, tt.repo)
+
+			// Verify it returns a slice (not nil)
+			if env == nil {
+				t.Fatal("ExecEnv returned nil")
+			}
+
+			// Should have at least system env vars + 3 required vars
+			if len(env) < 3 {
+				t.Errorf("ExecEnv returned %d vars, expected at least 3", len(env))
+			}
+
+			// Run validation
+			if tt.validate != nil {
+				tt.validate(t, env)
 			}
 		})
 	}

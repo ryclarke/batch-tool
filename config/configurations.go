@@ -66,6 +66,7 @@ const (
 	GithubBackoffLarge     = "github.write-backoff-large"
 
 	// == COMMAND FLAGS == //
+	CmdEnv = "cmd.args.env"
 
 	// git
 	GitCommitMessage = "git.args.commit.message"

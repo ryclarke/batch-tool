@@ -172,6 +172,7 @@ func ValidateStash(ctx context.Context, ch output.Channel) error {
 func lookupChanges(ctx context.Context, repo string) (bool, error) {
 	cmd := exec.Command("git", "status", "--porcelain")
 	cmd.Dir = utils.RepoPath(ctx, repo)
+	cmd.Env = utils.ExecEnv(ctx, repo)
 
 	output, err := cmd.Output()
 	if err != nil {
@@ -184,6 +185,7 @@ func lookupChanges(ctx context.Context, repo string) (bool, error) {
 func lookupStash(ctx context.Context, repo string) (string, error) {
 	cmd := exec.Command("git", "stash", "list", "-n", "1", "--format=%s")
 	cmd.Dir = utils.RepoPath(ctx, repo)
+	cmd.Env = utils.ExecEnv(ctx, repo)
 
 	output, err := cmd.Output()
 	if err != nil {

@@ -29,6 +29,7 @@ const (
 	configFlag = "config"
 	styleFlag  = "style"
 	printFlag  = "print"
+	envFlag    = "env"
 
 	waitFlag   = "wait"
 	noWaitFlag = "no-" + waitFlag
@@ -90,6 +91,7 @@ Shell Note:
 			viper.BindPFlag(config.OutputStyle, cmd.Flags().Lookup(styleFlag))
 			viper.BindPFlag(config.PrintResults, cmd.Flags().Lookup(printFlag))
 			viper.BindPFlag(config.MaxConcurrency, cmd.Flags().Lookup(maxConcurrencyFlag))
+			viper.BindPFlag(config.CmdEnv, cmd.Flags().Lookup(envFlag))
 
 			// Validate output style is a valid selection
 			if err := utils.ValidateEnumConfig(cmd, config.OutputStyle, output.AvailableStyles); err != nil {
@@ -136,6 +138,7 @@ Shell Note:
 	rootCmd.PersistentFlags().BoolP(printFlag, "p", false, "print results to stdout after processing is complete")
 	rootCmd.PersistentFlags().Int(maxConcurrencyFlag, runtime.NumCPU(), "maximum number of concurrent operations")
 	rootCmd.PersistentFlags().Bool(syncFlag, false, "execute commands synchronously (same as --max-concurrency=1)")
+	rootCmd.PersistentFlags().StringSliceP(envFlag, "e", []string{}, "environment variables to set for command execution")
 
 	utils.BuildBoolFlags(rootCmd, waitFlag, "", noWaitFlag, "q", "wait for user to exit after processing is complete")
 	utils.BuildBoolFlags(rootCmd, skipUnwantedFlag, "", noSkipUnwantedFlag, "", "skip configured undesired labels")
