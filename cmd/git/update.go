@@ -1,14 +1,11 @@
 package git
 
 import (
-	"context"
-
 	"github.com/spf13/cobra"
 
 	"github.com/ryclarke/batch-tool/call"
 	"github.com/ryclarke/batch-tool/catalog"
 	"github.com/ryclarke/batch-tool/config"
-	"github.com/ryclarke/batch-tool/output"
 	"github.com/ryclarke/batch-tool/utils"
 )
 
@@ -66,22 +63,18 @@ HEAD reference or uses a configured default.`,
 	return updateCmd
 }
 
-// Clean resets any uncommitted changes and removes untracked files.
-func Clean(ctx context.Context, ch output.Channel) error {
-	// Reset any uncommitted changes
-	if err := call.Exec("git", "reset", "--hard")(ctx, ch); err != nil {
-		return err
-	}
+var (
+	// Update checks out the default branch and pulls the latest changes.
+	Update = call.Wrap(
+		call.Exec("sh", "-c", "git checkout ${GIT_DEFAULT_BRANCH}"),
+		call.Exec("git", "pull"),
+	)
 
-	// Clean untracked files
-	return call.Exec("git", "clean", "-fd")(ctx, ch)
-}
-
-// Update checks out the default branch and pulls the latest changes.
-func Update(ctx context.Context, ch output.Channel) error {
-	if err := call.Exec("git", "checkout", catalog.GetBranchForRepo(ctx, ch.Name()))(ctx, ch); err != nil {
-		return err
-	}
-
-	return call.Exec("git", "pull")(ctx, ch)
-}
+	// Clean resets any uncommitted changes, removes untracked files, and re-initializes submodules.
+	Clean = call.Wrap(
+		call.Exec("git", "reset", "--hard"),
+		call.Exec("git", "clean", "-fd"),
+		call.Exec("git", "submodule", "deinit", "-f", "."),
+		call.Exec("git", "submodule", "update", "--init", "--recursive"),
+	)
+)

@@ -99,6 +99,7 @@ func Env(ctx context.Context, repo string) ([]string, error) {
 	env := os.Environ()
 	env = append(env, fmt.Sprintf("REPO_NAME=%s", repo))
 	env = append(env, fmt.Sprintf("GIT_BRANCH=%s", branch))
+	env = append(env, fmt.Sprintf("GIT_DEFAULT_BRANCH=%s", catalog.GetBranchForRepo(ctx, repo)))
 	env = append(env, fmt.Sprintf("GIT_PROJECT=%s", catalog.GetProjectForRepo(ctx, repo)))
 
 	// Add user-specified environment variables

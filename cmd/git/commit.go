@@ -73,32 +73,31 @@ Safety Features:
 func Commit(ctx context.Context, ch output.Channel) error {
 	viper := config.Viper(ctx)
 
-	if err := call.Exec("git", "add", "-A")(ctx, ch); err != nil {
-		return err
+	// build the sequence of steps to perform the commit
+	steps := []call.Func{
+		call.Exec("git", "add", "-A"), // stage all changes for commit
 	}
 
-	args := []string{"commit"}
+	commitArgs := []string{"commit"}
 
 	msg := viper.GetString(config.GitCommitMessage)
 	if msg != "" {
-		args = append(args, "-m", msg)
+		commitArgs = append(commitArgs, "-m", msg)
 	}
 
 	if viper.GetBool(config.GitCommitAmend) {
-		args = append(args, "--amend", "--reset-author")
+		commitArgs = append(commitArgs, "--amend", "--reset-author")
 		if msg == "" {
-			args = append(args, "--no-edit")
+			commitArgs = append(commitArgs, "--no-edit")
 		}
 	}
 
-	if err := call.Exec("git", args...)(ctx, ch); err != nil {
-		return err
-	}
+	steps = append(steps, call.Exec("git", commitArgs...)) // create the commit with the specified args
 
 	// skip pushing the commit if --no-push is set or --push is false
-	if !viper.GetBool(config.GitCommitPush) {
-		return nil
+	if viper.GetBool(config.GitCommitPush) {
+		steps = append(steps, Push)
 	}
 
-	return Push(ctx, ch)
+	return call.Wrap(steps...)(ctx, ch)
 }
