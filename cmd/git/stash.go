@@ -201,7 +201,10 @@ func ValidateStash(ctx context.Context, ch output.Channel) error {
 // lookupChanges checks if the repository has uncommitted changes.
 // This includes staged, unstaged, and untracked files.
 func lookupChanges(ctx context.Context, repo string) (bool, error) {
-	cmd := call.Cmd(ctx, repo, "git", "status", "--porcelain")
+	cmd, err := call.Cmd(ctx, repo, "git", "status", "--porcelain")
+	if err != nil {
+		return false, err
+	}
 
 	output, err := cmd.Output()
 	if err != nil {
@@ -212,7 +215,10 @@ func lookupChanges(ctx context.Context, repo string) (bool, error) {
 }
 
 func lookupStash(ctx context.Context, repo string) (string, error) {
-	cmd := call.Cmd(ctx, repo, "git", "stash", "list", "-n", "1", "--format=%s")
+	cmd, err := call.Cmd(ctx, repo, "git", "stash", "list", "-n", "1", "--format=%s")
+	if err != nil {
+		return "", err
+	}
 
 	output, err := cmd.Output()
 	if err != nil {

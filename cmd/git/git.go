@@ -61,7 +61,10 @@ func ValidateBranch(branch ...string) call.Func {
 			branch = []string{catalog.GetBranchForRepo(ctx, ch.Name())}
 		}
 
-		cmd := call.Cmd(ctx, ch.Name(), "git", "rev-parse", "--abbrev-ref", "HEAD")
+		cmd, err := call.Cmd(ctx, ch.Name(), "git", "rev-parse", "--abbrev-ref", "HEAD")
+		if err != nil {
+			return err
+		}
 
 		output, err := cmd.Output()
 		if err != nil {

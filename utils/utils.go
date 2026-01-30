@@ -4,7 +4,6 @@ package utils
 import (
 	"context"
 	"fmt"
-	"os"
 	"strings"
 
 	mapset "github.com/deckarep/golang-set/v2"
@@ -49,23 +48,4 @@ func ValidateEnumConfig(cmd *cobra.Command, key string, validChoices []string) e
 	}
 
 	return nil
-}
-
-// ExecEnv constructs the environment variables for an Exec call
-func ExecEnv(ctx context.Context, repo string) []string {
-	viper := config.Viper(ctx)
-
-	branch, _ := LookupBranch(ctx, repo)
-
-	env := os.Environ()
-	env = append(env, fmt.Sprintf("REPO_NAME=%s", repo))
-	env = append(env, fmt.Sprintf("GIT_BRANCH=%s", branch))
-	env = append(env, fmt.Sprintf("GIT_PROJECT=%s", CatalogLookup(ctx, repo)))
-
-	// Add user-specified environment variables
-	// TODO: add support for env files
-	envArgs := viper.GetStringSlice(config.CmdEnv)
-	env = append(env, envArgs...)
-
-	return env
 }
