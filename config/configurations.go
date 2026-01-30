@@ -33,6 +33,7 @@ const (
 	GitProvider   = "git.provider"
 	GitDirectory  = "git.directory"
 	DefaultBranch = "git.default-branch"
+	StashUpdates  = "git.stash-updates"
 
 	// CloneSSHURLTmpl is the SSH URL template with placeholders: User, Host, Project, Repo
 	CloneSSHURLTmpl = "ssh://%s@%s/%s/%s.git"
@@ -147,6 +148,7 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault(GitProvider, "github")
 	v.SetDefault(GitProjects, []string{})
 	v.SetDefault(DefaultBranch, "main")
+	v.SetDefault(StashUpdates, false)
 	v.SetDefault(SortRepos, true)
 
 	v.SetDefault(SkipUnwanted, true)

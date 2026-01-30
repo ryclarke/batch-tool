@@ -7,6 +7,7 @@ git:
     - another-team
   directory: ./tmp      # directory where repositories are cloned, defaults to $GOPATH/src if set, else the current working directory
   default-branch: main  # fallback if no default branch is configured for a repository
+  stash-updates: false  # if true, automatically stash uncommitted changes before updating branches (can be overridden with --stash or --no-stash)
 
 repos:
   sort: true

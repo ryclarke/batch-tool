@@ -250,7 +250,7 @@ func TestRequestTeamReviewers(t *testing.T) {
 	}{
 		{
 			name: "success",
-			setupMock: func(t *testing.T) *httptest.Server {
+			setupMock: func(_ *testing.T) *httptest.Server {
 				return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					if r.Method == http.MethodPost && r.URL.Path == "/repos/test-org/test-repo/pulls/42/requested_reviewers" {
 						w.WriteHeader(http.StatusOK)
@@ -267,7 +267,7 @@ func TestRequestTeamReviewers(t *testing.T) {
 		},
 		{
 			name: "api_error",
-			setupMock: func(t *testing.T) *httptest.Server {
+			setupMock: func(_ *testing.T) *httptest.Server {
 				return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					if r.Method == http.MethodPost && r.URL.Path == "/repos/test-org/test-repo/pulls/42/requested_reviewers" {
 						w.WriteHeader(http.StatusInternalServerError)
@@ -284,7 +284,7 @@ func TestRequestTeamReviewers(t *testing.T) {
 		},
 		{
 			name: "empty_teams",
-			setupMock: func(t *testing.T) *httptest.Server {
+			setupMock: func(_ *testing.T) *httptest.Server {
 				return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					if r.Method == http.MethodPost && r.URL.Path == "/repos/test-org/test-repo/pulls/42/requested_reviewers" {
 						w.WriteHeader(http.StatusOK)

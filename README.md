@@ -62,6 +62,7 @@ git:
   host: github.com
   project: your-username-or-org
   default-branch: main # fallback for a repo with no default branch
+  stash-updates: false # if true, automatically stash/restore changes during git update
 
 channels:
   output-style: tui  # Modern TUI interface (default); use "native" for scripts
@@ -186,7 +187,7 @@ batch-tool git status <repos...>
 # Create new branches for each repository
 batch-tool git branch -b "<branch-name>" <repos...>
 
-# Checkout the default branches and pull any upstream changes
+# Checkout the default branches and pull any upstream changes (destroys uncommitted changes)
 batch-tool git update <repos...>
 
 # Show diff information in the working trees
@@ -195,6 +196,31 @@ batch-tool git diff <repos...>
 # Commit and push changes
 batch-tool git commit -m "commit message" <repos...>
 ```
+
+#### Git Update with Stash
+
+The `git update` command can automatically save and restore uncommitted changes using `git stash`. This is useful when you have local modifications that you want to preserve while updating to the latest default branch.
+
+**Configuration:**
+```yaml
+git:
+  stash-updates: true  # Enable automatic stash by default
+```
+
+**Usage:**
+```bash
+# Enable stash just for this command
+batch-tool git update --stash <repos...>
+
+# Or use the inverted flag to disable stash if it's enabled in config
+batch-tool git update --no-stash <repos...>
+```
+
+**Safety Features:**
+- Only works with stashes created by batch-tool (identified by `batch-tool YYYY-MM-DDTHH:MM:SSZ` message)
+- Safely handles clean working directories (no changes to stash)
+- Fails explicitly if stashed changes cannot be restored
+- Can be globally enabled in config, but can be disabled per-command with `--no-stash`
 
 ### Pull Request Management
 

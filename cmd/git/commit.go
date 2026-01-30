@@ -15,8 +15,9 @@ import (
 const (
 	messageFlag = "message"
 	amendFlag   = "amend"
-	pushFlag    = "push"
-	noPushFlag  = "no-push"
+
+	pushFlag   = "push"
+	noPushFlag = "no-" + pushFlag
 )
 
 func addCommitCmd() *cobra.Command {

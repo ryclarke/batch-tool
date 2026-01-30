@@ -3,7 +3,6 @@ package git
 import (
 	"context"
 	"fmt"
-	"os/exec"
 	"strings"
 	"time"
 
@@ -13,13 +12,9 @@ import (
 	"github.com/ryclarke/batch-tool/catalog"
 	"github.com/ryclarke/batch-tool/config"
 	"github.com/ryclarke/batch-tool/output"
-	"github.com/ryclarke/batch-tool/utils"
 )
 
 const (
-	stashActionPush = "push"
-	stashActionPop  = "pop"
-
 	stashMessagePrefix   = "batch-tool"
 	stashStateKeyPattern = "repos.stashed.%s" // repo name placeholder
 
@@ -28,17 +23,9 @@ const (
 
 func addStashCmd() *cobra.Command {
 	stashCmd := &cobra.Command{
-		Use:   "stash {push|pop [--allow-any]} <repository>...",
-		Short: "Stash or restore uncommitted changes across repositories",
-		Long: `Manage git stash across multiple repositories.
-
-This command provides simple push/pop operations for git stash, allowing you
-to temporarily save uncommitted changes before performing operations like
-updating branches, then restore them afterward.
-
-Operations:
-  push    Save current uncommitted changes with a timestamped batch-tool message
-  pop     Restore the most recently stashed batch-tool changes and remove from stack
+		Use:   "stash <repository>...",
+		Short: "Manage git stashes across repositories",
+		Long: `Manage git stashes across multiple repositories with push/pop subcommands, or list stashes.
 
 Safety Features:
   - Push creates timestamped stash messages for tracking (batch-tool YYYY-MM-DDTHH:MM:SSZ)
@@ -55,7 +42,10 @@ Workflow Example:
 
 Note: Pop will only restore stashes with the 'batch-tool' prefix. Manual stashes
 and stashes created by other tools are left untouched for safety.`,
-		Example: `  # Stash changes in specific repositories
+		Example: `  # List all stashes
+  batch-tool git stash repo1 repo2
+
+  # Stash changes in specific repositories
   batch-tool git stash push repo1 repo2
 
   # Restore stashed changes
@@ -65,34 +55,75 @@ and stashes created by other tools are left untouched for safety.`,
   batch-tool git stash push ~backend
   batch-tool git update ~backend
   batch-tool git stash pop ~backend`,
-		Args:              cobra.MinimumNArgs(2),
 		ValidArgsFunction: catalog.CompletionFunc(),
-		PreRunE: func(cmd *cobra.Command, args []string) error {
-			if args[0] == stashActionPush && cmd.Flags().Changed(stashAllowAnyFlag) {
-				return fmt.Errorf("the --%s flag is only valid with the 'pop' action", stashAllowAnyFlag)
-			}
-
-			return config.Viper(cmd.Context()).BindPFlag(config.GitStashAllowAny, cmd.Flags().Lookup(stashAllowAnyFlag))
-		},
-		RunE: func(cmd *cobra.Command, args []string) error {
-			action := strings.ToLower(args[0])
-
-			switch action {
-			case stashActionPush:
-				call.Do(cmd, args[1:], StashPush)
-			case stashActionPop:
-				call.Do(cmd, args[1:], call.Wrap(ValidateStash, StashPop))
-			default:
-				return fmt.Errorf("invalid stash action: %s (valid actions are 'push' or 'pop')", action)
-			}
-
-			return nil
+		Run: func(cmd *cobra.Command, args []string) {
+			call.Do(cmd, args, call.Exec("git", "stash", "list"))
 		},
 	}
 
-	stashCmd.Flags().Bool(stashAllowAnyFlag, false, "Allow popping any stash, not just batch-tool stashes")
+	stashCmd.AddCommand(addStashPushCmd(), addStashPopCmd())
 
 	return stashCmd
+}
+
+func addStashPushCmd() *cobra.Command {
+	// stashPushCmd represents the stash push command
+	stashPushCmd := &cobra.Command{
+		Use:   "push <repository>...",
+		Short: "Stash uncommitted changes with a timestamped message",
+		Long: `Save uncommitted changes to the stash stack with a timestamped message.
+
+This command runs 'git stash push' in each specified repository, creating
+a stash entry with a message formatted as 'batch-tool YYYY-MM-DDTHH:MM:SSZ'.
+
+If the worktree is clean (no uncommitted changes), it reports success
+without error.`,
+		Example: `  # Stash changes in specific repositories
+  batch-tool git stash push repo1 repo2
+
+  # Stash all backend services before update
+  batch-tool git stash push ~backend`,
+		Args:              cobra.MinimumNArgs(1),
+		ValidArgsFunction: catalog.CompletionFunc(),
+		Run: func(cmd *cobra.Command, args []string) {
+			call.Do(cmd, args, StashPush)
+		},
+	}
+
+	return stashPushCmd
+}
+
+func addStashPopCmd() *cobra.Command {
+	// stashPopCmd represents the stash pop command
+	stashPopCmd := &cobra.Command{
+		Use:   "pop <repository>...",
+		Short: "Restore the most recently stashed changes",
+		Long: `Restore the most recently stashed changes if it's a batch-tool stash.
+
+This command runs 'git stash pop' in each specified repository, restoring
+the most recent stash entry created by batch-tool (with message prefix
+'batch-tool YYYY-MM-DDTHH:MM:SSZ').
+
+For safety, it refuses to pop stashes not created by batch-tool unless
+the --allow-any flag is used.`,
+		Example: `  # Restore stashed changes
+  batch-tool git stash pop repo1 repo2
+
+  # Restore stashes allowing any stash to be popped
+  batch-tool git stash pop --allow-any repo1`,
+		Args:              cobra.MinimumNArgs(1),
+		ValidArgsFunction: catalog.CompletionFunc(),
+		PreRunE: func(cmd *cobra.Command, _ []string) error {
+			return config.Viper(cmd.Context()).BindPFlag(config.GitStashAllowAny, cmd.Flags().Lookup(stashAllowAnyFlag))
+		},
+		Run: func(cmd *cobra.Command, args []string) {
+			call.Do(cmd, args, call.Wrap(ValidateStash, StashPop))
+		},
+	}
+
+	stashPopCmd.Flags().Bool(stashAllowAnyFlag, false, "Allow popping any stash, not just batch-tool stashes")
+
+	return stashPopCmd
 }
 
 // StashPush saves uncommitted changes to the stash stack with a timestamped message.
@@ -117,7 +148,7 @@ func StashPush(ctx context.Context, ch output.Channel) error {
 
 	// Create timestamped stash message
 	message := fmt.Sprintf("%s %s", stashMessagePrefix, time.Now().Format(time.RFC3339))
-	if err = call.Exec("git", "stash", "push", "-m", message)(ctx, ch); err != nil {
+	if err = call.Exec("git", "stash", "push", "-a", "-m", message)(ctx, ch); err != nil {
 		return err
 	}
 
@@ -170,9 +201,7 @@ func ValidateStash(ctx context.Context, ch output.Channel) error {
 // lookupChanges checks if the repository has uncommitted changes.
 // This includes staged, unstaged, and untracked files.
 func lookupChanges(ctx context.Context, repo string) (bool, error) {
-	cmd := exec.Command("git", "status", "--porcelain")
-	cmd.Dir = utils.RepoPath(ctx, repo)
-	cmd.Env = utils.ExecEnv(ctx, repo)
+	cmd := call.Cmd(ctx, repo, "git", "status", "--porcelain")
 
 	output, err := cmd.Output()
 	if err != nil {
@@ -183,9 +212,7 @@ func lookupChanges(ctx context.Context, repo string) (bool, error) {
 }
 
 func lookupStash(ctx context.Context, repo string) (string, error) {
-	cmd := exec.Command("git", "stash", "list", "-n", "1", "--format=%s")
-	cmd.Dir = utils.RepoPath(ctx, repo)
-	cmd.Env = utils.ExecEnv(ctx, repo)
+	cmd := call.Cmd(ctx, repo, "git", "stash", "list", "-n", "1", "--format=%s")
 
 	output, err := cmd.Output()
 	if err != nil {

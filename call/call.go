@@ -53,13 +53,21 @@ func Wrap(calls ...Func) Func {
 // streaming Stdout and Stderr to the channel and returning error status.
 func Exec(command string, arguments ...string) Func {
 	return func(ctx context.Context, ch output.Channel) error {
-		cmd := exec.CommandContext(ctx, command, arguments...)
-		cmd.Dir = utils.RepoPath(ctx, ch.Name())
-		cmd.Env = utils.ExecEnv(ctx, ch.Name())
+		cmd := Cmd(ctx, ch.Name(), command, arguments...)
 
 		// Directly use channel as io.Writer
 		cmd.Stdout, cmd.Stderr = ch, ch
 
 		return cmd.Run()
 	}
+}
+
+// Cmd creates an exec.Cmd configured for the given repository context,
+// to facilitate consistent environment and working directory setup.
+func Cmd(ctx context.Context, repo, command string, arguments ...string) *exec.Cmd {
+	cmd := exec.CommandContext(ctx, command, arguments...)
+	cmd.Dir = utils.RepoPath(ctx, repo)
+	cmd.Env = utils.ExecEnv(ctx, repo)
+
+	return cmd
 }

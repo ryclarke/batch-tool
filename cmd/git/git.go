@@ -3,7 +3,6 @@ package git
 import (
 	"context"
 	"fmt"
-	"os/exec"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -11,7 +10,6 @@ import (
 	"github.com/ryclarke/batch-tool/call"
 	"github.com/ryclarke/batch-tool/catalog"
 	"github.com/ryclarke/batch-tool/output"
-	"github.com/ryclarke/batch-tool/utils"
 )
 
 // Cmd configures the root git command along with all subcommands and flags
@@ -63,9 +61,7 @@ func ValidateBranch(branch ...string) call.Func {
 			branch = []string{catalog.GetBranchForRepo(ctx, ch.Name())}
 		}
 
-		cmd := exec.Command("git", "rev-parse", "--abbrev-ref", "HEAD")
-		cmd.Dir = utils.RepoPath(ctx, ch.Name())
-		cmd.Env = utils.ExecEnv(ctx, ch.Name())
+		cmd := call.Cmd(ctx, ch.Name(), "git", "rev-parse", "--abbrev-ref", "HEAD")
 
 		output, err := cmd.Output()
 		if err != nil {

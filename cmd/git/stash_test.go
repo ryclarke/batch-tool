@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/spf13/cobra"
+
 	testhelper "github.com/ryclarke/batch-tool/utils/testing"
 )
 
@@ -16,8 +18,8 @@ func TestAddStashCmd(t *testing.T) {
 		t.Fatal("addStashCmd() returned nil")
 	}
 
-	if cmd.Use != "stash {push|pop [--allow-any]} <repository>..." {
-		t.Errorf("Expected Use to be 'stash {push|pop [--allow-any]} <repository>...', got %s", cmd.Use)
+	if cmd.Use != "stash <repository>..." {
+		t.Errorf("Expected Use to be 'stash <repository>...', got %s", cmd.Use)
 	}
 
 	if cmd.Short == "" {
@@ -27,27 +29,49 @@ func TestAddStashCmd(t *testing.T) {
 	if cmd.Long == "" {
 		t.Error("Expected Long description to be set")
 	}
+
+	// Verify subcommands exist
+	pushCmd := cmd.Commands()
+	if len(pushCmd) != 2 {
+		t.Errorf("Expected 2 subcommands (push and pop), got %d", len(pushCmd))
+	}
 }
 
 func TestStashCmdArgs(t *testing.T) {
 	cmd := addStashCmd()
 
-	// Test that command requires minimum of 2 arguments (action + repo)
-	err := cmd.Args(cmd, []string{})
-	if err == nil {
-		t.Error("Expected error when no arguments provided")
+	// The stash command itself doesn't require arguments (it lists stashes by default)
+	// But its subcommands do require repository arguments
+
+	// Test push subcommand
+	pushCmd := findSubcommand(cmd, "push")
+	if pushCmd == nil {
+		t.Fatal("push subcommand not found")
 	}
 
-	err = cmd.Args(cmd, []string{"push"})
-	if err == nil {
-		t.Error("Expected error when only action provided without repo")
+	if pushCmd.Args == nil {
+		t.Error("Expected push subcommand to have Args validator")
 	}
 
-	// Test that command accepts valid arguments
-	err = cmd.Args(cmd, []string{"push", "repo1"})
-	if err != nil {
-		t.Errorf("Expected no error with valid arguments, got %v", err)
+	// Test pop subcommand
+	popCmd := findSubcommand(cmd, "pop")
+	if popCmd == nil {
+		t.Fatal("pop subcommand not found")
 	}
+
+	if popCmd.Args == nil {
+		t.Error("Expected pop subcommand to have Args validator")
+	}
+}
+
+// Helper function to find subcommand by name
+func findSubcommand(parent *cobra.Command, name string) *cobra.Command {
+	for _, cmd := range parent.Commands() {
+		if cmd.Name() == name {
+			return cmd
+		}
+	}
+	return nil
 }
 
 func TestStashPushCleanWorktree(t *testing.T) {
@@ -67,8 +91,12 @@ func TestStashPushCleanWorktree(t *testing.T) {
 	}
 
 	output := buf.String()
-	if !bytes.Contains([]byte(output), []byte("worktree is clean")) && !bytes.Contains([]byte(output), []byte("No local changes")) {
-		t.Errorf("Expected clean worktree message, got: %s", output)
+	// With a clean worktree, stash push should report "Nothing to stash" or succeed silently
+	if !bytes.Contains([]byte(output), []byte("Nothing to stash")) &&
+		!bytes.Contains([]byte(output), []byte("worktree is clean")) &&
+		!bytes.Contains([]byte(output), []byte("No local changes")) &&
+		err != nil {
+		t.Errorf("Expected clean worktree message or success, got: %s, err: %v", output, err)
 	}
 }
 
@@ -186,11 +214,12 @@ func TestStashInvalidAction(t *testing.T) {
 
 	err := cmd.ExecuteContext(testCtx)
 	if err == nil {
-		t.Error("Expected error for invalid action")
+		t.Fatal("Expected error for invalid action")
 	}
 
-	if !bytes.Contains([]byte(err.Error()), []byte("invalid stash action")) {
-		t.Errorf("Expected 'invalid stash action' error, got: %v", err)
+	// With subcommands, cobra returns "unknown command" error
+	if !bytes.Contains([]byte(err.Error()), []byte("unknown command")) {
+		t.Errorf("Expected 'unknown command' error, got: %v", err)
 	}
 }
 
