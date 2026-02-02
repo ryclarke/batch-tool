@@ -43,7 +43,8 @@ func Do(cmd *cobra.Command, repos []string, callFunc Func, handler ...output.Han
 	// start workers with concurrency limit
 	for i := range repos {
 		wg.Add(1)
-		go runCallFunc(ctx, channels[i], callFunc)
+		// launch each Func in its own goroutine with a child Viper context
+		go runCallFunc(config.SetChild(ctx), channels[i], callFunc)
 	}
 
 	// use the default output handler if none provided

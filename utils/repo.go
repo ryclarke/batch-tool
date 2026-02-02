@@ -10,8 +10,13 @@ import (
 	"github.com/ryclarke/batch-tool/config"
 )
 
-// CatalogLookup is a function type for looking up project from catalog
-var CatalogLookup = defaultCatalogLookup
+// functions initialized in catalog package to avoid circular import
+var (
+	// CatalogProjectLookup is a function type for looking up project from catalog
+	CatalogProjectLookup = defaultProjectLookup
+	// CatalogBranchLookup is a function type for looking up branch from catalog
+	CatalogBranchLookup = defaultBranchLookup
+)
 
 // ParseRepo splits a repo identifier into its component parts
 func ParseRepo(ctx context.Context, repo string) (host, project, name string) {
@@ -23,12 +28,7 @@ func ParseRepo(ctx context.Context, repo string) (host, project, name string) {
 	if len(parts) > 1 {
 		project = parts[len(parts)-2]
 	} else {
-		// Check catalog first via callback, then fall back to default project
-		if CatalogLookup != nil {
-			project = CatalogLookup(ctx, name)
-		} else {
-			project = viper.GetString(config.GitProject)
-		}
+		project = CatalogProjectLookup(ctx, name)
 	}
 
 	if len(parts) > 2 {
@@ -82,6 +82,7 @@ func LookupBranch(ctx context.Context, name string) (string, error) {
 
 	branch := viper.GetString(config.Branch)
 	if branch == "" {
+		// don't use Cmd helper because of infinite recursion
 		cmd := exec.Command("git", "rev-parse", "--abbrev-ref", "HEAD")
 		cmd.Dir = RepoPath(ctx, name)
 
@@ -97,6 +98,10 @@ func LookupBranch(ctx context.Context, name string) (string, error) {
 	return branch, nil
 }
 
-func defaultCatalogLookup(ctx context.Context, _ string) string {
+func defaultProjectLookup(ctx context.Context, _ string) string {
 	return config.Viper(ctx).GetString(config.GitProject)
+}
+
+func defaultBranchLookup(ctx context.Context, _ string) string {
+	return config.Viper(ctx).GetString(config.DefaultBranch)
 }

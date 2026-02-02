@@ -5,3 +5,8 @@ git:
 channels:
   output-style: native
   buffer-size: 10
+  write-backoff: 1ms
+
+github:
+  write-backoff-small: 1ms
+  write-backoff-large: 2ms

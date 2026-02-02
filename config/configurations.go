@@ -131,15 +131,6 @@ func Init(ctx context.Context) context.Context {
 	return SetViper(ctx, v)
 }
 
-// New creates a new Viper instance with default configuration.
-func New() *viper.Viper {
-	v := viper.NewWithOptions(viper.EnvKeyReplacer(strings.NewReplacer(".", "_", "-", "_")))
-	v.AutomaticEnv() // read in environment variables that match
-	setDefaults(v)
-
-	return v
-}
-
 func setDefaults(v *viper.Viper) {
 	// Default user for SSH clone.
 	v.SetDefault(GitUser, "git")

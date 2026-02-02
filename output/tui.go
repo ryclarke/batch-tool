@@ -450,10 +450,6 @@ func (m *model) buildContent() string {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	return m.buildContentUnsafe()
-}
-
-func (m *model) buildContentUnsafe() string {
 	var content strings.Builder
 
 	for i, repo := range m.repos {
@@ -473,6 +469,9 @@ func (m *model) buildContentUnsafe() string {
 // printFullOutput prints the complete output to the terminal without viewport wrapping.
 // This allows the full output to be persisted after the TUI exits.
 func printFullOutput(cmd *cobra.Command, m *model) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
 	out := cmd.OutOrStdout()
 	err := cmd.ErrOrStderr()
 
@@ -480,8 +479,7 @@ func printFullOutput(cmd *cobra.Command, m *model) {
 	fmt.Fprintln(err, m.styles.progress.Render(m.command))
 
 	// Print output summary
-	progressSummary := fmt.Sprintf(summaryText, len(m.repos), m.getDuration())
-	fmt.Fprintln(err, m.styles.progress.Render(progressSummary))
+	fmt.Fprintln(err, m.styles.progress.Render(fmt.Sprintf(summaryText, len(m.repos), m.getDuration())))
 	fmt.Fprintln(err)
 
 	// Print all repository outputs using shared formatting logic
@@ -565,6 +563,9 @@ func (m *model) View() string {
 
 // renderProgress generates the progress text and bar
 func (m *model) renderProgress() string {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
 	var b strings.Builder
 	completed := m.countCompleted()
 	failed := m.countFailed()
@@ -626,11 +627,6 @@ func (m *model) countCompleted() int {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	return m.countCompletedUnsafe()
-}
-
-// countCompletedUnsafe returns the count (caller must hold at least RLock).
-func (m *model) countCompletedUnsafe() int {
 	count := 0
 	for _, repo := range m.repos {
 		if repo.completed {
@@ -646,10 +642,6 @@ func (m *model) countFailed() int {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	return m.countFailedUnsafe()
-}
-
-func (m *model) countFailedUnsafe() int {
 	count := 0
 	for _, repo := range m.repos {
 		if repo.completed && repo.failed {

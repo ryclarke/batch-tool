@@ -12,11 +12,12 @@ import (
 	"github.com/ryclarke/batch-tool/catalog"
 	"github.com/ryclarke/batch-tool/config"
 	"github.com/ryclarke/batch-tool/output"
+	"github.com/ryclarke/batch-tool/utils"
 )
 
 const (
-	stashMessagePrefix   = "batch-tool"
-	stashStateKeyPattern = "repos.stashed.%s" // repo name placeholder
+	stashMessagePrefix = "batch-tool"
+	stashedKey         = "repos.x.stashed"
 
 	stashAllowAnyFlag = "allow-any"
 )
@@ -133,7 +134,7 @@ func StashPush(ctx context.Context, ch output.Channel) error {
 	var stashed bool
 	defer func() {
 		// Ensure we mark the stash state even if an error occurs
-		setStashState(ctx, ch.Name(), stashed)
+		config.Viper(ctx).Set(stashedKey, stashed)
 	}()
 
 	changed, err := lookupChanges(ctx, ch.Name())
@@ -163,7 +164,7 @@ func StashPush(ctx context.Context, ch output.Channel) error {
 // Returns an error if changes were expected to be stashed but cannot be popped.
 func StashPop(ctx context.Context, ch output.Channel) error {
 	// Check if we stashed changes for this repo in this session
-	if !getStashState(ctx, ch.Name()) {
+	if !config.Viper(ctx).GetBool(stashedKey) {
 		return nil
 	}
 
@@ -172,7 +173,7 @@ func StashPop(ctx context.Context, ch output.Channel) error {
 	}
 
 	// Clear the stashed flag after successful pop
-	setStashState(ctx, ch.Name(), false)
+	config.Viper(ctx).Set(stashedKey, false)
 	return nil
 }
 
@@ -194,14 +195,14 @@ func ValidateStash(ctx context.Context, ch output.Channel) error {
 		return fmt.Errorf("latest stash is not a batch-tool stash: %s", message)
 	}
 
-	setStashState(ctx, ch.Name(), true)
+	config.Viper(ctx).Set(stashedKey, true)
 	return nil
 }
 
 // lookupChanges checks if the repository has uncommitted changes.
 // This includes staged, unstaged, and untracked files.
 func lookupChanges(ctx context.Context, repo string) (bool, error) {
-	cmd, err := call.Cmd(ctx, repo, "git", "status", "--porcelain")
+	cmd, err := utils.Cmd(ctx, repo, "git", "status", "--porcelain")
 	if err != nil {
 		return false, err
 	}
@@ -215,7 +216,7 @@ func lookupChanges(ctx context.Context, repo string) (bool, error) {
 }
 
 func lookupStash(ctx context.Context, repo string) (string, error) {
-	cmd, err := call.Cmd(ctx, repo, "git", "stash", "list", "-n", "1", "--format=%s")
+	cmd, err := utils.Cmd(ctx, repo, "git", "stash", "list", "-n", "1", "--format=%s")
 	if err != nil {
 		return "", err
 	}
@@ -226,16 +227,4 @@ func lookupStash(ctx context.Context, repo string) (string, error) {
 	}
 
 	return strings.TrimSpace(string(output)), nil
-}
-
-// setStashState stores whether changes were stashed for a repository in the viper context.
-func setStashState(ctx context.Context, repo string, stashed bool) {
-	key := fmt.Sprintf(stashStateKeyPattern, repo)
-	config.Viper(ctx).Set(key, stashed)
-}
-
-// getStashState retrieves whether changes were stashed for a repository from the viper context.
-func getStashState(ctx context.Context, repo string) bool {
-	key := fmt.Sprintf(stashStateKeyPattern, repo)
-	return config.Viper(ctx).GetBool(key)
 }

@@ -32,8 +32,9 @@ var Labels = make(map[string]mapset.Set[string])
 func Init(ctx context.Context, flush bool) {
 	viper := config.Viper(ctx)
 
-	// Register catalog lookup function for utils package
-	utils.CatalogLookup = GetProjectForRepo
+	// Register catalog lookup functions for utils package
+	utils.CatalogProjectLookup = GetProjectForRepo
+	utils.CatalogBranchLookup = GetBranchForRepo
 
 	if err := initRepositoryCatalog(ctx, flush); err != nil {
 		fmt.Fprintf(os.Stderr, "ERROR: Could not load repository metadata: %v\n", err)

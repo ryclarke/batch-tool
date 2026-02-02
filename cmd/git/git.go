@@ -10,6 +10,7 @@ import (
 	"github.com/ryclarke/batch-tool/call"
 	"github.com/ryclarke/batch-tool/catalog"
 	"github.com/ryclarke/batch-tool/output"
+	"github.com/ryclarke/batch-tool/utils"
 )
 
 // Cmd configures the root git command along with all subcommands and flags
@@ -61,7 +62,7 @@ func ValidateBranch(branch ...string) call.Func {
 			branch = []string{catalog.GetBranchForRepo(ctx, ch.Name())}
 		}
 
-		cmd, err := call.Cmd(ctx, ch.Name(), "git", "rev-parse", "--abbrev-ref", "HEAD")
+		cmd, err := utils.Cmd(ctx, ch.Name(), "git", "rev-parse", "--abbrev-ref", "HEAD")
 		if err != nil {
 			return err
 		}
