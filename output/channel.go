@@ -58,8 +58,7 @@ type channel struct {
 	sem *semaphore.Weighted
 	wg  *sync.WaitGroup
 
-	mu      sync.Mutex // protects concurrent writes from Stdout/Stderr
-	release int64      // weight to release (for semaphore)
+	release int64 // weight to release (for semaphore)
 }
 
 func (c *channel) Name() string {
@@ -79,9 +78,6 @@ func (c *channel) Write(p []byte) (n int, _ error) {
 		return 0, nil
 	}
 
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
 	// Make a copy to prevent caller from modifying the buffer
 	buf := make([]byte, len(p))
 	copy(buf, p)
@@ -97,18 +93,12 @@ func (c *channel) WriteString(s string) (n int, _ error) {
 		return 0, nil
 	}
 
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
 	c.output <- []byte(s + "\n")
 	return len(s), nil
 }
 
 // WriteError writes an error to the error channel.
 func (c *channel) WriteError(err error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
 	c.err <- err
 }
 
