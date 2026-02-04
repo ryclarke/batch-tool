@@ -33,6 +33,7 @@ const (
 	GitProvider   = "git.provider"
 	GitDirectory  = "git.directory"
 	DefaultBranch = "git.default-branch"
+	StashUpdates  = "git.stash-updates"
 
 	// CloneSSHURLTmpl is the SSH URL template with placeholders: User, Host, Project, Repo
 	CloneSSHURLTmpl = "ssh://%s@%s/%s/%s.git"
@@ -66,18 +67,24 @@ const (
 	GithubBackoffLarge     = "github.write-backoff-large"
 
 	// == COMMAND FLAGS == //
+	CmdEnv = "cmd.args.env"
 
 	// git
-	CommitMessage = "git.args.commit.message"
-	CommitAmend   = "git.args.commit.amend"
-	CommitPush    = "git.args.commit.push"
+	GitCommitMessage = "git.args.commit.message"
+	GitCommitAmend   = "git.args.commit.amend"
+	GitCommitPush    = "git.args.commit.push"
+	GitStashAllowAny = "git.args.stash.allow-any"
 
 	// pr
+	PrOptions        = "pr.args.options"
 	PrTitle          = "pr.args.title"
 	PrDescription    = "pr.args.description"
+	PrDraft          = "pr.args.draft"
 	PrReviewers      = "pr.args.reviewers"
+	PrTeamReviewers  = "pr.args.team-reviewers"
 	PrResetReviewers = "pr.args.reset-reviewers"
 	PrAllReviewers   = "pr.args.all-reviewers"
+	PrBaseBranch     = "pr.args.base-branch"
 	PrForceMerge     = "pr.args.force-merge"
 
 	// make
@@ -124,15 +131,6 @@ func Init(ctx context.Context) context.Context {
 	return SetViper(ctx, v)
 }
 
-// New creates a new Viper instance with default configuration.
-func New() *viper.Viper {
-	v := viper.NewWithOptions(viper.EnvKeyReplacer(strings.NewReplacer(".", "_", "-", "_")))
-	v.AutomaticEnv() // read in environment variables that match
-	setDefaults(v)
-
-	return v
-}
-
 func setDefaults(v *viper.Viper) {
 	// Default user for SSH clone.
 	v.SetDefault(GitUser, "git")
@@ -141,6 +139,7 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault(GitProvider, "github")
 	v.SetDefault(GitProjects, []string{})
 	v.SetDefault(DefaultBranch, "main")
+	v.SetDefault(StashUpdates, false)
 	v.SetDefault(SortRepos, true)
 
 	v.SetDefault(SkipUnwanted, true)
@@ -150,6 +149,7 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault(CatalogCachePath, "") // empty means use default: gitdir/host/.batch-tool-cache.json
 	v.SetDefault(CatalogCacheTTL, "24h")
 	v.SetDefault(OutputStyle, "tui")
+	v.SetDefault(WaitOnExit, true) // Wait for user input after completion by default
 	v.SetDefault(ChannelBuffer, 100)
 	v.SetDefault(MaxConcurrency, runtime.NumCPU()) // Default to number of logical CPUs
 	v.SetDefault(WriteBackoff, "1s")

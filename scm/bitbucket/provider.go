@@ -12,6 +12,12 @@ import (
 	"github.com/ryclarke/batch-tool/scm"
 )
 
+var caps = &scm.Capabilities{
+	TeamReviewers:  false,
+	ResetReviewers: true,
+	Draft:          false,
+}
+
 var _ scm.Provider = new(Bitbucket)
 
 func init() {
@@ -24,6 +30,7 @@ func New(ctx context.Context, project string) scm.Provider {
 	viper := config.Viper(ctx)
 	return &Bitbucket{
 		client:  http.DefaultClient,
+		scheme:  "https",
 		host:    viper.GetString(config.GitHost),
 		project: project,
 		ctx:     ctx,
@@ -33,16 +40,26 @@ func New(ctx context.Context, project string) scm.Provider {
 // Bitbucket represents an SCM provider for the Bitbucket v1 API.
 type Bitbucket struct {
 	client  *http.Client
+	scheme  string
 	host    string
 	project string
 	ctx     context.Context
 }
 
+// CheckCapabilities validates that the provided PR options are supported by Bitbucket.
+func (b *Bitbucket) CheckCapabilities(opts *scm.PROptions) error {
+	return scm.ValidatePROptions(caps, opts)
+}
+
 // constructs the base URL for the Bitbucket API endpoint.
 func (b *Bitbucket) url(repo string, queryParams url.Values, path ...string) string {
+	scheme := b.scheme
+	if scheme == "" {
+		scheme = "https"
+	}
 	// Create base URL using url.URL struct
 	baseURL := &url.URL{
-		Scheme: "https",
+		Scheme: scheme,
 		Host:   b.host,
 		Path:   "/rest/api/1.0/projects",
 	}

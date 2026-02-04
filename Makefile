@@ -47,11 +47,11 @@ release: .goreleaser
 
 .PHONY: test
 test: vendor .gotestsum
-	@gotestsum ./...
+	@gotestsum -- -race ./...
 
 .PHONY: cover
 cover: vendor .gotestsum
-	@gotestsum -- -coverprofile=coverage.out ./...
+	@gotestsum -- -race -coverprofile=coverage.out ./...
 
 .PHONY: lint
 lint: .golangci-lint

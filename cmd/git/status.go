@@ -13,8 +13,19 @@ import (
 func addStatusCmd() *cobra.Command {
 	// statusCmd represents the git status command
 	statusCmd := &cobra.Command{
-		Use:               "status <repository>...",
-		Short:             "Git status of each repository",
+		Use:   "status <repository>...",
+		Short: "Git status of each repository",
+		Long: `Show the git status for each specified repository.
+
+This command fetches the status for each repository, displaying:
+  - Current branch name
+  - Tracking information (ahead/behind remote)
+  - Modified, staged, and untracked files`,
+		Example: `  # Check status of specific repositories
+  batch-tool git status repo1 repo2
+
+  # Check all repositories
+  batch-tool git status ~all`,
 		Args:              cobra.MinimumNArgs(1),
 		ValidArgsFunction: catalog.CompletionFunc(),
 		Run: func(cmd *cobra.Command, args []string) {

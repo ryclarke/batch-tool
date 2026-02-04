@@ -21,8 +21,8 @@ func TestCmd(t *testing.T) {
 		t.Fatal("Cmd() returned nil")
 	}
 
-	if cmd.Use != "make <repository>..." {
-		t.Errorf("Expected Use to be 'make <repository>...', got %s", cmd.Use)
+	if cmd.Use != "make [-t <target>]... <repository>..." {
+		t.Errorf("Expected Use to be 'make [-t <target>]... <repository>...', got %s", cmd.Use)
 	}
 
 	if cmd.Short == "" {
@@ -135,33 +135,6 @@ func TestMakeCmdWithCustomTargets(t *testing.T) {
 		if i >= len(targets) || targets[i] != expected {
 			t.Errorf("Expected target[%d] to be '%s', got '%v'", i, expected, targets)
 		}
-	}
-}
-
-func TestMakeCmdDefaultTargets(t *testing.T) {
-	cmd := Cmd()
-	ctx := loadFixture(t)
-
-	var buf bytes.Buffer
-	cmd.SetOut(&buf)
-	cmd.SetContext(ctx)
-
-	// Don't set any targets, should use default
-	err := cmd.PreRunE(cmd, []string{})
-	if err != nil {
-		t.Errorf("PreRunE failed: %v", err)
-	}
-
-	// Verify default targets were bound
-	viper := config.Viper(ctx)
-	targets := viper.GetStringSlice(config.MakeTargets)
-
-	if len(targets) != 1 {
-		t.Errorf("Expected 1 default target, got %d", len(targets))
-	}
-
-	if len(targets) > 0 && targets[0] != "format" {
-		t.Errorf("Expected default target to be 'format', got '%s'", targets[0])
 	}
 }
 

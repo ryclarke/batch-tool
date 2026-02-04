@@ -1246,6 +1246,7 @@ func TestGetRepository(t *testing.T) {
 				if repo == nil {
 					t.Fatal("Expected non-nil repository when found=true")
 				}
+
 				if repo.Name != tt.wantName {
 					t.Errorf("GetRepository(%q) name = %q, want %q", tt.repoName, repo.Name, tt.wantName)
 				}

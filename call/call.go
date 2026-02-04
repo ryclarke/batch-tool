@@ -24,7 +24,6 @@ package call
 
 import (
 	"context"
-	"os/exec"
 
 	"github.com/ryclarke/batch-tool/output"
 	"github.com/ryclarke/batch-tool/utils"
@@ -53,9 +52,10 @@ func Wrap(calls ...Func) Func {
 // streaming Stdout and Stderr to the channel and returning error status.
 func Exec(command string, arguments ...string) Func {
 	return func(ctx context.Context, ch output.Channel) error {
-		cmd := exec.CommandContext(ctx, command, arguments...)
-		cmd.Dir = utils.RepoPath(ctx, ch.Name())
-		cmd.Env = utils.ExecEnv(ctx, ch.Name())
+		cmd, err := utils.Cmd(ctx, ch.Name(), command, arguments...)
+		if err != nil {
+			return err
+		}
 
 		// Directly use channel as io.Writer
 		cmd.Stdout, cmd.Stderr = ch, ch

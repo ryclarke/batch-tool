@@ -19,12 +19,33 @@ const (
 // Cmd configures the make command
 func Cmd() *cobra.Command {
 	makeCmd := &cobra.Command{
-		Use:   "make <repository>...",
+		Use:   "make [-t <target>]... <repository>...",
 		Short: "Execute make targets across repositories",
-		Long: `Execute make targets across repositories
+		Long: `Execute make targets across multiple repositories.
 
-The provided make targets will be called for each provided repository. Note that some
-make targets currently MUST be run synchronously using the '--sync' command line flag.`,
+This command runs specified make targets in each repository that has a Makefile.
+Multiple targets can be specified and will be executed together as a single invocation.
+
+Target Execution:
+  Targets are executed by running 'make <target1> <target2> ...' in each
+  repository's root directory. The command fails if the Makefile doesn't exist
+  or if any target fails.
+
+Synchronous vs Concurrent:
+  Some make targets (particularly those that modify files or run builds) may
+  need to be run synchronously to avoid conflicts. Use the --sync flag to
+  execute one repository at a time.`,
+		Example: `  # Run default make target
+  batch-tool make repo1 repo2
+
+  # Run specific target
+  batch-tool make -t test ~backend
+
+  # Run multiple targets together
+  batch-tool make -t clean -t build -t test repo1
+
+  # Run targets synchronously (one repo at a time)
+  batch-tool make --sync -t build ~all`,
 		Args:              cobra.MinimumNArgs(1),
 		ValidArgsFunction: catalog.CompletionFunc(),
 		PreRunE: func(cmd *cobra.Command, _ []string) error {
@@ -39,7 +60,7 @@ make targets currently MUST be run synchronously using the '--sync' command line
 		},
 	}
 
-	makeCmd.Flags().StringSliceP(targetFlag, "t", []string{"format"}, "make target(s)")
+	makeCmd.Flags().StringSliceP(targetFlag, "t", nil, "make target(s), can be specified multiple times")
 
 	return makeCmd
 }

@@ -31,9 +31,28 @@ linters:
     # Performance
     - prealloc        # Find slice declarations that could potentially be pre-allocated
 
+    # Architecture
+    - depguard        # Enforce import restrictions
+
+  settings:
+    depguard:
+      rules:
+        viper-context:
+          files:
+            - "!**/config/**"  # Apply to all files EXCEPT in config package
+          deny:
+            - pkg: "github.com/spf13/viper"
+              desc: "viper should only be imported in the config package; use config.Viper(ctx) instead"
+
   exclusions:
     generated: strict
     rules:
+      # Exclude nil dereference checks in test files (staticcheck has false positives with t.Fatal)
+      - path: _test\.go
+        text: SA5011
+        linters:
+          - staticcheck
+
       # Exclude unwanted linters from test files
       - path: _test\.go|utils/testing/.*\.go
         linters:

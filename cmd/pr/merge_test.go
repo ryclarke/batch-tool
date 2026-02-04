@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/ryclarke/batch-tool/config"
+	"github.com/ryclarke/batch-tool/scm"
 	testhelper "github.com/ryclarke/batch-tool/utils/testing"
 )
 
@@ -15,8 +16,8 @@ func TestAddMergeCmd(t *testing.T) {
 		t.Fatal("addMergeCmd() returned nil")
 	}
 
-	if cmd.Use != "merge <repository>..." {
-		t.Errorf("Expected Use to be 'merge <repository>...', got %s", cmd.Use)
+	if cmd.Use != "merge [-f] <repository>..." {
+		t.Errorf("Expected Use to be 'merge [-f] <repository>...', got %s", cmd.Use)
 	}
 
 	if cmd.Short == "" {
@@ -90,7 +91,11 @@ func TestMergeCommandRun(t *testing.T) {
 
 			// Create PRs for this test using the provider
 			for _, repo := range tt.repos {
-				_, err := testProvider.OpenPullRequest(repo, "feature-branch", "Test Title", "Test Description", []string{"reviewer1"})
+				_, err := testProvider.OpenPullRequest(repo, "feature-branch", &scm.PROptions{
+					Title:       "Test Title",
+					Description: "Test Description",
+					Reviewers:   []string{"reviewer1"},
+				})
 				if err != nil {
 					t.Fatalf("Failed to create test PR for %s: %v", repo, err)
 				}
@@ -189,7 +194,11 @@ func TestMergeCommandWithUnmergeablePR(t *testing.T) {
 			testCtx, testProvider := setupTestContext(t, reposPath)
 
 			// Create PR
-			_, err := testProvider.OpenPullRequest("repo-1", "feature-branch", "Test Title", "Test Description", []string{"reviewer1"})
+			_, err := testProvider.OpenPullRequest("repo-1", "feature-branch", &scm.PROptions{
+				Title:       "Test Title",
+				Description: "Test Description",
+				Reviewers:   []string{"reviewer1"},
+			})
 			if err != nil {
 				t.Fatalf("Failed to create test PR: %v", err)
 			}
@@ -242,7 +251,7 @@ func TestMergeCommandForceFlagBypassesFalseNegative(t *testing.T) {
 
 	// Scenario: Provider incorrectly reports PR as unmergeable (false negative)
 	// but we know it's fine and want to merge anyway
-	_, err := testProvider.OpenPullRequest("hotfix-repo", "feature-branch", "Critical Security Fix", "Must merge ASAP", []string{"security-team"})
+	_, err := testProvider.OpenPullRequest("hotfix-repo", "feature-branch", &scm.PROptions{Title: "Critical Security Fix", Description: "Must merge ASAP", Reviewers: []string{"security-team"}})
 	if err != nil {
 		t.Fatalf("Failed to create test PR: %v", err)
 	}

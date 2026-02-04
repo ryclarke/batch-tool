@@ -2,6 +2,7 @@ package github
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -21,7 +22,14 @@ const (
 	readWeight  = 1
 )
 
-var sem = semaphore.NewWeighted(writeWeight)
+var (
+	sem  = semaphore.NewWeighted(writeWeight)
+	caps = &scm.Capabilities{
+		TeamReviewers:  true,
+		ResetReviewers: true,
+		Draft:          true,
+	}
+)
 
 var _ scm.Provider = new(Github)
 
@@ -48,8 +56,31 @@ type Github struct {
 	ctx     context.Context
 }
 
-func (g *Github) waitForRateLimit(ctx context.Context, search bool) error {
-	rate, err := g.checkRateLimit(ctx, search)
+// CheckCapabilities validates that the provided PR options are supported by GitHub.
+func (g *Github) CheckCapabilities(opts *scm.PROptions) error {
+	return scm.ValidatePROptions(caps, opts)
+}
+
+// handleRateLimitError checks if the error is a rate limit error and waits for the limit to reset.
+// Returns true if a retry should be attempted, false if the error is not rate-limit related.
+// The search parameter indicates whether to check search rate limits (true) or core rate limits (false).
+func (g *Github) handleRateLimitError(err error, search bool) (shouldRetry bool, retErr error) {
+	rateLimitError := &github.RateLimitError{}
+	if !errors.As(err, &rateLimitError) {
+		// Not a rate limit error, don't retry
+		return false, nil
+	}
+
+	// It's a rate limit error, wait for reset
+	if rateErr := g.waitForRateLimit(search); rateErr != nil {
+		return false, rateErr
+	}
+
+	return true, nil
+}
+
+func (g *Github) waitForRateLimit(search bool) error {
+	rate, err := g.checkRateLimit(search)
 	if err != nil {
 		return err
 	}
@@ -63,8 +94,8 @@ func (g *Github) waitForRateLimit(ctx context.Context, search bool) error {
 	return nil
 }
 
-func (g *Github) checkRateLimit(ctx context.Context, search bool) (*github.Rate, error) {
-	limits, _, err := g.client.RateLimit.Get(ctx)
+func (g *Github) checkRateLimit(search bool) (*github.Rate, error) {
+	limits, _, err := g.client.RateLimit.Get(g.ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to check rate limits: %w", err)
 	}
@@ -78,8 +109,9 @@ func (g *Github) checkRateLimit(ctx context.Context, search bool) (*github.Rate,
 
 func (g *Github) readLock() (done func()) {
 	if err := sem.Acquire(g.ctx, readWeight); err != nil {
-		// Context cancelled or deadline exceeded, return no-op cleanup
-		return func() {}
+		return func() {
+			// Context cancelled or deadline exceeded, return no-op cleanup
+		}
 	}
 
 	return func() {
@@ -89,8 +121,9 @@ func (g *Github) readLock() (done func()) {
 
 func (g *Github) writeLock() (done func()) {
 	if err := sem.Acquire(g.ctx, writeWeight); err != nil {
-		// Context cancelled or deadline exceeded, return no-op cleanup
-		return func() {}
+		return func() {
+			// Context cancelled or deadline exceeded, return no-op cleanup
+		}
 	}
 
 	return func() {

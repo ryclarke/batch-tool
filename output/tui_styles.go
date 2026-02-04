@@ -34,8 +34,12 @@ const (
 const (
 	separatorLine = "  ─────────────────────────────────────"
 
-	summaryText  = "%d repositories | Elapsed: %s"
-	progressText = "Progress: %d/" + summaryText
+	summaryText      = "%d repositories | Elapsed: %s"
+	summaryTextFail  = "%d repositories (%d failed) | Elapsed: %s"
+	progressText     = "Progress: %d/" + summaryText
+	progressTextFail = "Progress: %d/" + summaryTextFail
+
+	//"Progress: %d/%d repositories (%d failed) | Elapsed: %s"
 
 	noReposText = "No repositories matched by provided filter, nothing to do."
 	footerText  = "scroll: ↑/↓ | paging: PgUp/PgDn/Home/End"
@@ -248,7 +252,17 @@ func renderProgressBar(styles outputStyles, completed, errors, total, width int)
 	errorPercent := float64(errors) / float64(total)
 	successWidth := int(float64(width) * successPercent)
 	errorWidth := int(float64(width) * errorPercent)
-	emptyWidth := width - successWidth - errorWidth
+
+	// Ensure non-zero counts get at least 1 character representation
+	if successCount > 0 && successWidth == 0 {
+		successWidth = 1
+	}
+	if errors > 0 && errorWidth == 0 {
+		errorWidth = 1
+	}
+
+	// Calculate remaining space
+	emptyWidth := max(width-successWidth-errorWidth, 0)
 
 	var bar strings.Builder
 

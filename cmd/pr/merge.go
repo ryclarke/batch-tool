@@ -8,7 +8,6 @@ import (
 
 	"github.com/ryclarke/batch-tool/call"
 	"github.com/ryclarke/batch-tool/catalog"
-	"github.com/ryclarke/batch-tool/cmd/git"
 	"github.com/ryclarke/batch-tool/config"
 	"github.com/ryclarke/batch-tool/output"
 	"github.com/ryclarke/batch-tool/scm"
@@ -22,15 +21,40 @@ const (
 // addMergeCmd initializes the pr merge command
 func addMergeCmd() *cobra.Command {
 	mergeCmd := &cobra.Command{
-		Use:               "merge <repository>...",
-		Short:             "Merge accepted pull requests",
+		Use:   "merge [-f] <repository>...",
+		Short: "Merge accepted pull requests",
+		Long: `Merge approved pull requests for the current branch, using the default
+merge behavior for your SCM provider.
+
+
+Safety Checks:
+  By default, the command verifies the PR is in an approved/mergeable state
+  before merging (only supported by GitHub provider).
+
+Force Merge:
+  Use --force (-f) to bypass status checks and merge anyway. This should be
+  used with caution as it may merge PRs that haven't been properly reviewed
+  or tested if merge policies are not configured properly on the remote.
+
+Post-Merge:
+  After merging, you typically want to:
+  - Update local default branch: batch-tool git update <repo>
+  - Clean up feature branch: git branch -d <branch>`,
+		Example: `  # Merge approved PRs
+  batch-tool pr merge repo1 repo2
+
+  # Force merge without status checks
+  batch-tool pr merge -f repo1
+
+  # Merge and update branches afterward
+  batch-tool pr merge repo1 && batch-tool git update repo1`,
 		Args:              cobra.MinimumNArgs(1),
 		ValidArgsFunction: catalog.CompletionFunc(),
 		PreRunE: func(cmd *cobra.Command, _ []string) error {
 			return config.Viper(cmd.Context()).BindPFlag(config.PrForceMerge, cmd.Flags().Lookup(forceFlag))
 		},
 		Run: func(cmd *cobra.Command, args []string) {
-			call.Do(cmd, args, call.Wrap(git.ValidateBranch, Merge))
+			call.Do(cmd, args, Merge)
 		},
 	}
 

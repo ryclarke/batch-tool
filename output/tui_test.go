@@ -103,7 +103,7 @@ func TestHandleRepoOutput(t *testing.T) {
 
 	msg := repoOutputMsg{index: 0, data: []byte("test output")}
 	newModel, _ := m.handleRepoOutput(msg)
-	m = newModel.(model)
+	m = newModel.(*model)
 
 	if len(m.repos[0].output) != 11 {
 		t.Errorf("Expected 11 output bytes, got %d", len(m.repos[0].output))
@@ -130,7 +130,7 @@ func TestHandleRepoError(t *testing.T) {
 
 	msg := repoErrorMsg{index: 0, err: errors.New("test error")}
 	newModel, _ := m.handleRepoError(msg)
-	m = newModel.(model)
+	m = newModel.(*model)
 
 	if len(m.repos[0].errors) != 1 {
 		t.Errorf("Expected 1 error, got %d", len(m.repos[0].errors))
@@ -160,7 +160,7 @@ func TestHandleRepoCompleted(t *testing.T) {
 	// First completion (output channel closed)
 	msg := repoCompletedMsg{index: 0}
 	newModel, _ := m.handleRepoCompleted(msg)
-	m = newModel.(model)
+	m = newModel.(*model)
 
 	if !m.repos[0].outputDone {
 		t.Error("Expected outputDone to be true")
@@ -171,7 +171,7 @@ func TestHandleRepoCompleted(t *testing.T) {
 
 	// Second completion (error channel closed)
 	newModel, _ = m.handleRepoCompleted(msg)
-	m = newModel.(model)
+	m = newModel.(*model)
 
 	if !m.repos[0].errorsDone {
 		t.Error("Expected errorsDone to be true")
@@ -252,8 +252,8 @@ func TestCountCompleted(t *testing.T) {
 	}
 }
 
-// TestCountErrors tests the count errors function
-func TestCountErrors(t *testing.T) {
+// TestCountFailed tests the count failed function
+func TestCountFailed(t *testing.T) {
 	cmd := makeTestCommand(t)
 	repos := []string{"repo1", "repo2", "repo3"}
 	channels := makeTestChannels(repos, false)
@@ -267,40 +267,40 @@ func TestCountErrors(t *testing.T) {
 
 	m := initialModel(cmd, channels, testCancelFunc)
 
-	if count := m.countErrors(); count != 0 {
+	if count := m.countFailed(); count != 0 {
 		t.Errorf("Expected 0 errors, got %d", count)
 	}
 
 	// Completed but no errors
 	m.repos[0].completed = true
 	m.repos[0].failed = false
-	if count := m.countErrors(); count != 0 {
+	if count := m.countFailed(); count != 0 {
 		t.Errorf("Expected 0 errors for completed successful repo, got %d", count)
 	}
 
 	// Completed with errors
 	m.repos[1].completed = true
 	m.repos[1].failed = true
-	if count := m.countErrors(); count != 1 {
+	if count := m.countFailed(); count != 1 {
 		t.Errorf("Expected 1 error, got %d", count)
 	}
 
 	// Not completed with failed flag (shouldn't count)
 	m.repos[2].completed = false
 	m.repos[2].failed = true
-	if count := m.countErrors(); count != 1 {
+	if count := m.countFailed(); count != 1 {
 		t.Errorf("Expected 1 error (incomplete repos shouldn't count), got %d", count)
 	}
 
 	// Complete the third repo
 	m.repos[2].completed = true
-	if count := m.countErrors(); count != 2 {
+	if count := m.countFailed(); count != 2 {
 		t.Errorf("Expected 2 errors, got %d", count)
 	}
 }
 
-// TestCalculateElapsed tests the elapsed time calculation
-func TestCalculateElapsed(t *testing.T) {
+// TestGetDuration tests the elapsed time calculation
+func TestGetDuration(t *testing.T) {
 	cmd := makeTestCommand(t)
 	repos := []string{"repo1"}
 	channels := makeTestChannels(repos, true)
@@ -309,7 +309,7 @@ func TestCalculateElapsed(t *testing.T) {
 	m.startTime = time.Now().Add(-5 * time.Second)
 
 	// Test ongoing calculation
-	elapsed := m.calculateElapsed()
+	elapsed := m.getDuration()
 	if elapsed < 4*time.Second || elapsed > 6*time.Second {
 		t.Errorf("Expected elapsed time around 5s, got %v", elapsed)
 	}
@@ -317,7 +317,7 @@ func TestCalculateElapsed(t *testing.T) {
 	// Test completed calculation
 	m.allDone = true
 	m.endTime = m.startTime.Add(3 * time.Second)
-	elapsed = m.calculateElapsed()
+	elapsed = m.getDuration()
 	if elapsed != 3*time.Second {
 		t.Errorf("Expected elapsed time of 3s, got %v", elapsed)
 	}
@@ -374,8 +374,8 @@ func TestFormatRepoHeader(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			repo := repoStatus{Channel: &testChannel{name: "test-repo"}}
-			tt.setup(&repo)
+			repo := &repoStatus{Channel: &testChannel{name: "test-repo"}}
+			tt.setup(repo)
 
 			result := m.formatRepoHeader(repo)
 			if !strings.Contains(result, tt.contains) {
@@ -594,9 +594,9 @@ func TestHandleRepoCompletedSetsAllDone(t *testing.T) {
 	// Complete both channels
 	msg := repoCompletedMsg{index: 0}
 	newModel, _ := m.handleRepoCompleted(msg)
-	m = newModel.(model)
+	m = newModel.(*model)
 	newModel, _ = m.handleRepoCompleted(msg)
-	m = newModel.(model)
+	m = newModel.(*model)
 
 	if !m.allDone {
 		t.Error("Expected allDone to be true after all repos complete")
@@ -629,9 +629,9 @@ func TestHandleRepoCompletedWithError(t *testing.T) {
 	// Complete both channels
 	msg := repoCompletedMsg{index: 0}
 	newModel, _ := m.handleRepoCompleted(msg)
-	m = newModel.(model)
+	m = newModel.(*model)
 	newModel, _ = m.handleRepoCompleted(msg)
-	m = newModel.(model)
+	m = newModel.(*model)
 
 	if !m.repos[0].failed {
 		t.Error("Expected repo with errors to be marked as failed")
@@ -657,7 +657,7 @@ func TestHandleRepoCompletedOutOfBounds(t *testing.T) {
 	// Try to complete with invalid index
 	msg := repoCompletedMsg{index: 999}
 	newModel, _ := m.handleRepoCompleted(msg)
-	m = newModel.(model)
+	m = newModel.(*model)
 
 	// Should not crash
 	if m.repos[0].completed {
@@ -687,7 +687,7 @@ func TestFormatRepoHeaderInactive(t *testing.T) {
 
 	m := initialModel(cmd, channels, testCancelFunc)
 
-	repo := repoStatus{
+	repo := &repoStatus{
 		Channel:   &testChannel{name: "test-repo"},
 		active:    false,
 		completed: false,
@@ -857,7 +857,7 @@ func TestHandleWindowSize(t *testing.T) {
 	// Test initial window size (viewport not ready)
 	msg := tea.WindowSizeMsg{Width: 100, Height: 50}
 	newModel, _ := m.handleWindowSize(msg)
-	m = newModel.(model)
+	m = newModel.(*model)
 
 	if !m.ready {
 		t.Error("Expected model to be ready after window size message")
@@ -872,7 +872,7 @@ func TestHandleWindowSize(t *testing.T) {
 	// Test subsequent window size (resize)
 	msg = tea.WindowSizeMsg{Width: 120, Height: 60}
 	newModel, _ = m.handleWindowSize(msg)
-	m = newModel.(model)
+	m = newModel.(*model)
 
 	if m.width != 120 {
 		t.Errorf("Expected width 120, got %d", m.width)
@@ -906,7 +906,7 @@ func TestHandleKeyPressCtrlC(t *testing.T) {
 	// Create a key message for Ctrl+C
 	msg := tea.KeyMsg{Type: tea.KeyCtrlC}
 	newModel, _ := m.handleKeyPress(msg)
-	m = newModel.(model)
+	m = newModel.(*model)
 
 	if !m.quitting {
 		t.Error("Expected Ctrl+C to set quitting to true")
@@ -937,7 +937,7 @@ func TestHandleKeyPressQ(t *testing.T) {
 	// Test 'q' when not done - should not quit
 	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}}
 	newModel, _ := m.handleKeyPress(msg)
-	m = newModel.(model)
+	m = newModel.(*model)
 
 	if m.quitting {
 		t.Error("Expected 'q' to not quit when processing is not done")
@@ -946,7 +946,7 @@ func TestHandleKeyPressQ(t *testing.T) {
 	// Test 'q' when done - should quit
 	m.allDone = true
 	newModel, _ = m.handleKeyPress(msg)
-	m = newModel.(model)
+	m = newModel.(*model)
 
 	if !m.quitting {
 		t.Error("Expected 'q' to quit when all processing is done")
@@ -973,7 +973,7 @@ func TestHandleKeyPressP(t *testing.T) {
 	// Test 'p' when not done - should not quit or persist
 	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'p'}}
 	newModel, _ := m.handleKeyPress(msg)
-	m = newModel.(model)
+	m = newModel.(*model)
 
 	if m.quitting {
 		t.Error("Expected 'p' to not quit when processing is not done")
@@ -985,7 +985,7 @@ func TestHandleKeyPressP(t *testing.T) {
 	// Test 'p' when done - should quit and persist
 	m.allDone = true
 	newModel, _ = m.handleKeyPress(msg)
-	m = newModel.(model)
+	m = newModel.(*model)
 
 	if !m.printOutput {
 		t.Error("Expected 'p' to set persistAfter when all processing is done")

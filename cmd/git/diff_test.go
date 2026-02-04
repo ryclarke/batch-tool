@@ -16,8 +16,8 @@ func TestAddDiffCmd(t *testing.T) {
 		t.Fatal("addDiffCmd() returned nil")
 	}
 
-	if cmd.Use != "diff <repository>..." {
-		t.Errorf("Expected Use to be 'diff <repository>...', got %s", cmd.Use)
+	if cmd.Use != "diff [--cached] <repository>..." {
+		t.Errorf("Expected Use to be 'diff [--cached] <repository>...', got %s", cmd.Use)
 	}
 
 	if cmd.Short == "" {

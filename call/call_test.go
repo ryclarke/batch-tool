@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ryclarke/batch-tool/config"
 	"github.com/ryclarke/batch-tool/output"
 	"github.com/ryclarke/batch-tool/utils"
 	testhelper "github.com/ryclarke/batch-tool/utils/testing"
@@ -188,4 +189,45 @@ func TestExec(t *testing.T) {
 			testhelper.AssertOutput(t, output, tt.wantOutput, err, tt.wantError)
 		})
 	}
+}
+
+func TestExecIncludesMetadataEnv(t *testing.T) {
+	ctx := loadFixture(t)
+	viper := config.Viper(ctx)
+	viper.Set(config.GitProject, "test-project")
+	viper.Set(config.Branch, "feature/test")
+	viper.Set(config.DefaultBranch, "main")
+
+	repo := "test-repo"
+	testhelper.SetupDirs(t, ctx, []string{repo})
+
+	execFunc := Exec("env")
+	if execFunc == nil {
+		t.Fatal("Exec returned nil")
+	}
+
+	ch := output.NewChannel(ctx, repo, nil, nil)
+	err := execFunc(ctx, ch)
+	ch.Close()
+
+	if err != nil {
+		t.Fatalf("Exec env failed: %v", err)
+	}
+
+	// Collect output - reconstruct lines from byte chunks
+	var buffer []byte
+	for msg := range ch.Out() {
+		buffer = append(buffer, msg...)
+	}
+	outputLines := strings.Split(strings.TrimSuffix(string(buffer), "\n"), "\n")
+	if len(buffer) == 0 {
+		t.Fatal("expected env output, got empty output")
+	}
+
+	testhelper.AssertContains(t, outputLines, []string{
+		"REPO_NAME=" + repo,
+		"GIT_BRANCH=feature/test",
+		"GIT_DEFAULT_BRANCH=main",
+		"GIT_PROJECT=test-project",
+	})
 }

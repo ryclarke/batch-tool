@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/charmbracelet/bubbles/viewport"
@@ -15,7 +16,7 @@ import (
 )
 
 // List of flag names which should be included in the command display for context.
-var includeFlags = []string{"script", "branch"}
+var includeFlags = []string{"script", "file", "arg", "branch", "reviewer"}
 
 // TUIHandler is an OutputHandler that uses a TUI to provide a modern, interactive interface.
 // It displays repository progress with styled output, real-time updates, and a cleaner visual presentation.
@@ -39,6 +40,16 @@ func TUIHandler(cmd *cobra.Command, channels []Channel) {
 		tea.WithMouseCellMotion(), // Enable mouse support
 	)
 
+	// Ensure terminal is restored on panic
+	defer func() {
+		if r := recover(); r != nil {
+			// Attempt to restore terminal state
+			p.Kill()
+			// Print panic info after terminal is restored
+			fmt.Fprintf(cmd.ErrOrStderr(), "\nTUI panic recovered: %v\n", r)
+		}
+	}()
+
 	finalModel, err := p.Run()
 	if err != nil {
 		fmt.Fprintf(cmd.ErrOrStderr(), tuiFailText, err)
@@ -48,15 +59,17 @@ func TUIHandler(cmd *cobra.Command, channels []Channel) {
 	}
 
 	// If the user requested to persist output, print it to the terminal
-	if m, ok := finalModel.(model); ok && m.printOutput {
+	if m, ok := finalModel.(*model); ok && m.printOutput {
 		printFullOutput(cmd, m)
 	}
 }
 
 // model represents the state of the TUI application
 type model struct {
+	mu sync.RWMutex
+
 	command    string
-	repos      []repoStatus
+	repos      []*repoStatus
 	cancelFunc context.CancelFunc
 	startTime  time.Time
 	endTime    time.Time
@@ -101,12 +114,12 @@ type repoCompletedMsg struct {
 
 type tickMsg time.Time
 
-func initialModel(cmd *cobra.Command, channels []Channel, cancel context.CancelFunc) model {
+func initialModel(cmd *cobra.Command, channels []Channel, cancel context.CancelFunc) *model {
 	viper := config.Viper(cmd.Context())
 
-	repoStatuses := make([]repoStatus, len(channels))
+	repoStatuses := make([]*repoStatus, len(channels))
 	for i, ch := range channels {
-		repoStatuses[i] = repoStatus{
+		repoStatuses[i] = &repoStatus{
 			Channel: ch,
 		}
 	}
@@ -118,7 +131,7 @@ func initialModel(cmd *cobra.Command, channels []Channel, cancel context.CancelF
 		errs[i] = ch.Err()
 	}
 
-	return model{
+	return &model{
 		command:    buildCommandString(cmd),
 		repos:      repoStatuses,
 		cancelFunc: cancel,
@@ -154,7 +167,7 @@ func buildCommandString(cmd *cobra.Command) string {
 	return strings.Join(cmdParts, " ")
 }
 
-func (m model) Init() tea.Cmd {
+func (m *model) Init() tea.Cmd {
 	cmds := make([]tea.Cmd, 0, len(m.repos)*2+1)
 
 	// Start listening to all output and error channels
@@ -197,7 +210,7 @@ func waitForError(index int, ch Channel) tea.Cmd {
 	}
 }
 
-func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 
 	switch msg := msg.(type) {
@@ -232,7 +245,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 // handleWindowSize processes window resize events
-func (m model) handleWindowSize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
+func (m *model) handleWindowSize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 	m.width = msg.Width
 	m.height = msg.Height
 	m.styles = newOutputStyles(msg.Width)
@@ -255,7 +268,7 @@ func (m model) handleWindowSize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 }
 
 // handleKeyPress processes keyboard input
-func (m model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m *model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 
 	switch msg.String() {
@@ -297,59 +310,38 @@ func (m model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 // handleRepoOutput processes output messages from repositories
-func (m model) handleRepoOutput(msg repoOutputMsg) (tea.Model, tea.Cmd) {
-	if msg.index < len(m.repos) {
-		// First output signals that the subprocess has started
-		if !m.repos[msg.index].active {
-			m.repos[msg.index].active = true
-			if len(msg.data) == 0 {
-				// Skip an initial empty line
-				return m, waitForOutput(msg.index, m.repos[msg.index])
-			}
-		}
-
-		m.repos[msg.index].output = append(m.repos[msg.index].output, msg.data...)
-	}
-
-	m.viewport.SetContent(m.buildContent())
-	return m, waitForOutput(msg.index, m.repos[msg.index])
-}
-
-// handleRepoError processes error messages from repositories
-func (m model) handleRepoError(msg repoErrorMsg) (tea.Model, tea.Cmd) {
-	if msg.index < len(m.repos) {
-		m.repos[msg.index].errors = append(m.repos[msg.index].errors, msg.err)
-	}
-
-	m.viewport.SetContent(m.buildContent())
-	return m, waitForError(msg.index, m.repos[msg.index])
-}
-
-// handleRepoCompleted processes completion messages from repositories
-func (m model) handleRepoCompleted(msg repoCompletedMsg) (tea.Model, tea.Cmd) {
-	if msg.index >= len(m.repos) {
+func (m *model) handleRepoOutput(msg repoOutputMsg) (tea.Model, tea.Cmd) {
+	ch, skip := m.appendRepoOutput(msg.index, msg.data)
+	if ch == nil {
 		return m, nil
 	}
 
-	// Track which channel closed
-	if !m.repos[msg.index].outputDone {
-		m.repos[msg.index].outputDone = true
-	} else {
-		m.repos[msg.index].errorsDone = true
+	if !skip {
+		m.viewport.SetContent(m.buildContent())
 	}
 
-	// Only mark as completed when BOTH channels are closed
-	if m.repos[msg.index].outputDone && m.repos[msg.index].errorsDone {
-		m.repos[msg.index].completed = true
-		m.repos[msg.index].active = false
-		// Mark as failed if there were any errors
-		if len(m.repos[msg.index].errors) > 0 {
-			m.repos[msg.index].failed = true
-		}
+	return m, waitForOutput(msg.index, ch)
+}
+
+// handleRepoError processes error messages from repositories
+func (m *model) handleRepoError(msg repoErrorMsg) (tea.Model, tea.Cmd) {
+	ch := m.appendRepoError(msg.index, msg.err)
+	if ch == nil {
+		return m, nil
 	}
 
-	// Check if all repositories are done
-	if m.allReposCompleted() {
+	m.viewport.SetContent(m.buildContent())
+	return m, waitForError(msg.index, ch)
+}
+
+// handleRepoCompleted processes completion messages from repositories
+func (m *model) handleRepoCompleted(msg repoCompletedMsg) (tea.Model, tea.Cmd) {
+	allDone, valid := m.markRepoChannelClosed(msg.index)
+	if !valid {
+		return m, nil
+	}
+
+	if allDone {
 		m.allDone = true
 		m.endTime = time.Now()
 
@@ -364,8 +356,86 @@ func (m model) handleRepoCompleted(msg repoCompletedMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// allReposCompleted checks if all repositories have finished processing
-func (m model) allReposCompleted() bool {
+// appendRepoOutput appends data to a repo's output buffer.
+// Returns the channel and whether the message should be skipped (initial empty line).
+// Returns nil channel if index is out of bounds.
+func (m *model) appendRepoOutput(index int, data []byte) (ch Channel, skip bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if index >= len(m.repos) {
+		return nil, false
+	}
+
+	// First output signals that the subprocess has started
+	if !m.repos[index].active {
+		m.repos[index].active = true
+		if len(data) == 0 {
+			// Skip an initial empty line
+			return m.repos[index].Channel, true
+		}
+	}
+
+	m.repos[index].output = append(m.repos[index].output, data...)
+	return m.repos[index].Channel, false
+}
+
+// appendRepoError appends an error to a repo's error list.
+// Returns the channel, or nil if index is out of bounds.
+func (m *model) appendRepoError(index int, err error) Channel {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if index >= len(m.repos) {
+		return nil
+	}
+
+	m.repos[index].errors = append(m.repos[index].errors, err)
+	return m.repos[index].Channel
+}
+
+// markRepoChannelClosed marks a channel as closed and checks completion state.
+// Returns (allDone, valid) where valid is false if index is out of bounds.
+func (m *model) markRepoChannelClosed(index int) (allDone, valid bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if index >= len(m.repos) {
+		return false, false
+	}
+
+	// Track which channel closed
+	if !m.repos[index].outputDone {
+		m.repos[index].outputDone = true
+	} else {
+		m.repos[index].errorsDone = true
+	}
+
+	// Only mark as completed when BOTH channels are closed
+	if m.repos[index].outputDone && m.repos[index].errorsDone {
+		m.repos[index].completed = true
+		m.repos[index].active = false
+		// Mark as failed if there were any errors
+		if len(m.repos[index].errors) > 0 {
+			m.repos[index].failed = true
+		}
+	}
+
+	// Check if all repositories are done
+	for _, repo := range m.repos {
+		if !repo.completed {
+			return false, true
+		}
+	}
+
+	return true, true
+}
+
+// allReposCompleted checks if all repositories have finished processing.
+func (m *model) allReposCompleted() bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
 	for _, repo := range m.repos {
 		if !repo.completed {
 			return false
@@ -376,13 +446,10 @@ func (m model) allReposCompleted() bool {
 }
 
 // buildContent generates the scrollable content for the viewport
-func (m model) buildContent() string {
-	return m.buildStyledContent()
-}
+func (m *model) buildContent() string {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 
-// buildStyledContent generates styled content for all repositories.
-// This function is used by both the viewport (buildContent) and terminal output (printFullOutput).
-func (m model) buildStyledContent() string {
 	var content strings.Builder
 
 	for i, repo := range m.repos {
@@ -401,7 +468,10 @@ func (m model) buildStyledContent() string {
 
 // printFullOutput prints the complete output to the terminal without viewport wrapping.
 // This allows the full output to be persisted after the TUI exits.
-func printFullOutput(cmd *cobra.Command, m model) {
+func printFullOutput(cmd *cobra.Command, m *model) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
 	out := cmd.OutOrStdout()
 	err := cmd.ErrOrStderr()
 
@@ -409,18 +479,17 @@ func printFullOutput(cmd *cobra.Command, m model) {
 	fmt.Fprintln(err, m.styles.progress.Render(m.command))
 
 	// Print output summary
-	progressText := fmt.Sprintf(summaryText, len(m.repos), m.calculateElapsed())
-	fmt.Fprintln(err, m.styles.progress.Render(progressText))
+	fmt.Fprintln(err, m.styles.progress.Render(fmt.Sprintf(summaryText, len(m.repos), m.getDuration())))
 	fmt.Fprintln(err)
 
 	// Print all repository outputs using shared formatting logic
-	content := m.buildStyledContent()
+	content := m.buildContent()
 	fmt.Fprint(out, content)
 	fmt.Fprintln(out)
 }
 
 // formatRepoSection formats a complete repository section including header, output, and errors.
-func (m model) formatRepoSection(repo repoStatus) string {
+func (m *model) formatRepoSection(repo *repoStatus) string {
 	var section strings.Builder
 
 	// Repository header
@@ -446,7 +515,7 @@ func (m model) formatRepoSection(repo repoStatus) string {
 }
 
 // formatRepoHeader returns a styled repository header based on its status
-func (m model) formatRepoHeader(repo repoStatus) string {
+func (m *model) formatRepoHeader(repo *repoStatus) string {
 	if repo.completed {
 		if repo.failed {
 			return m.styles.repoError.Render(fmt.Sprintf(repoErrorFormat, repo.Name()))
@@ -464,7 +533,7 @@ func (m model) formatRepoHeader(repo repoStatus) string {
 	return m.styles.repoActive.Render(fmt.Sprintf(repoActiveFormat, repo.Name()))
 }
 
-func (m model) View() string {
+func (m *model) View() string {
 	if !m.ready {
 		return "Initializing...\n"
 	}
@@ -493,15 +562,26 @@ func (m model) View() string {
 }
 
 // renderProgress generates the progress text and bar
-func (m model) renderProgress() string {
+func (m *model) renderProgress() string {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
 	var b strings.Builder
 	completed := m.countCompleted()
-	elapsed := m.calculateElapsed()
+	failed := m.countFailed()
+	elapsed := m.getDuration()
 
-	progressText := fmt.Sprintf(progressText,
-		completed, len(m.repos), elapsed)
+	var progressSummary string
 
-	b.WriteString(m.styles.progress.Render(progressText))
+	if failed > 0 {
+		progressSummary = fmt.Sprintf(progressTextFail,
+			completed, len(m.repos), failed, elapsed)
+	} else {
+		progressSummary = fmt.Sprintf(progressText,
+			completed, len(m.repos), elapsed)
+	}
+
+	b.WriteString(m.styles.progress.Render(progressSummary))
 	b.WriteString("\n")
 
 	// Progress bar
@@ -510,8 +590,7 @@ func (m model) renderProgress() string {
 		progressBarWidth = m.width - 10
 	}
 
-	errorCount := m.countErrors()
-	progressBar := renderProgressBar(m.styles, completed, errorCount, len(m.repos), progressBarWidth)
+	progressBar := renderProgressBar(m.styles, completed, failed, len(m.repos), progressBarWidth)
 	b.WriteString(progressBar)
 	b.WriteString(" ")
 
@@ -527,7 +606,7 @@ func (m model) renderProgress() string {
 }
 
 // renderFooter generates the footer with help text
-func (m model) renderFooter() string {
+func (m *model) renderFooter() string {
 	b := strings.Builder{}
 	b.WriteString("\n")
 
@@ -544,7 +623,10 @@ func (m model) renderFooter() string {
 }
 
 // countCompleted returns the number of completed repositories
-func (m model) countCompleted() int {
+func (m *model) countCompleted() int {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
 	count := 0
 	for _, repo := range m.repos {
 		if repo.completed {
@@ -555,8 +637,11 @@ func (m model) countCompleted() int {
 	return count
 }
 
-// countErrors returns the number of repositories that completed with errors
-func (m model) countErrors() int {
+// countFailed returns the number of repositories that completed with errors
+func (m *model) countFailed() int {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
 	count := 0
 	for _, repo := range m.repos {
 		if repo.completed && repo.failed {
@@ -567,8 +652,8 @@ func (m model) countErrors() int {
 	return count
 }
 
-// calculateElapsed returns the elapsed time, using endTime if all done
-func (m model) calculateElapsed() time.Duration {
+// getDuration returns the elapsed time, using endTime if all done
+func (m *model) getDuration() time.Duration {
 	if m.allDone {
 		return m.endTime.Sub(m.startTime).Round(time.Second)
 	}

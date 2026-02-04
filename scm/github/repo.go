@@ -2,7 +2,6 @@ package github
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net/http"
 
@@ -67,19 +66,27 @@ func (g *Github) listRepositories(ctx context.Context, opt *github.RepositoryLis
 				Sort:        opt.Sort,
 				ListOptions: opt.ListOptions,
 			}
-			return g.listUserRepositories(ctx, userOpt)
+			return g.listUserRepositories(userOpt)
 		}
 
-		rateLimitError := &github.RateLimitError{}
-		if errors.As(err, &rateLimitError) {
-			return nil, nil, fmt.Errorf("failed to list repositories: %w", err)
-		}
-		if rateErr := g.waitForRateLimit(ctx, true); rateErr != nil {
+		if retry, rateErr := g.handleRateLimitError(err, true); rateErr != nil {
 			return nil, nil, fmt.Errorf("failed to list repositories: %w: %w", rateErr, err)
+		} else if !retry {
+			return nil, nil, fmt.Errorf("failed to list repositories: %w", err)
 		}
 
 		// retry the request after waiting for the rate limit to reset
 		if repos, resp, err = g.client.Repositories.ListByOrg(ctx, g.project, opt); err != nil {
+			// If we get a 404, the project might be a user, not an org
+			if resp != nil && resp.StatusCode == http.StatusNotFound {
+				// Convert options for user listing
+				userOpt := &github.RepositoryListByUserOptions{
+					Sort:        opt.Sort,
+					ListOptions: opt.ListOptions,
+				}
+				return g.listUserRepositories(userOpt)
+			}
+
 			return nil, nil, fmt.Errorf("failed to list repositories after retry: %w", err)
 		}
 	}
@@ -87,19 +94,17 @@ func (g *Github) listRepositories(ctx context.Context, opt *github.RepositoryLis
 	return repos, resp, nil
 }
 
-func (g *Github) listUserRepositories(ctx context.Context, opt *github.RepositoryListByUserOptions) ([]*github.Repository, *github.Response, error) {
-	repos, resp, err := g.client.Repositories.ListByUser(ctx, g.project, opt)
+func (g *Github) listUserRepositories(opt *github.RepositoryListByUserOptions) ([]*github.Repository, *github.Response, error) {
+	repos, resp, err := g.client.Repositories.ListByUser(g.ctx, g.project, opt)
 	if err != nil {
-		rateLimitError := &github.RateLimitError{}
-		if errors.As(err, &rateLimitError) {
-			return nil, nil, fmt.Errorf("failed to list user repositories: %w", err)
-		}
-		if rateErr := g.waitForRateLimit(ctx, true); rateErr != nil {
+		if retry, rateErr := g.handleRateLimitError(err, true); rateErr != nil {
 			return nil, nil, fmt.Errorf("failed to list user repositories: %w: %w", rateErr, err)
+		} else if !retry {
+			return nil, nil, fmt.Errorf("failed to list user repositories: %w", err)
 		}
 
 		// retry the request after waiting for the rate limit to reset
-		if repos, resp, err = g.client.Repositories.ListByUser(ctx, g.project, opt); err != nil {
+		if repos, resp, err = g.client.Repositories.ListByUser(g.ctx, g.project, opt); err != nil {
 			return nil, nil, fmt.Errorf("failed to list user repositories after retry: %w", err)
 		}
 	}

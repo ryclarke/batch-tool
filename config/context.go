@@ -20,6 +20,13 @@ func SetViper(ctx context.Context, v *viper.Viper) context.Context {
 	return context.WithValue(ctx, configKey, v)
 }
 
+// SetChild creates a child Viper instance and saves it into the context.
+func SetChild(ctx context.Context) context.Context {
+	v := Child(ctx)
+
+	return SetViper(ctx, v)
+}
+
 // Viper retrieves the Viper instance from the context.
 func Viper(ctx context.Context) *viper.Viper {
 	v := ctx.Value(configKey)

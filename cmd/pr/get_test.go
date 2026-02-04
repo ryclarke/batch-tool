@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/ryclarke/batch-tool/config"
+	"github.com/ryclarke/batch-tool/scm"
 	testhelper "github.com/ryclarke/batch-tool/utils/testing"
 )
 
@@ -84,7 +85,7 @@ func TestGetCommandRun(t *testing.T) {
 
 			// Create PRs for this test using the provider
 			for _, repo := range tt.repos {
-				_, err := testProvider.OpenPullRequest(repo, "feature-branch", "Test Title", "Test Description", []string{"reviewer1"})
+				_, err := testProvider.OpenPullRequest(repo, "feature-branch", &scm.PROptions{Title: "Test Title", Description: "Test Description", Reviewers: []string{"reviewer1"}})
 				if err != nil {
 					t.Fatalf("Failed to create test PR for %s: %v", repo, err)
 				}

@@ -2,9 +2,11 @@ package git
 
 import (
 	"bytes"
+	"os"
 	"path/filepath"
 	"testing"
 
+	"github.com/ryclarke/batch-tool/config"
 	testhelper "github.com/ryclarke/batch-tool/utils/testing"
 )
 
@@ -116,5 +118,159 @@ func TestUpdateCommandRunFromFeatureBranch(t *testing.T) {
 
 	if !bytes.Contains([]byte(output), []byte("repo-1")) {
 		t.Errorf("Expected output to contain 'repo-1', got: %s", output)
+	}
+}
+
+func TestCleanFunction(t *testing.T) {
+	reposPath := testhelper.SetupRepos(t, []string{"repo-1"})
+	testCtx := setupTestGitContext(t, reposPath)
+
+	// Create uncommitted changes and untracked files
+	repoDir := filepath.Join(reposPath, "example.com", "test-project", "repo-1")
+	testFile := filepath.Join(repoDir, "uncommitted.txt")
+	if err := os.WriteFile(testFile, []byte("uncommitted change"), 0644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
+
+	untrackedFile := filepath.Join(repoDir, "untracked.txt")
+	if err := os.WriteFile(untrackedFile, []byte("untracked file"), 0644); err != nil {
+		t.Fatalf("Failed to create untracked file: %v", err)
+	}
+
+	// Stage one file
+	testhelper.ExecCommand(t, repoDir, "git", "add", "uncommitted.txt")
+
+	cmd := addUpdateCmd()
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+	cmd.SetArgs([]string{"repo-1"})
+
+	err := cmd.ExecuteContext(testCtx)
+	if err != nil {
+		t.Fatalf("Command execution failed: %v", err)
+	}
+
+	// Verify both files are removed
+	if _, err := os.Stat(testFile); !os.IsNotExist(err) {
+		t.Error("Expected staged file to be cleaned")
+	}
+
+	if _, err := os.Stat(untrackedFile); !os.IsNotExist(err) {
+		t.Error("Expected untracked file to be cleaned")
+	}
+}
+
+func TestUpdateWithStashFlag(t *testing.T) {
+	reposPath := testhelper.SetupRepos(t, []string{"repo-1"})
+	testCtx := setupTestGitContext(t, reposPath)
+
+	// Create uncommitted changes
+	repoDir := filepath.Join(reposPath, "example.com", "test-project", "repo-1")
+	testFile := filepath.Join(repoDir, "stashed-change.txt")
+	testContent := []byte("content to be stashed")
+	if err := os.WriteFile(testFile, testContent, 0644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
+	testhelper.ExecCommand(t, repoDir, "git", "add", "stashed-change.txt")
+
+	cmd := addUpdateCmd()
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+	cmd.SetArgs([]string{"--stash", "repo-1"})
+
+	err := cmd.ExecuteContext(testCtx)
+	if err != nil {
+		t.Fatalf("Command execution failed: %v", err)
+	}
+
+	// Verify file is restored after update
+	if _, err := os.Stat(testFile); os.IsNotExist(err) {
+		t.Error("Expected file to be restored after stash pop")
+	}
+
+	// Verify content is preserved
+	content, err := os.ReadFile(testFile)
+	if err != nil {
+		t.Fatalf("Failed to read restored file: %v", err)
+	}
+	if !bytes.Equal(content, testContent) {
+		t.Errorf("Expected restored content to match original, got %s", string(content))
+	}
+}
+
+func TestUpdateWithNoStashFlag(t *testing.T) {
+	reposPath := testhelper.SetupRepos(t, []string{"repo-1"})
+	testCtx := setupTestGitContext(t, reposPath)
+
+	// Set stash-updates to true in config
+	viper := config.Viper(testCtx)
+	viper.Set(config.StashUpdates, true)
+
+	// Create uncommitted changes
+	repoDir := filepath.Join(reposPath, "example.com", "test-project", "repo-1")
+	testFile := filepath.Join(repoDir, "to-be-cleaned.txt")
+	if err := os.WriteFile(testFile, []byte("will be destroyed"), 0644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
+	testhelper.ExecCommand(t, repoDir, "git", "add", "to-be-cleaned.txt")
+
+	cmd := addUpdateCmd()
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+	cmd.SetArgs([]string{"--no-stash", "repo-1"})
+
+	err := cmd.ExecuteContext(testCtx)
+	if err != nil {
+		t.Fatalf("Command execution failed: %v", err)
+	}
+
+	// Verify file is cleaned (not stashed)
+	if _, err := os.Stat(testFile); !os.IsNotExist(err) {
+		t.Error("Expected file to be cleaned, not stashed")
+	}
+}
+
+func TestUpdateWithConfigStash(t *testing.T) {
+	reposPath := testhelper.SetupRepos(t, []string{"repo-1"})
+	testCtx := setupTestGitContext(t, reposPath)
+
+	// Set stash-updates to true in config
+	viper := config.Viper(testCtx)
+	viper.Set(config.StashUpdates, true)
+
+	// Create uncommitted changes
+	repoDir := filepath.Join(reposPath, "example.com", "test-project", "repo-1")
+	testFile := filepath.Join(repoDir, "config-stashed.txt")
+	testContent := []byte("stashed by config")
+	if err := os.WriteFile(testFile, testContent, 0644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
+	testhelper.ExecCommand(t, repoDir, "git", "add", "config-stashed.txt")
+
+	cmd := addUpdateCmd()
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+	cmd.SetArgs([]string{"repo-1"})
+
+	err := cmd.ExecuteContext(testCtx)
+	if err != nil {
+		t.Fatalf("Command execution failed: %v", err)
+	}
+
+	// Verify file is restored (stashed and popped due to config)
+	if _, err := os.Stat(testFile); os.IsNotExist(err) {
+		t.Error("Expected file to be restored after stash pop")
+	}
+
+	content, err := os.ReadFile(testFile)
+	if err != nil {
+		t.Fatalf("Failed to read restored file: %v", err)
+	}
+	if !bytes.Equal(content, testContent) {
+		t.Errorf("Expected restored content to match original")
 	}
 }

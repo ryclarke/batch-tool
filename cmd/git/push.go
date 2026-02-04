@@ -19,16 +19,37 @@ const (
 func addPushCmd() *cobra.Command {
 	// pushCmd represents the push command
 	pushCmd := &cobra.Command{
-		Use:               "push <repository>...",
-		Short:             "Push committed code changes to remote",
+		Use:   "push [-f] <repository>...",
+		Short: "Push committed code changes to remote",
+		Long: `Push local commits to the remote repository.
+
+This command pushes the current branch to the remote repository with
+upstream tracking enabled.
+
+Safety Features:
+  - Prevents pushing the default/primary branch
+  - Requires explicit force flag for force pushes
+  - Sets upstream tracking automatically
+
+Push Modes:
+  Normal:        Push commits to remote (fails if remote has diverged)
+  Force (-f):    Force push, overwriting remote history
+
+WARNING: Force push rewrites history on the remote. Use with caution,
+especially on shared branches.`,
+		Example: `  # Push current branch to remote
+  batch-tool git push repo1 repo2
+
+  # Force push after amending commits
+  batch-tool git push -f repo1 repo2`,
 		Args:              cobra.MinimumNArgs(1),
 		ValidArgsFunction: catalog.CompletionFunc(),
 		PreRun: func(cmd *cobra.Command, _ []string) {
 			viper := config.Viper(cmd.Context())
-			viper.BindPFlag(config.CommitAmend, cmd.Flags().Lookup(forceFlag))
+			viper.BindPFlag(config.GitCommitAmend, cmd.Flags().Lookup(forceFlag))
 		},
 		Run: func(cmd *cobra.Command, args []string) {
-			call.Do(cmd, args, call.Wrap(ValidateBranch, Push))
+			call.Do(cmd, args, call.Wrap(ValidateBranch(), Push))
 		},
 	}
 
@@ -46,7 +67,7 @@ func Push(ctx context.Context, ch output.Channel) error {
 	}
 
 	args := []string{"push", "-u", "origin", branch}
-	if viper.GetBool(config.CommitAmend) {
+	if viper.GetBool(config.GitCommitAmend) {
 		args = append(args, "-f")
 	}
 

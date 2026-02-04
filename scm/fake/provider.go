@@ -22,6 +22,7 @@ type Fake struct {
 	Repositories []*scm.Repository
 	PullRequests map[string]*scm.PullRequest // key: "repo:branch"
 	Errors       map[string]error            // configurable errors for testing
+	Capabilities *scm.Capabilities           // configurable capabilities for testing
 }
 
 // New creates a new fake SCM provider with the specified project
@@ -31,11 +32,17 @@ func New(_ context.Context, project string) scm.Provider {
 		Repositories: make([]*scm.Repository, 0),
 		PullRequests: make(map[string]*scm.PullRequest),
 		Errors:       make(map[string]error),
+		Capabilities: &scm.Capabilities{
+			TeamReviewers:  true,
+			ResetReviewers: true,
+			Draft:          true,
+		},
 	}
 }
 
-// NewFake creates a new fake SCM provider with the specified project with optional seed data
-func NewFake(project string, repos []*scm.Repository) *Fake {
+// NewFake creates a new fake SCM provider with the specified project and optional seed data.
+// Optionally pass a Capabilities struct to override the default (which supports all features).
+func NewFake(project string, repos []*scm.Repository, caps ...*scm.Capabilities) *Fake {
 	f := New(context.Background(), project).(*Fake)
 	f.Repositories = make([]*scm.Repository, len(repos))
 
@@ -51,6 +58,11 @@ func NewFake(project string, repos []*scm.Repository) *Fake {
 		}
 	}
 
+	// Override capabilities if provided
+	if len(caps) > 0 {
+		f.Capabilities = caps[0]
+	}
+
 	return f
 }
 
@@ -58,6 +70,11 @@ func NewFake(project string, repos []*scm.Repository) *Fake {
 func (f *Fake) SeedErrors(errors map[string]error) {
 	// Deep copy errors to avoid mutations affecting tests
 	maps.Copy(f.Errors, errors)
+}
+
+// CheckCapabilities validates that the provided PR options are supported by the fake provider.
+func (f *Fake) CheckCapabilities(opts *scm.PROptions) error {
+	return scm.ValidatePROptions(f.Capabilities, opts)
 }
 
 // ListRepositories returns the configured repositories
@@ -92,18 +109,21 @@ func (f *Fake) GetPullRequest(repo, branch string) (*scm.PullRequest, error) {
 	if pr, exists := f.PullRequests[key]; exists {
 		// Return a copy to prevent mutations
 		result := &scm.PullRequest{
-			Title:       pr.Title,
-			Description: pr.Description,
-			Branch:      pr.Branch,
-			Repo:        pr.Repo,
-			Reviewers:   make([]string, 0, len(pr.Reviewers)),
-			Mergeable:   pr.Mergeable,
-			ID:          pr.ID,
-			Number:      pr.Number,
-			Version:     pr.Version,
+			Title:         pr.Title,
+			Description:   pr.Description,
+			Branch:        pr.Branch,
+			Repo:          pr.Repo,
+			Reviewers:     make([]string, 0, len(pr.Reviewers)),
+			TeamReviewers: make([]string, 0, len(pr.TeamReviewers)),
+			Mergeable:     pr.Mergeable,
+			ID:            pr.ID,
+			Number:        pr.Number,
+			Version:       pr.Version,
+			Draft:         pr.Draft,
 		}
 
 		result.Reviewers = append(result.Reviewers, pr.Reviewers...)
+		result.TeamReviewers = append(result.TeamReviewers, pr.TeamReviewers...)
 
 		return result, nil
 	}
@@ -112,7 +132,11 @@ func (f *Fake) GetPullRequest(repo, branch string) (*scm.PullRequest, error) {
 }
 
 // OpenPullRequest creates a new pull request
-func (f *Fake) OpenPullRequest(repo, branch, title, description string, reviewers []string) (*scm.PullRequest, error) {
+func (f *Fake) OpenPullRequest(repo, branch string, opts *scm.PROptions) (*scm.PullRequest, error) {
+	if opts == nil {
+		opts = &scm.PROptions{} // default options
+	}
+
 	if err := f.Errors["OpenPullRequest"]; err != nil {
 		return nil, err
 	}
@@ -127,14 +151,15 @@ func (f *Fake) OpenPullRequest(repo, branch, title, description string, reviewer
 	// Create new PR
 	prID := len(f.PullRequests) + 1
 	pr := &scm.PullRequest{
-		ID:          prID,
-		Version:     1,
-		Title:       title,
-		Description: description,
-		Branch:      branch,
-		Repo:        repo,
-		Reviewers:   reviewers,
-		Mergeable:   true, // Default to mergeable
+		ID:            prID,
+		Version:       1,
+		Title:         opts.Title,
+		Description:   opts.Description,
+		Branch:        branch,
+		Repo:          repo,
+		Reviewers:     opts.Reviewers,
+		TeamReviewers: opts.TeamReviewers,
+		Mergeable:     true, // Default to mergeable
 	}
 
 	f.PullRequests[key] = pr
@@ -144,7 +169,11 @@ func (f *Fake) OpenPullRequest(repo, branch, title, description string, reviewer
 }
 
 // UpdatePullRequest updates an existing pull request
-func (f *Fake) UpdatePullRequest(repo, branch, title, description string, reviewers []string, appendReviewers bool) (*scm.PullRequest, error) {
+func (f *Fake) UpdatePullRequest(repo, branch string, opts *scm.PROptions) (*scm.PullRequest, error) {
+	if opts == nil {
+		opts = &scm.PROptions{} // default options
+	}
+
 	if err := f.Errors["UpdatePullRequest"]; err != nil {
 		return nil, err
 	}
@@ -157,15 +186,18 @@ func (f *Fake) UpdatePullRequest(repo, branch, title, description string, review
 	}
 
 	// Update fields
-	pr.Title = title
-	pr.Description = description
+	pr.Title = opts.Title
+	pr.Description = opts.Description
 
 	// Increment version
 	pr.Version++
 
 	// Update reviewers
-	if appendReviewers {
-		allReviewers := append(pr.Reviewers, reviewers...)
+	if opts.ResetReviewers {
+		pr.Reviewers = opts.Reviewers
+		pr.TeamReviewers = opts.TeamReviewers
+	} else {
+		allReviewers := append(pr.Reviewers, opts.Reviewers...)
 
 		// Remove duplicates
 		reviewerSet := make(map[string]bool)
@@ -177,8 +209,18 @@ func (f *Fake) UpdatePullRequest(repo, branch, title, description string, review
 			}
 		}
 		pr.Reviewers = uniqueReviewers
-	} else {
-		pr.Reviewers = reviewers
+
+		// Do the same for team reviewers
+		allTeamReviewers := append(pr.TeamReviewers, opts.TeamReviewers...)
+		teamReviewerSet := make(map[string]bool)
+		uniqueTeamReviewers := make([]string, 0)
+		for _, teamReviewer := range allTeamReviewers {
+			if !teamReviewerSet[teamReviewer] {
+				teamReviewerSet[teamReviewer] = true
+				uniqueTeamReviewers = append(uniqueTeamReviewers, teamReviewer)
+			}
+		}
+		pr.TeamReviewers = uniqueTeamReviewers
 	}
 
 	// Return a copy
@@ -386,17 +428,21 @@ func (f *Fake) GetAllLabels() []string {
 func copyPR(pr *scm.PullRequest) *scm.PullRequest {
 	// Return a copy to prevent mutations
 	result := &scm.PullRequest{
-		Title:       pr.Title,
-		Description: pr.Description,
-		Branch:      pr.Branch,
-		Repo:        pr.Repo,
-		Reviewers:   make([]string, 0, len(pr.Reviewers)),
-		ID:          pr.ID,
-		Number:      pr.Number,
-		Version:     pr.Version,
+		Title:         pr.Title,
+		Description:   pr.Description,
+		Branch:        pr.Branch,
+		Repo:          pr.Repo,
+		Reviewers:     make([]string, 0, len(pr.Reviewers)),
+		TeamReviewers: make([]string, 0, len(pr.TeamReviewers)),
+		ID:            pr.ID,
+		Number:        pr.Number,
+		Version:       pr.Version,
+		Draft:         pr.Draft,
+		Mergeable:     pr.Mergeable,
 	}
 
 	result.Reviewers = append(result.Reviewers, pr.Reviewers...)
+	result.TeamReviewers = append(result.TeamReviewers, pr.TeamReviewers...)
 
 	return result
 }

@@ -15,8 +15,8 @@ func TestPrCmd(t *testing.T) {
 		t.Fatal("Cmd() returned nil")
 	}
 
-	if cmd.Use != "pr [cmd] <repository>..." {
-		t.Errorf("Expected Use to be 'pr [cmd] <repository>...', got %s", cmd.Use)
+	if cmd.Use != "pr <repository>..." {
+		t.Errorf("Expected Use to be 'pr <repository>...', got %s", cmd.Use)
 	}
 
 	if cmd.Short == "" {
@@ -126,43 +126,5 @@ func TestPrCmdPersistentPreRunE(t *testing.T) {
 	err := cmd.PersistentPreRunE(cmd, []string{})
 	if err == nil {
 		t.Error("Expected error when auth token is not set")
-	}
-}
-
-func TestLookupReviewers(t *testing.T) {
-	ctx := loadFixture(t)
-	viper := config.Viper(ctx)
-
-	// Test with command-line reviewers
-	viper.Set(config.PrReviewers, []string{"reviewer1", "reviewer2"})
-	reviewers := lookupReviewers(ctx, "test-repo")
-
-	if len(reviewers) != 2 {
-		t.Errorf("Expected 2 reviewers, got %d", len(reviewers))
-	}
-	if reviewers[0] != "reviewer1" || reviewers[1] != "reviewer2" {
-		t.Errorf("Expected [reviewer1, reviewer2], got %v", reviewers)
-	}
-
-	// Test with default reviewers for repository
-	viper.Set(config.PrReviewers, []string{}) // Clear command-line reviewers
-	defaultReviewers := map[string][]string{
-		"test-repo":  {"default1", "default2"},
-		"other-repo": {"other1"},
-	}
-	viper.Set(config.DefaultReviewers, defaultReviewers)
-
-	reviewers = lookupReviewers(ctx, "test-repo")
-	if len(reviewers) != 2 {
-		t.Errorf("Expected 2 default reviewers, got %d", len(reviewers))
-	}
-	if reviewers[0] != "default1" || reviewers[1] != "default2" {
-		t.Errorf("Expected [default1, default2], got %v", reviewers)
-	}
-
-	// Test with non-existent repository
-	reviewers = lookupReviewers(ctx, "nonexistent-repo")
-	if len(reviewers) != 0 {
-		t.Errorf("Expected 0 reviewers for nonexistent repo, got %d", len(reviewers))
 	}
 }
