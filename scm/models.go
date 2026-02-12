@@ -36,4 +36,12 @@ type PROptions struct {
 	ResetReviewers bool
 	BaseBranch     string
 	Draft          *bool
+
+	Merge PRMergeOptions
+}
+
+// PRMergeOptions holds options for merging pull requests.
+type PRMergeOptions struct {
+	Method         string
+	CheckMergeable bool
 }

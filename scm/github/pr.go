@@ -6,6 +6,7 @@ import (
 
 	"github.com/google/go-github/v74/github"
 
+	"github.com/ryclarke/batch-tool/config"
 	"github.com/ryclarke/batch-tool/scm"
 )
 
@@ -82,17 +83,26 @@ func (g *Github) UpdatePullRequest(repo, branch string, opts *scm.PROptions) (*s
 }
 
 // MergePullRequest merges an existing pull request
-func (g *Github) MergePullRequest(repo, branch string, force bool) (*scm.PullRequest, error) {
+func (g *Github) MergePullRequest(repo, branch string, opts *scm.PRMergeOptions) (*scm.PullRequest, error) {
+	if opts == nil {
+		opts = &scm.PRMergeOptions{} // default options
+	}
+
 	pr, err := g.getPullRequest(repo, branch)
 	if err != nil {
 		return nil, err
 	}
 
-	if !force && !pr.GetMergeable() {
+	if opts.CheckMergeable && !pr.GetMergeable() {
 		return nil, fmt.Errorf("pull request %s [%d] for %s is not mergeable: %s", branch, pr.GetNumber(), repo, pr.GetMergeableState())
 	}
 
-	if err = g.mergePullRequest(repo, pr.GetNumber()); err != nil {
+	// if no merge method specified, use the default from config (if set)
+	if opts.Method == "" {
+		opts.Method = config.Viper(g.ctx).GetString(config.DefaultMergeMethod)
+	}
+
+	if err = g.mergePullRequest(repo, pr.GetNumber(), opts.Method); err != nil {
 		return nil, err
 	}
 
@@ -192,11 +202,19 @@ func (g *Github) editPullRequest(repo string, prNumber int, req *github.PullRequ
 	return pr, nil
 }
 
-func (g *Github) mergePullRequest(repo string, prNumber int) error {
+func (g *Github) mergePullRequest(repo string, prNumber int, mergeMethod string) error {
 	// acquire write lock (and release it when done)
 	defer g.writeLock()()
 
-	_, _, err := g.client.PullRequests.Merge(g.ctx, g.project, repo, prNumber, "", nil)
+	var opts *github.PullRequestOptions
+
+	// If a merge method configuration is available, include it in the merge options
+	// Otherwise opts will be nil (GitHub API defaults to "merge" if not specified)
+	if mergeMethod != "" {
+		opts = &github.PullRequestOptions{MergeMethod: mergeMethod}
+	}
+
+	_, _, err := g.client.PullRequests.Merge(g.ctx, g.project, repo, prNumber, "", opts)
 	if err != nil {
 		if retry, rateErr := g.handleRateLimitError(err, false); rateErr != nil {
 			return fmt.Errorf("failed to merge pull request: %w: %w", rateErr, err)
@@ -205,7 +223,7 @@ func (g *Github) mergePullRequest(repo string, prNumber int) error {
 		}
 
 		// retry the request after waiting for the rate limit to reset
-		if _, _, err = g.client.PullRequests.Merge(g.ctx, g.project, repo, prNumber, "", nil); err != nil {
+		if _, _, err = g.client.PullRequests.Merge(g.ctx, g.project, repo, prNumber, "", opts); err != nil {
 			return fmt.Errorf("failed to merge pull request after retry: %w", err)
 		}
 	}
@@ -226,10 +244,7 @@ func (g *Github) processChanges(opts *scm.PROptions) (req *github.PullRequest, c
 		changed = true
 	}
 
-	if opts.Draft != nil {
-		req.Draft = github.Ptr(*opts.Draft)
-		changed = true
-	}
+	// TODO: handle updating the draft status when supported by the provider
 
 	return req, changed
 }
@@ -242,6 +257,7 @@ func parsePR(resp *github.PullRequest) *scm.PullRequest {
 		Description: resp.GetBody(),
 		Reviewers:   make([]string, 0, len(resp.RequestedReviewers)),
 		Draft:       resp.GetDraft(),
+		Mergeable:   resp.GetMergeable(),
 	}
 
 	for _, reviewer := range resp.RequestedReviewers {

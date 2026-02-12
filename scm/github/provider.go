@@ -28,6 +28,9 @@ var (
 		TeamReviewers:  true,
 		ResetReviewers: true,
 		Draft:          true,
+
+		MergeMethods:   []string{"merge", "squash", "rebase"},
+		CheckMergeable: true,
 	}
 )
 

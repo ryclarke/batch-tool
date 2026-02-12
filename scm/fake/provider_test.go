@@ -259,7 +259,7 @@ func TestMergePullRequest(t *testing.T) {
 	}
 
 	// Merge the PR
-	mergedPR, err := f.MergePullRequest("repo-1", "feature-branch", false)
+	mergedPR, err := f.MergePullRequest("repo-1", "feature-branch", &scm.PRMergeOptions{CheckMergeable: true})
 	if err != nil {
 		t.Fatalf("Failed to merge pull request: %v", err)
 	}
@@ -279,13 +279,13 @@ func TestMergePullRequestAlreadyMerged(t *testing.T) {
 		t.Fatalf("Failed to open pull request: %v", err)
 	}
 
-	_, err = f.MergePullRequest("repo-1", "feature-branch", false)
+	_, err = f.MergePullRequest("repo-1", "feature-branch", &scm.PRMergeOptions{CheckMergeable: true})
 	if err != nil {
 		t.Fatalf("Failed to merge pull request: %v", err)
 	}
 
 	// Try to merge again
-	_, err = f.MergePullRequest("repo-1", "feature-branch", false)
+	_, err = f.MergePullRequest("repo-1", "feature-branch", &scm.PRMergeOptions{CheckMergeable: true})
 	if err == nil {
 		t.Error("Expected error when merging already merged pull request")
 	}
@@ -354,7 +354,7 @@ func TestMergePullRequestMergeability(t *testing.T) {
 			}
 
 			// Attempt to merge
-			mergedPR, err := f.MergePullRequest("repo-1", "test-branch", tt.force)
+			mergedPR, err := f.MergePullRequest("repo-1", "test-branch", &scm.PRMergeOptions{CheckMergeable: !tt.force})
 
 			if tt.expectError {
 				if err == nil {
@@ -405,7 +405,7 @@ func TestMergePullRequestForceBypassesChecks(t *testing.T) {
 	}
 
 	// Without force, merge should fail
-	_, err = f.MergePullRequest("repo-1", "hotfix-branch", false)
+	_, err = f.MergePullRequest("repo-1", "hotfix-branch", &scm.PRMergeOptions{CheckMergeable: true})
 	if err == nil {
 		t.Error("Expected merge to fail without force flag")
 	}
@@ -417,7 +417,7 @@ func TestMergePullRequestForceBypassesChecks(t *testing.T) {
 	}
 
 	// With force, merge should succeed despite unmergeable status
-	mergedPR, err := f.MergePullRequest("repo-1", "hotfix-branch", true)
+	mergedPR, err := f.MergePullRequest("repo-1", "hotfix-branch", &scm.PRMergeOptions{CheckMergeable: false})
 	if err != nil {
 		t.Errorf("Expected force merge to succeed: %v", err)
 	}
@@ -583,7 +583,7 @@ func TestErrorHandling(t *testing.T) {
 		{
 			"MergePullRequest",
 			func() error {
-				_, err := f.MergePullRequest("repo-1", "branch-1", false)
+				_, err := f.MergePullRequest("repo-1", "branch-1", &scm.PRMergeOptions{CheckMergeable: true})
 				return err
 			},
 		},

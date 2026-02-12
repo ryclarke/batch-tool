@@ -16,6 +16,9 @@ var caps = &scm.Capabilities{
 	TeamReviewers:  false,
 	ResetReviewers: true,
 	Draft:          false,
+
+	MergeMethods:   []string{},
+	CheckMergeable: false,
 }
 
 var _ scm.Provider = new(Bitbucket)

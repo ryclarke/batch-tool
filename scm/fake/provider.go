@@ -36,6 +36,8 @@ func New(_ context.Context, project string) scm.Provider {
 			TeamReviewers:  true,
 			ResetReviewers: true,
 			Draft:          true,
+			MergeMethods:   []string{"merge", "squash", "rebase"},
+			CheckMergeable: true,
 		},
 	}
 }
@@ -228,9 +230,13 @@ func (f *Fake) UpdatePullRequest(repo, branch string, opts *scm.PROptions) (*scm
 }
 
 // MergePullRequest merges an existing pull request
-func (f *Fake) MergePullRequest(repo, branch string, force bool) (*scm.PullRequest, error) {
+func (f *Fake) MergePullRequest(repo, branch string, opts *scm.PRMergeOptions) (*scm.PullRequest, error) {
 	if err := f.Errors["MergePullRequest"]; err != nil {
 		return nil, err
+	}
+
+	if opts == nil {
+		opts = &scm.PRMergeOptions{} // default options
 	}
 
 	key := fmt.Sprintf("%s:%s", repo, branch)
@@ -240,8 +246,8 @@ func (f *Fake) MergePullRequest(repo, branch string, force bool) (*scm.PullReque
 		return nil, fmt.Errorf("pull request not found for %s:%s", repo, branch)
 	}
 
-	// Check mergeability unless force flag is set
-	if !force && !pr.Mergeable {
+	// Check mergeability if check flag is enabled
+	if opts.CheckMergeable && !pr.Mergeable {
 		return nil, fmt.Errorf("pull request for %s:%s is not mergeable (conflicts, required checks failing, etc)", repo, branch)
 	}
 

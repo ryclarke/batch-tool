@@ -15,7 +15,9 @@ import (
 )
 
 const (
-	forceFlag = "force"
+	checkFlag   = "check"
+	noCheckFlag = "force"
+	methodFlag  = "method"
 )
 
 // addMergeCmd initializes the pr merge command
@@ -51,14 +53,25 @@ Post-Merge:
 		Args:              cobra.MinimumNArgs(1),
 		ValidArgsFunction: catalog.CompletionFunc(),
 		PreRunE: func(cmd *cobra.Command, _ []string) error {
-			return config.Viper(cmd.Context()).BindPFlag(config.PrForceMerge, cmd.Flags().Lookup(forceFlag))
+			viper := config.Viper(cmd.Context())
+
+			if err := utils.BindBoolFlags(cmd, config.PrMergeCheck, checkFlag, noCheckFlag); err != nil {
+				return err
+			}
+
+			return viper.BindPFlag(config.PrMergeMethod, cmd.Flags().Lookup(methodFlag))
 		},
 		Run: func(cmd *cobra.Command, args []string) {
+			buildPROptions(cmd)
+
 			call.Do(cmd, args, Merge)
 		},
 	}
 
-	mergeCmd.Flags().BoolP(forceFlag, "f", false, "attempt to merge without checking PR status")
+	// TODO: change default to true once GitHub API improves reliability of mergeable status (currently it can be stale and cause false negatives)
+	utils.BuildBoolFlagsDefault(mergeCmd, checkFlag, "", noCheckFlag, "f", false, "check PR status before merging (can be unreliable)")
+
+	mergeCmd.Flags().StringP(methodFlag, "m", "", "merge method to use (e.g. merge, squash, rebase)")
 
 	return mergeCmd
 }
@@ -76,7 +89,12 @@ func Merge(ctx context.Context, ch output.Channel) error {
 		return err
 	}
 
-	pr, err := provider.MergePullRequest(ch.Name(), branch, viper.GetBool(config.PrForceMerge))
+	opts := prOptions(ctx, ch.Name(), true)
+	if err := provider.CheckCapabilities(&opts); err != nil {
+		return err
+	}
+
+	pr, err := provider.MergePullRequest(ch.Name(), branch, &opts.Merge)
 	if err != nil {
 		return err
 	}

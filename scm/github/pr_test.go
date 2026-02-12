@@ -433,7 +433,7 @@ func TestMergePullRequest(t *testing.T) {
 	defer server.Close()
 
 	g := newTestGithub(t, server)
-	pr, err := g.MergePullRequest("test-repo", "feature-branch", false)
+	pr, err := g.MergePullRequest("test-repo", "feature-branch", &scm.PRMergeOptions{CheckMergeable: true})
 
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
@@ -454,7 +454,7 @@ func TestMergePullRequest_NotMergeable(t *testing.T) {
 	defer server.Close()
 
 	g := newTestGithub(t, server)
-	_, err := g.MergePullRequest("test-repo", "feature-branch", false)
+	_, err := g.MergePullRequest("test-repo", "feature-branch", &scm.PRMergeOptions{CheckMergeable: true})
 
 	if err == nil {
 		t.Fatal("Expected error for non-mergeable PR")
@@ -492,7 +492,7 @@ func TestMergePullRequest_ForceNonMergeable(t *testing.T) {
 	defer server.Close()
 
 	g := newTestGithub(t, server)
-	pr, err := g.MergePullRequest("test-repo", "feature-branch", true) // force=true
+	pr, err := g.MergePullRequest("test-repo", "feature-branch", &scm.PRMergeOptions{CheckMergeable: false}) // force=true becomes check=false
 
 	if err != nil {
 		t.Fatalf("Force merge should succeed: %v", err)
@@ -510,7 +510,7 @@ func TestMergePullRequest_NotFound(t *testing.T) {
 	defer server.Close()
 
 	g := newTestGithub(t, server)
-	_, err := g.MergePullRequest("test-repo", "nonexistent-branch", false)
+	_, err := g.MergePullRequest("test-repo", "nonexistent-branch", &scm.PRMergeOptions{CheckMergeable: true})
 
 	if err == nil {
 		t.Fatal("Expected error for nonexistent PR")
@@ -1059,7 +1059,7 @@ func TestMergePullRequest_APIError(t *testing.T) {
 	defer server.Close()
 
 	g := newTestGithub(t, server)
-	err := g.mergePullRequest("test-repo", 42)
+	err := g.mergePullRequest("test-repo", 42, "invalid-merge-method")
 
 	if err == nil {
 		t.Fatal("Expected error for API failure")
@@ -1069,18 +1069,12 @@ func TestMergePullRequest_APIError(t *testing.T) {
 // TestTeamReviewersOpenPullRequest tests opening a PR with team reviewers
 // Note: This test verifies the team reviewer flow is called without errors.
 func TestTeamReviewersOpenPullRequest(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 
 		// Create PR response
-		if strings.HasSuffix(r.URL.Path, "/pulls") && r.Method == "POST" {
-			pr := mockPRResponse(1, 1, "Test PR", "Test description", "feature/new", true, []string{})
-			json.NewEncoder(w).Encode(pr)
-		} else if strings.Contains(r.URL.Path, "/review_requests") && r.Method == "POST" {
-			// Request reviewers response - return the PR with basic info
-			pr := mockPRResponse(1, 1, "Test PR", "Test description", "feature/new", true, []string{})
-			json.NewEncoder(w).Encode(pr)
-		}
+		pr := mockPRResponse(1, 1, "Test PR", "Test description", "feature/new", true, []string{})
+		json.NewEncoder(w).Encode(pr)
 	}))
 	defer server.Close()
 
