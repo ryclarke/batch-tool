@@ -137,7 +137,7 @@ func TestProviderInterface(t *testing.T) {
 	}
 
 	// Test MergePullRequest
-	if _, err := testProvider.MergePullRequest("test-repo", "feature-branch", false); err != nil {
+	if _, err := testProvider.MergePullRequest("test-repo", "feature-branch", &scm.PRMergeOptions{CheckMergeable: true}); err != nil {
 		t.Errorf("MergePullRequest failed: %v", err)
 	}
 	if _, ok := testProvider.PullRequests["test-repo"]; ok {

@@ -83,7 +83,7 @@ func New(ctx context.Context, ch output.Channel) error {
 	}
 
 	// load PR options from config
-	opts := prOptions(ctx, ch.Name())
+	opts := prOptions(ctx, ch.Name(), false)
 	if err := provider.CheckCapabilities(&opts); err != nil {
 		return err
 	}

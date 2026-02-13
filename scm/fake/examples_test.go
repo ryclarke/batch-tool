@@ -120,7 +120,7 @@ func TestExampleIntegration(t *testing.T) {
 	}
 
 	// Test scenario: Merge pull request
-	mergedPR, err := fake.MergePullRequest("repo-1", "feature-branch", false)
+	mergedPR, err := fake.MergePullRequest("repo-1", "feature-branch", &scm.PRMergeOptions{CheckMergeable: true})
 	if err != nil {
 		t.Fatalf("Failed to merge pull request: %v", err)
 	}

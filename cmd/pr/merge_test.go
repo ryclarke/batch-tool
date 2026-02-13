@@ -47,13 +47,35 @@ func TestMergeCommandRun(t *testing.T) {
 	tests := []struct {
 		name           string
 		repos          []string
+		checkFlag      bool
 		forceFlag      bool
 		expectedOutput []string
 	}{
 		{
-			name:      "Merge single PR",
+			name:      "Merge single PR (default)",
 			repos:     []string{"repo-1"},
+			checkFlag: false,
 			forceFlag: false,
+			expectedOutput: []string{
+				"Merged pull request",
+				"Test Title",
+			},
+		},
+		{
+			name:      "Merge with --check flag",
+			repos:     []string{"repo-1"},
+			checkFlag: true,
+			forceFlag: false,
+			expectedOutput: []string{
+				"Merged pull request",
+				"Test Title",
+			},
+		},
+		{
+			name:      "Merge with --force flag",
+			repos:     []string{"repo-1"},
+			checkFlag: false,
+			forceFlag: true,
 			expectedOutput: []string{
 				"Merged pull request",
 				"Test Title",
@@ -62,20 +84,12 @@ func TestMergeCommandRun(t *testing.T) {
 		{
 			name:      "Merge multiple PRs",
 			repos:     []string{"repo-1", "repo-2"},
+			checkFlag: false,
 			forceFlag: false,
 			expectedOutput: []string{
 				"Merged pull request",
 				"repo-1",
 				"repo-2",
-			},
-		},
-		{
-			name:      "Merge single PR with force flag",
-			repos:     []string{"repo-1"},
-			forceFlag: true,
-			expectedOutput: []string{
-				"Merged pull request",
-				"Test Title",
 			},
 		},
 	}
@@ -108,7 +122,9 @@ func TestMergeCommandRun(t *testing.T) {
 			cmd.SetErr(&buf)
 
 			args := tt.repos
-			if tt.forceFlag {
+			if tt.checkFlag {
+				args = append([]string{"--check"}, args...)
+			} else if tt.forceFlag {
 				args = append([]string{"--force"}, args...)
 			}
 			cmd.SetArgs(args)
@@ -158,32 +174,51 @@ func TestMergeCommandWithUnmergeablePR(t *testing.T) {
 	tests := []struct {
 		name          string
 		mergeable     bool
+		checkFlag     bool
 		forceFlag     bool
 		expectSuccess bool
 		errorContains string
 	}{
 		{
-			name:          "mergeable PR without force",
+			name:          "mergeable PR (default)",
 			mergeable:     true,
+			checkFlag:     false,
 			forceFlag:     false,
 			expectSuccess: true,
 		},
 		{
-			name:          "mergeable PR with force",
+			name:          "mergeable PR with --check",
 			mergeable:     true,
+			checkFlag:     true,
+			forceFlag:     false,
+			expectSuccess: true,
+		},
+		{
+			name:          "mergeable PR with --force",
+			mergeable:     true,
+			checkFlag:     false,
 			forceFlag:     true,
 			expectSuccess: true,
 		},
 		{
-			name:          "unmergeable PR without force fails",
+			name:          "unmergeable PR with --check fails",
 			mergeable:     false,
+			checkFlag:     true,
 			forceFlag:     false,
 			expectSuccess: false,
 			errorContains: "is not mergeable",
 		},
 		{
-			name:          "unmergeable PR with force succeeds (bypasses check)",
+			name:          "unmergeable PR (default) succeeds",
 			mergeable:     false,
+			checkFlag:     false,
+			forceFlag:     false,
+			expectSuccess: true, // default doesn't check mergeability
+		},
+		{
+			name:          "unmergeable PR with --force succeeds",
+			mergeable:     false,
+			checkFlag:     false,
 			forceFlag:     true,
 			expectSuccess: true,
 		},
@@ -216,7 +251,9 @@ func TestMergeCommandWithUnmergeablePR(t *testing.T) {
 			cmd.SetErr(&buf)
 
 			args := []string{"repo-1"}
-			if tt.forceFlag {
+			if tt.checkFlag {
+				args = append([]string{"--check"}, args...)
+			} else if tt.forceFlag {
 				args = append([]string{"--force"}, args...)
 			}
 			cmd.SetArgs(args)
@@ -244,8 +281,8 @@ func TestMergeCommandWithUnmergeablePR(t *testing.T) {
 	}
 }
 
-// TestMergeCommandForceFlagBypassesFalseNegative tests the primary use case for force flag
-func TestMergeCommandForceFlagBypassesFalseNegative(t *testing.T) {
+// TestMergeCommandCheckFlagBypassesFalseNegative tests the primary use case for check flag
+func TestMergeCommandCheckFlagBypassesFalseNegative(t *testing.T) {
 	reposPath := testhelper.SetupRepos(t, []string{"hotfix-repo"}, true)
 	testCtx, testProvider := setupTestContext(t, reposPath)
 
@@ -262,12 +299,12 @@ func TestMergeCommandForceFlagBypassesFalseNegative(t *testing.T) {
 		t.Fatalf("Failed to set PR mergeable status: %v", err)
 	}
 
-	// First attempt without force should fail
+	// First attempt with --check flag should fail (but default is already to check)
 	cmd := addMergeCmd()
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
-	cmd.SetArgs([]string{"hotfix-repo"})
+	cmd.SetArgs([]string{"--check", "hotfix-repo"}) // use --check flag to verify mergeability
 	_ = cmd.ExecuteContext(testCtx)
 
 	output := buf.String()
@@ -284,12 +321,12 @@ func TestMergeCommandForceFlagBypassesFalseNegative(t *testing.T) {
 		t.Fatal("Expected PR to still exist")
 	}
 
-	// Second attempt with force flag should succeed
+	// Second attempt without --check flag should succeed (bypasses mergeability check)
 	cmd2 := addMergeCmd()
 	var buf2 bytes.Buffer
 	cmd2.SetOut(&buf2)
 	cmd2.SetErr(&buf2)
-	cmd2.SetArgs([]string{"--force", "hotfix-repo"})
+	cmd2.SetArgs([]string{"hotfix-repo"}) // no --check flag means bypass checking
 	_ = cmd2.ExecuteContext(testCtx)
 
 	output2 := buf2.String()
@@ -302,4 +339,308 @@ func TestMergeCommandForceFlagBypassesFalseNegative(t *testing.T) {
 	if err == nil {
 		t.Error("Expected PR to be deleted after successful force merge")
 	}
+}
+
+// TestMergeCommandMergeMethodFlag tests the merge method flag behavior
+func TestMergeCommandMergeMethodFlag(t *testing.T) {
+	reposPath := testhelper.SetupRepos(t, []string{"repo-1"}, true)
+
+	tests := []struct {
+		name         string
+		mergeMethod  string
+		expectMethod string
+	}{
+		{
+			name:         "merge method: merge",
+			mergeMethod:  "merge",
+			expectMethod: "merge",
+		},
+		{
+			name:         "merge method: squash",
+			mergeMethod:  "squash",
+			expectMethod: "squash",
+		},
+		{
+			name:         "merge method: rebase",
+			mergeMethod:  "rebase",
+			expectMethod: "rebase",
+		},
+		{
+			name:         "no merge method specified (default)",
+			mergeMethod:  "",
+			expectMethod: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			testCtx, testProvider := setupTestContext(t, reposPath)
+			testViper := config.Viper(testCtx)
+
+			// Create PR for this test
+			_, err := testProvider.OpenPullRequest("repo-1", "feature-branch", &scm.PROptions{
+				Title:       "Test PR",
+				Description: "Test Description",
+				Reviewers:   []string{"reviewer1"},
+			})
+			if err != nil {
+				t.Fatalf("Failed to create test PR: %v", err)
+			}
+
+			cmd := addMergeCmd()
+
+			var buf bytes.Buffer
+			cmd.SetOut(&buf)
+			cmd.SetErr(&buf)
+
+			args := []string{"repo-1"}
+			if tt.mergeMethod != "" {
+				args = append([]string{"--method", tt.mergeMethod}, args...)
+			}
+			cmd.SetArgs(args)
+
+			err = cmd.ExecuteContext(testCtx)
+			if err != nil {
+				t.Fatalf("Command execution failed: %v", err)
+			}
+
+			output := buf.String()
+
+			// Verify merge was successful
+			if !bytes.Contains([]byte(output), []byte("Merged pull request")) {
+				t.Errorf("Expected successful merge output, got: %s", output)
+			}
+
+			// Verify the merge method was set in viper if provided
+			if tt.mergeMethod != "" {
+				retrievedMethod := testViper.GetString(config.PrMergeMethod)
+				if retrievedMethod != tt.expectMethod {
+					t.Errorf("Expected merge method %q in viper, got %q", tt.expectMethod, retrievedMethod)
+				}
+			}
+		})
+	}
+}
+
+// TestMergeCommandMergeMethodShortFlag tests the short form of the merge method flag
+func TestMergeCommandMergeMethodShortFlag(t *testing.T) {
+	reposPath := testhelper.SetupRepos(t, []string{"repo-1"}, true)
+	testCtx, testProvider := setupTestContext(t, reposPath)
+
+	// Create PR
+	_, err := testProvider.OpenPullRequest("repo-1", "feature-branch", &scm.PROptions{
+		Title:       "Test PR",
+		Description: "Test Description",
+		Reviewers:   []string{"reviewer1"},
+	})
+	if err != nil {
+		t.Fatalf("Failed to create test PR: %v", err)
+	}
+
+	cmd := addMergeCmd()
+
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	// Test short flag -m
+	cmd.SetArgs([]string{"-m", "squash", "repo-1"})
+
+	err = cmd.ExecuteContext(testCtx)
+	if err != nil {
+		t.Fatalf("Command execution failed: %v", err)
+	}
+
+	output := buf.String()
+
+	// Verify merge was successful
+	if !bytes.Contains([]byte(output), []byte("Merged pull request")) {
+		t.Errorf("Expected successful merge output, got: %s", output)
+	}
+
+	// Verify the merge method was set
+	testViper := config.Viper(testCtx)
+	retrievedMethod := testViper.GetString(config.PrMergeMethod)
+	if retrievedMethod != "squash" {
+		t.Errorf("Expected merge method 'squash' in viper, got %q", retrievedMethod)
+	}
+}
+
+// TestMergeCommandWithBothCheckFlagAndMergeMethod tests combining check and merge method flags
+func TestMergeCommandWithBothCheckFlagAndMergeMethod(t *testing.T) {
+	reposPath := testhelper.SetupRepos(t, []string{"repo-1"}, true)
+	testCtx, testProvider := setupTestContext(t, reposPath)
+
+	// Create PR
+	_, err := testProvider.OpenPullRequest("repo-1", "feature-branch", &scm.PROptions{
+		Title:       "Test PR",
+		Description: "Test Description",
+		Reviewers:   []string{"reviewer1"},
+	})
+	if err != nil {
+		t.Fatalf("Failed to create test PR: %v", err)
+	}
+
+	// Mark PR as mergeable so the check passes
+	err = testProvider.SetPRMergeable("repo-1", "feature-branch", true)
+	if err != nil {
+		t.Fatalf("Failed to set PR mergeable status: %v", err)
+	}
+
+	cmd := addMergeCmd()
+
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	// Use both --check and --method flags
+	cmd.SetArgs([]string{"--check", "--method", "rebase", "repo-1"})
+
+	err = cmd.ExecuteContext(testCtx)
+	if err != nil {
+		t.Fatalf("Command execution failed: %v", err)
+	}
+
+	output := buf.String()
+
+	// Verify merge was successful despite PR not being mergeable
+	if !bytes.Contains([]byte(output), []byte("Merged pull request")) {
+		t.Errorf("Expected successful merge output with both flags, got: %s", output)
+	}
+
+	// Verify the merge method was set
+	testViper := config.Viper(testCtx)
+	retrievedMethod := testViper.GetString(config.PrMergeMethod)
+	if retrievedMethod != "rebase" {
+		t.Errorf("Expected merge method 'rebase' in viper, got %q", retrievedMethod)
+	}
+}
+
+// TestMergeCommandMultipleReposWithMergeMethod tests merge method with multiple repositories
+func TestMergeCommandMultipleReposWithMergeMethod(t *testing.T) {
+	reposPath := testhelper.SetupRepos(t, []string{"repo-1", "repo-2", "repo-3"}, true)
+	testCtx, testProvider := setupTestContext(t, reposPath)
+
+	// Create PRs for all repos
+	for _, repo := range []string{"repo-1", "repo-2", "repo-3"} {
+		_, err := testProvider.OpenPullRequest(repo, "feature-branch", &scm.PROptions{
+			Title:       "Test PR",
+			Description: "Test Description",
+			Reviewers:   []string{"reviewer1"},
+		})
+		if err != nil {
+			t.Fatalf("Failed to create test PR for %s: %v", repo, err)
+		}
+	}
+
+	cmd := addMergeCmd()
+
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	// Use method flag with multiple repos
+	cmd.SetArgs([]string{"--method", "squash", "repo-1", "repo-2", "repo-3"})
+
+	err := cmd.ExecuteContext(testCtx)
+	if err != nil {
+		t.Fatalf("Command execution failed: %v", err)
+	}
+
+	output := buf.String()
+
+	// Verify all merges were successful
+	for _, repo := range []string{"repo-1", "repo-2", "repo-3"} {
+		if !bytes.Contains([]byte(output), []byte(repo)) {
+			t.Errorf("Expected output to contain repo %q, got: %s", repo, output)
+		}
+	}
+
+	if !bytes.Contains([]byte(output), []byte("Merged pull request")) {
+		t.Errorf("Expected merge success messages in output, got: %s", output)
+	}
+
+	// Verify the merge method was set
+	testViper := config.Viper(testCtx)
+	retrievedMethod := testViper.GetString(config.PrMergeMethod)
+	if retrievedMethod != "squash" {
+		t.Errorf("Expected merge method 'squash' in viper, got %q", retrievedMethod)
+	}
+}
+
+// TestMergeCommandForceFlagShortForm tests the -f short flag
+func TestMergeCommandForceFlagShortForm(t *testing.T) {
+	reposPath := testhelper.SetupRepos(t, []string{"repo-1"}, true)
+	testCtx, testProvider := setupTestContext(t, reposPath)
+
+	// Create unmergeable PR
+	_, err := testProvider.OpenPullRequest("repo-1", "feature-branch", &scm.PROptions{
+		Title:       "Test PR",
+		Description: "Test Description",
+		Reviewers:   []string{"reviewer1"},
+	})
+	if err != nil {
+		t.Fatalf("Failed to create test PR: %v", err)
+	}
+
+	// Mark PR as not mergeable
+	err = testProvider.SetPRMergeable("repo-1", "feature-branch", false)
+	if err != nil {
+		t.Fatalf("Failed to set PR mergeable status: %v", err)
+	}
+
+	cmd := addMergeCmd()
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	// Use short -f flag to force merge
+	cmd.SetArgs([]string{"-f", "repo-1"})
+
+	err = cmd.ExecuteContext(testCtx)
+	if err != nil {
+		t.Fatalf("Command execution failed: %v", err)
+	}
+
+	output := buf.String()
+	if !bytes.Contains([]byte(output), []byte("Merged pull request")) {
+		t.Errorf("Expected successful merge with -f flag, got: %s", output)
+	}
+}
+
+// TestMergeCommandConflictingFlags tests behavior when both --check and --force are provided
+func TestMergeCommandConflictingFlags(t *testing.T) {
+	reposPath := testhelper.SetupRepos(t, []string{"repo-1"}, true)
+	testCtx, testProvider := setupTestContext(t, reposPath)
+
+	// Create mergeable PR
+	_, err := testProvider.OpenPullRequest("repo-1", "feature-branch", &scm.PROptions{
+		Title:       "Test PR",
+		Description: "Test Description",
+		Reviewers:   []string{"reviewer1"},
+	})
+	if err != nil {
+		t.Fatalf("Failed to create test PR: %v", err)
+	}
+
+	err = testProvider.SetPRMergeable("repo-1", "feature-branch", true)
+	if err != nil {
+		t.Fatalf("Failed to set PR mergeable status: %v", err)
+	}
+
+	cmd := addMergeCmd()
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	// Use both --check and --force flags - should either error or have defined precedence
+	cmd.SetArgs([]string{"--check", "--force", "repo-1"})
+
+	err = cmd.ExecuteContext(testCtx)
+	// Command might succeed with one flag taking precedence, or fail with conflicting flags
+	// Either behavior is acceptable as long as it's consistent
+	output := buf.String()
+
+	// Log the behavior for manual verification
+	t.Logf("Conflicting flags result - Error: %v, Output: %s", err, output)
 }

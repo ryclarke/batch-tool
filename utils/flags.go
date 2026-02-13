@@ -12,10 +12,15 @@ import (
 // BuildBoolFlags adds a pair of mutually exclusive boolean flags to the given command.
 // The "yes" flag enables the feature (default true), and the "no" flag disables it.
 func BuildBoolFlags(cmd *cobra.Command, yesName, yesShort, noName, noShort, description string) {
+	BuildBoolFlagsDefault(cmd, yesName, yesShort, noName, noShort, true, description)
+}
+
+// BuildBoolFlagsDefault adds a pair of mutually exclusive boolean flags to the given command with a specified default value.
+func BuildBoolFlagsDefault(cmd *cobra.Command, yesName, yesShort, noName, noShort string, defaultValue bool, description string) {
 	if yesShort != "" {
-		cmd.PersistentFlags().BoolP(yesName, yesShort, true, description)
+		cmd.PersistentFlags().BoolP(yesName, yesShort, defaultValue, description)
 	} else {
-		cmd.PersistentFlags().Bool(yesName, true, description)
+		cmd.PersistentFlags().Bool(yesName, defaultValue, description)
 	}
 
 	if noShort != "" {

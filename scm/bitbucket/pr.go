@@ -116,7 +116,7 @@ func (b *Bitbucket) UpdatePullRequest(repo, branch string, opts *scm.PROptions) 
 }
 
 // MergePullRequest merges an existing pull request.
-func (b *Bitbucket) MergePullRequest(repo, branch string, _ bool) (*scm.PullRequest, error) {
+func (b *Bitbucket) MergePullRequest(repo, branch string, _ *scm.PRMergeOptions) (*scm.PullRequest, error) {
 	pr, err := b.GetPullRequest(repo, branch)
 	if err != nil {
 		return nil, err

@@ -26,14 +26,15 @@ var (
 const (
 	EnvGopath = "gopath"
 
-	GitUser       = "git.user"
-	GitHost       = "git.host"
-	GitProject    = "git.project"
-	GitProjects   = "git.projects"
-	GitProvider   = "git.provider"
-	GitDirectory  = "git.directory"
-	DefaultBranch = "git.default-branch"
-	StashUpdates  = "git.stash-updates"
+	GitUser            = "git.user"
+	GitHost            = "git.host"
+	GitProject         = "git.project"
+	GitProjects        = "git.projects"
+	GitProvider        = "git.provider"
+	GitDirectory       = "git.directory"
+	DefaultBranch      = "git.default-branch"
+	StashUpdates       = "git.stash-updates"
+	DefaultMergeMethod = "git.default-merge-method"
 
 	// CloneSSHURLTmpl is the SSH URL template with placeholders: User, Host, Project, Repo
 	CloneSSHURLTmpl = "ssh://%s@%s/%s/%s.git"
@@ -85,7 +86,8 @@ const (
 	PrResetReviewers = "pr.args.reset-reviewers"
 	PrAllReviewers   = "pr.args.all-reviewers"
 	PrBaseBranch     = "pr.args.base-branch"
-	PrForceMerge     = "pr.args.force-merge"
+	PrMergeCheck     = "pr.args.merge-check"
+	PrMergeMethod    = "pr.args.merge-method"
 
 	// make
 	MakeTargets = "make.args.targets"
@@ -141,6 +143,7 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault(DefaultBranch, "main")
 	v.SetDefault(StashUpdates, false)
 	v.SetDefault(SortRepos, true)
+	v.SetDefault(DefaultMergeMethod, "squash") // "merge", "squash", or "rebase" (only supported by GitHub provider for now)
 
 	v.SetDefault(SkipUnwanted, true)
 	v.SetDefault(UnwantedLabels, []string{"deprecated", "poc"})

@@ -90,7 +90,7 @@ Branch Validation:
 	return prCmd
 }
 
-func prOptions(ctx context.Context, name string) scm.PROptions {
+func prOptions(ctx context.Context, name string, merge bool) scm.PROptions {
 	viper := config.Viper(ctx)
 
 	o := viper.Get(config.PrOptions)
@@ -103,6 +103,12 @@ func prOptions(ctx context.Context, name string) scm.PROptions {
 		return scm.PROptions{}
 	}
 
+	// Return only merge-related options if merge is true
+	if merge {
+		return scm.PROptions{Merge: opts.Merge}
+	}
+
+	opts.Merge = scm.PRMergeOptions{} // Clear merge options for non-merge operations
 	opts.BaseBranch = catalog.GetBranchForRepo(ctx, name)
 
 	return opts
@@ -119,6 +125,11 @@ func buildPROptions(cmd *cobra.Command) {
 		Reviewers:      viper.GetStringSlice(config.PrReviewers),
 		TeamReviewers:  viper.GetStringSlice(config.PrTeamReviewers),
 		ResetReviewers: viper.GetBool(config.PrResetReviewers),
+
+		Merge: scm.PRMergeOptions{
+			Method:         viper.GetString(config.PrMergeMethod),
+			CheckMergeable: viper.GetBool(config.PrMergeCheck),
+		},
 	}
 
 	// Set draft option if flag was explicitly provided

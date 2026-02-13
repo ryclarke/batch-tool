@@ -553,7 +553,7 @@ func TestMergePullRequest(t *testing.T) {
 	defer server.Close()
 
 	b := newTestBitbucket(t, server)
-	pr, err := b.MergePullRequest("test-repo", "feature-branch", false)
+	pr, err := b.MergePullRequest("test-repo", "feature-branch", &scm.PRMergeOptions{CheckMergeable: true})
 
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
@@ -574,7 +574,7 @@ func TestMergePullRequest_NotFound(t *testing.T) {
 	defer server.Close()
 
 	b := newTestBitbucket(t, server)
-	_, err := b.MergePullRequest("test-repo", "nonexistent-branch", false)
+	_, err := b.MergePullRequest("test-repo", "nonexistent-branch", &scm.PRMergeOptions{CheckMergeable: true})
 
 	if err == nil {
 		t.Fatal("Expected error for nonexistent PR")
