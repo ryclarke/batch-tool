@@ -72,9 +72,10 @@ Branch Validation:
 // New creates a new pull request for the given repository.
 func New(ctx context.Context, ch output.Channel) error {
 	viper := config.Viper(ctx)
+	repoName := utils.ResolveRepoName(ch.Name())
 
 	// Get project from repository metadata in catalog, fall back to default
-	project := catalog.GetProjectForRepo(ctx, ch.Name())
+	project := catalog.GetProjectForRepo(ctx, repoName)
 	provider := scm.Get(ctx, viper.GetString(config.GitProvider), project)
 
 	branch, err := utils.LookupBranch(ctx, ch.Name())
@@ -83,15 +84,15 @@ func New(ctx context.Context, ch output.Channel) error {
 	}
 
 	// load PR options from config
-	opts := prOptions(ctx, ch.Name(), false)
+	opts := prOptions(ctx, repoName, false)
 	if err := provider.CheckCapabilities(&opts); err != nil {
 		return err
 	}
 
 	// get reviewers from config if not set via flags
-	opts.Reviewers = lookupReviewers(ctx, ch.Name())
+	opts.Reviewers = lookupReviewers(ctx, repoName)
 
-	pr, err := provider.OpenPullRequest(ch.Name(), branch, &opts)
+	pr, err := provider.OpenPullRequest(repoName, branch, &opts)
 	if err != nil {
 		return err
 	}

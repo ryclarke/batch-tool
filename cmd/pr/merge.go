@@ -79,9 +79,10 @@ Post-Merge:
 // Merge merges the pull request for the given repository.
 func Merge(ctx context.Context, ch output.Channel) error {
 	viper := config.Viper(ctx)
+	repoName := utils.ResolveRepoName(ch.Name())
 
 	// Get project from repository metadata in catalog, fall back to default
-	project := catalog.GetProjectForRepo(ctx, ch.Name())
+	project := catalog.GetProjectForRepo(ctx, repoName)
 	provider := scm.Get(ctx, viper.GetString(config.GitProvider), project)
 
 	branch, err := utils.LookupBranch(ctx, ch.Name())
@@ -89,12 +90,12 @@ func Merge(ctx context.Context, ch output.Channel) error {
 		return err
 	}
 
-	opts := prOptions(ctx, ch.Name(), true)
+	opts := prOptions(ctx, repoName, true)
 	if err := provider.CheckCapabilities(&opts); err != nil {
 		return err
 	}
 
-	pr, err := provider.MergePullRequest(ch.Name(), branch, &opts.Merge)
+	pr, err := provider.MergePullRequest(repoName, branch, &opts.Merge)
 	if err != nil {
 		return err
 	}

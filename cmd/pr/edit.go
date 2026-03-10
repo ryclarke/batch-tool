@@ -67,23 +67,24 @@ Branch Requirement:
 // Edit updates the pull request for the given repository.
 func Edit(ctx context.Context, ch output.Channel) error {
 	viper := config.Viper(ctx)
+	repoName := utils.ResolveRepoName(ch.Name())
 
 	// Get project from repository metadata in catalog, fall back to default
-	project := catalog.GetProjectForRepo(ctx, ch.Name())
+	project := catalog.GetProjectForRepo(ctx, repoName)
 	provider := scm.Get(ctx, viper.GetString(config.GitProvider), project)
 
 	branch, err := utils.LookupBranch(ctx, ch.Name())
 	if err != nil {
-		return fmt.Errorf("failed to lookup branch for %s: %w", ch.Name(), err)
+		return fmt.Errorf("failed to lookup branch for %s: %w", repoName, err)
 	}
 
 	// load PR options from config
-	opts := prOptions(ctx, ch.Name(), false)
+	opts := prOptions(ctx, repoName, false)
 	if err := provider.CheckCapabilities(&opts); err != nil {
 		return err
 	}
 
-	pr, err := provider.UpdatePullRequest(ch.Name(), branch, &opts)
+	pr, err := provider.UpdatePullRequest(repoName, branch, &opts)
 	if err != nil {
 		return err
 	}

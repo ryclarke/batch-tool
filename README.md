@@ -87,6 +87,7 @@ repos:
       - reviewer1
       - reviewer2
 ```
+
 The only required field is `git.project`, the rest of the configuration has safe default values.
 
 ### 3. Authentication
@@ -117,6 +118,9 @@ You may also use the same syntax to refer to aliases defined locally in the conf
 - To force selection of a repository or alias/topic, include a `+`.
   - This bypasses unwanted label filtering and ignores exclusions from other arguments.
   - If applied to an alias/topic, _every_ member will be included regardless of other filters.
+- To operate on the current working directory only, pass `.` as the sole repository argument.
+  - In this mode, argument expansion (aliases/topics/labels) is skipped.
+  - No repository batching occurs; the command runs once against the current directory.
 
 -------------------------------
 
@@ -134,19 +138,20 @@ Example:
 batch-tool git status '~myservice' '!repo3' # matches repo1 and repo2 only
 batch-tool git status '~myservice' '+repo4' # forces inclusion of repo4
 batch-tool git status '+~myservice' '!~deprecated' # matches all 4 repos
+batch-tool pr get . # run against current directory without alias/label expansion
 ```
 
 ⚠️ When using special characters for matching and exclusion, ensure that all arguments are quoted properly to avoid improper shell expansion.
 
 ## Interactive Mode
 
-When the `--style=bubbletea` flag is provided, batch-tool launches an interactive terminal user interface (TUI) for command selection and navigation.
+When the `--style=tui` flag is provided, batch-tool launches an interactive terminal user interface (TUI) for command selection and navigation.
 
 ### Using Interactive Mode
 
 ```bash
 # Launch the interactive command selector
-batch-tool --style=bubbletea
+batch-tool --style=tui
 ```
 
 The TUI provides:
@@ -167,13 +172,13 @@ The TUI provides:
 
 The `--style` flag also controls how command output is displayed:
 
-- `native` (default): Traditional terminal output with streaming updates
-- `bubbletea`: Modern TUI with interactive progress display, real-time updates, and scrollable output
+- `tui` (default): Modern TUI with interactive progress display, real-time updates, and scrollable output
+- `native`: Traditional terminal output with streaming updates
 
 Example with output style:
 ```bash
 # Use interactive TUI for output display
-batch-tool git status repo1 repo2 --style=bubbletea
+batch-tool git status repo1 repo2 --style=tui
 ```
 
 ## Commands
@@ -230,11 +235,24 @@ batch-tool git update --no-stash <repos...>
 # Create new pull requests
 batch-tool pr new -t "PR Title" -d "Description" <repos...>
 
+# Create PRs with user and team reviewers
+batch-tool pr new -r reviewer1 -R my-org/platform-team <repos...>
+
 # Edit existing pull requests
 batch-tool pr edit -t "New Title" -d "New Description" <repos...>
 
 # Add requested reviewers by username
 batch-tool pr edit -r reviewer1 -r reviewer2 <repos...>
+
+# Add requested team reviewers by slug (GitHub provider)
+batch-tool pr edit -R my-org/backend-team -R my-org/frontend-team <repos...>
+
+# Replace existing reviewers (users and teams) instead of appending
+batch-tool pr edit -r reviewer1 -R my-org/platform-team --reset-reviewers <repos...>
+
+# Merge with explicit method and status check behavior
+batch-tool pr merge -m squash --check <repos...>
+batch-tool pr merge --force <repos...>
 
 # Merge all accepted pull requests
 batch-tool pr merge <repos...>
@@ -276,6 +294,10 @@ batch-tool --sync <command> <repos...>
 ## Global Flags
 
 - `--config string`: Specify config file (default: `batch-tool.yaml`)
+- `--style string` / `-o`: Output style (`tui` or `native`, default: `tui`)
+- `--print` / `-p`: Print results to stdout after processing is complete
+- `--wait` / `--no-wait`: Wait for user input after processing (auto-disabled in non-interactive output)
+- `--env` / `-e` (repeatable): Environment variables to set for command execution (`KEY=VALUE`)
 - `--sync`: Execute commands synchronously (alias for `--max-concurrency=1`)
 - `--max-concurrency int`: Maximum number of concurrent operations (default: number of logical CPUs)
 - `--sort`: Sort repositories (default: true)
@@ -291,6 +313,8 @@ git:
   host: github.com  # or your Bitbucket server
   project: your-org-or-username
   default-branch: main | develop
+  stash-updates: false          # Stash/restore local changes during git update by default
+  default-merge-method: squash  # PR merge method: merge | squash | rebase
   directory: /path/to/git/repos  # Base directory for repository clones
 ```
 

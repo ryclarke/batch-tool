@@ -1,6 +1,8 @@
 package utils_test
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/ryclarke/batch-tool/config"
@@ -115,6 +117,53 @@ func TestRepoPathEmptyRepo(t *testing.T) {
 	// Should return absolute path to git directory
 	if got != "/test/gitdir/src" {
 		t.Errorf("RepoPath(\"\") = %v, want /test/gitdir/src", got)
+	}
+}
+
+func TestRepoPathCurrentDirectory(t *testing.T) {
+	ctx := loadFixture(t)
+
+	want, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("Getwd() error = %v", err)
+	}
+
+	got := utils.RepoPath(ctx, ".")
+	if got != want {
+		t.Errorf("RepoPath(\".\") = %v, want %v", got, want)
+	}
+}
+
+func TestResolveRepoName(t *testing.T) {
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("Getwd() error = %v", err)
+	}
+
+	tests := []struct {
+		name string
+		repo string
+		want string
+	}{
+		{
+			name: "dot resolves to cwd basename",
+			repo: ".",
+			want: filepath.Base(wd),
+		},
+		{
+			name: "non-dot returns as-is",
+			repo: "owner/repo",
+			want: "owner/repo",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := utils.ResolveRepoName(tt.repo)
+			if got != tt.want {
+				t.Errorf("ResolveRepoName() = %v, want %v", got, tt.want)
+			}
+		})
 	}
 }
 

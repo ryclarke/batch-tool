@@ -5,6 +5,7 @@ import (
 	"os"
 	"runtime"
 	"sort"
+	"strings"
 	"sync"
 
 	"github.com/spf13/cobra"
@@ -73,20 +74,22 @@ func runCallFunc(ctx context.Context, ch output.Channel, callFunc Func) {
 	// Initial empty line to signal start of Func execution
 	ch.WriteString("")
 
-	// If the repository is missing, attempt to clone it first
-	repoDir := utils.RepoPath(ctx, ch.Name())
-	if _, err := os.Stat(repoDir); os.IsNotExist(err) {
-		// Create the directory if it doesn't exist yet
-		if err := os.MkdirAll(repoDir, 0755); err != nil {
-			ch.WriteError(err)
-			return
-		}
+	if ch.Name() != "." {
+		// If the repository is missing, attempt to clone it first
+		repoDir := utils.RepoPath(ctx, ch.Name())
+		if _, err := os.Stat(repoDir); os.IsNotExist(err) {
+			// Create the directory if it doesn't exist yet
+			if err := os.MkdirAll(repoDir, 0755); err != nil {
+				ch.WriteError(err)
+				return
+			}
 
-		// Execute git clone into the target directory
-		if err := Exec("git", "clone", utils.RepoURL(ctx, ch.Name()), repoDir)(ctx, ch); err != nil {
-			// Clone failed, return the error and abort further processing
-			ch.WriteError(err)
-			return
+			// Execute git clone into the target directory
+			if err := Exec("git", "clone", utils.RepoURL(ctx, ch.Name()), repoDir)(ctx, ch); err != nil {
+				// Clone failed, return the error and abort further processing
+				ch.WriteError(err)
+				return
+			}
 		}
 	}
 
@@ -99,6 +102,11 @@ func runCallFunc(ctx context.Context, ch output.Channel, callFunc Func) {
 // processArguments expands repository aliases, sorts repositories if configured, and sets appropriate write backoff.
 func processArguments(ctx context.Context, args []string) []string {
 	viper := config.Viper(ctx)
+	if len(args) == 1 && strings.TrimSpace(args[0]) == "." {
+		// special handling to enable working in the current directory
+		return []string{"."}
+	}
+
 	repos := catalog.RepositoryList(ctx, args...).ToSlice()
 
 	// Sort the repositories alphabetically
