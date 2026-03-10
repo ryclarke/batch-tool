@@ -118,6 +118,9 @@ You may also use the same syntax to refer to aliases defined locally in the conf
 - To force selection of a repository or alias/topic, include a `+`.
   - This bypasses unwanted label filtering and ignores exclusions from other arguments.
   - If applied to an alias/topic, _every_ member will be included regardless of other filters.
+- To operate on the current working directory only, pass `.` as the sole repository argument.
+  - In this mode, argument expansion (aliases/topics/labels) is skipped.
+  - No repository batching occurs; the command runs once against the current directory.
 
 -------------------------------
 
@@ -135,6 +138,7 @@ Example:
 batch-tool git status '~myservice' '!repo3' # matches repo1 and repo2 only
 batch-tool git status '~myservice' '+repo4' # forces inclusion of repo4
 batch-tool git status '+~myservice' '!~deprecated' # matches all 4 repos
+batch-tool pr get . # run against current directory without alias/label expansion
 ```
 
 ⚠️ When using special characters for matching and exclusion, ensure that all arguments are quoted properly to avoid improper shell expansion.

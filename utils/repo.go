@@ -3,6 +3,7 @@ package utils
 import (
 	"context"
 	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -44,6 +45,15 @@ func ParseRepo(ctx context.Context, repo string) (host, project, name string) {
 func RepoPath(ctx context.Context, repo string) string {
 	viper := config.Viper(ctx)
 
+	if repo == "." {
+		path, err := os.Getwd()
+		if err != nil {
+			panic(fmt.Sprintf("error determining current working directory path: %v", err))
+		}
+
+		return path
+	}
+
 	// If repo is empty, return the base working directory itself (for operations like cloning)
 	if repo == "" {
 		path, err := filepath.Abs(viper.GetString(config.GitDirectory))
@@ -62,6 +72,21 @@ func RepoPath(ctx context.Context, repo string) string {
 	}
 
 	return path
+}
+
+// ResolveRepoName returns the SCM repository name for the given argument.
+// The special repo argument "." resolves to the current directory basename.
+func ResolveRepoName(repo string) string {
+	if repo != "." {
+		return repo
+	}
+
+	cwd, err := os.Getwd()
+	if err != nil {
+		return repo
+	}
+
+	return filepath.Base(cwd)
 }
 
 // RepoURL returns the repository remote url for the given name

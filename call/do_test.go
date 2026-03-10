@@ -280,6 +280,108 @@ func TestProcessArguments(t *testing.T) {
 	}
 }
 
+func TestProcessArgumentsCurrentDirectorySpecialCase(t *testing.T) {
+	tests := []struct {
+		name           string
+		args           []string
+		initialBackoff string
+		want           []string
+	}{
+		{
+			name:           "exact dot argument",
+			args:           []string{"."},
+			initialBackoff: "123ms",
+			want:           []string{"."},
+		},
+		{
+			name:           "dot with surrounding whitespace",
+			args:           []string{" . "},
+			initialBackoff: "456ms",
+			want:           []string{"."},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := loadFixture(t)
+			viper := config.Viper(ctx)
+
+			viper.Set(config.GitProvider, "github")
+			viper.Set(config.GithubHourlyWriteLimit, 1)
+			viper.Set(config.GithubBackoffSmall, "2s")
+			viper.Set(config.GithubBackoffLarge, "8s")
+			viper.Set(config.WriteBackoff, tt.initialBackoff)
+
+			got := processArguments(ctx, tt.args)
+			if len(got) != len(tt.want) {
+				t.Fatalf("processArguments() returned %d items, want %d", len(got), len(tt.want))
+			}
+
+			for i := range got {
+				if got[i] != tt.want[i] {
+					t.Fatalf("processArguments()[%d] = %q, want %q", i, got[i], tt.want[i])
+				}
+			}
+
+			// The dot short-circuit should bypass provider backoff tuning.
+			if backoff := viper.GetDuration(config.WriteBackoff); backoff.String() != tt.initialBackoff {
+				t.Errorf("WriteBackoff changed to %v, want unchanged %v", backoff, tt.initialBackoff)
+			}
+		})
+	}
+}
+
+func TestDoCurrentDirectoryArgument(t *testing.T) {
+	tests := []struct {
+		name string
+		repo string
+	}{
+		{
+			name: "exact dot passes through",
+			repo: ".",
+		},
+		{
+			name: "trimmed dot passes through",
+			repo: " . ",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := loadFixture(t)
+			viper := config.Viper(ctx)
+
+			viper.Set(config.MaxConcurrency, 1)
+			viper.Set(config.ChannelBuffer, 10)
+
+			var callCount int64
+			callFunc := func(_ context.Context, ch output.Channel) error {
+				atomic.AddInt64(&callCount, 1)
+				ch.WriteString("repo=" + ch.Name())
+				return nil
+			}
+
+			var buf, errBuf bytes.Buffer
+			cmd := fakeCmd(t, ctx, &buf)
+			cmd.SetErr(&errBuf)
+
+			Do(cmd, []string{tt.repo}, callFunc)
+
+			if got := atomic.LoadInt64(&callCount); got != 1 {
+				t.Fatalf("callFunc invoked %d times, want 1", got)
+			}
+
+			combinedOutput := buf.String() + "\n" + errBuf.String()
+			testhelper.AssertContains(t, combinedOutput, []string{"repo=."})
+
+			// Current-directory mode should never attempt clone output.
+			if strings.Contains(combinedOutput, "Cloning into") {
+				t.Errorf("unexpected clone attempt for %q argument", tt.repo)
+			}
+		})
+	}
+}
+
 // TestDoVariousModes tests various execution modes of Do
 func TestDoVariousModes(t *testing.T) {
 	tests := []struct {

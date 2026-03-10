@@ -34,13 +34,14 @@ func Cmd(ctx context.Context, repo, command string, arguments ...string) (*exec.
 func Env(ctx context.Context, repo string) ([]string, error) {
 	viper := config.Viper(ctx)
 	branch, _ := LookupBranch(ctx, repo)
+	repoName := ResolveRepoName(repo)
 
 	// Start with the inherited environment and add repo-specific metadata
 	env := os.Environ()
-	env = append(env, fmt.Sprintf("REPO_NAME=%s", repo))
+	env = append(env, fmt.Sprintf("REPO_NAME=%s", repoName))
 	env = append(env, fmt.Sprintf("GIT_BRANCH=%s", branch))
-	env = append(env, fmt.Sprintf("GIT_DEFAULT_BRANCH=%s", CatalogBranchLookup(ctx, repo)))
-	env = append(env, fmt.Sprintf("GIT_PROJECT=%s", CatalogProjectLookup(ctx, repo)))
+	env = append(env, fmt.Sprintf("GIT_DEFAULT_BRANCH=%s", CatalogBranchLookup(ctx, repoName)))
+	env = append(env, fmt.Sprintf("GIT_PROJECT=%s", CatalogProjectLookup(ctx, repoName)))
 
 	// Add user-specified environment variables
 	envArgs := viper.GetStringSlice(config.CmdEnv)

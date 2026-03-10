@@ -51,14 +51,15 @@ func Get(ctx context.Context, ch output.Channel) error {
 	if err != nil {
 		return fmt.Errorf("failed to lookup branch for %s: %w", ch.Name(), err)
 	}
+	repoName := utils.ResolveRepoName(ch.Name())
 
 	// Get project from repository metadata in catalog, fall back to default
-	project := catalog.GetProjectForRepo(ctx, ch.Name())
+	project := catalog.GetProjectForRepo(ctx, repoName)
 	provider := scm.Get(ctx, viper.GetString(config.GitProvider), project)
 
-	pr, err := provider.GetPullRequest(ch.Name(), branch)
+	pr, err := provider.GetPullRequest(repoName, branch)
 	if err != nil {
-		return fmt.Errorf("failed to get pull request for %s: %w", ch.Name(), err)
+		return fmt.Errorf("failed to get pull request for %s: %w", repoName, err)
 	}
 
 	fmt.Fprintf(ch, "(PR #%d) %s %v\n", pr.Number, pr.Title, pr.Reviewers)
