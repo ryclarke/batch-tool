@@ -10,54 +10,47 @@ on:
     branches: [ "main" ]
 
 env:
-  GOLANG_VERSION: "1.25"
-  LINTER_VERSION: "v2.7"
+  LINTER_VERSION: "v2.11"
 
 jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v6
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
 
-    - name: Set up Go
-      uses: actions/setup-go@v6
-      with:
-        go-version: "${{ env.GOLANG_VERSION }}"
-
-    - name: Run linter checks
-      uses: golangci/golangci-lint-action@v7
-      with:
-        version: "${{ env.LINTER_VERSION }}"
-        args: --timeout=5m
+      - name: Run linter checks
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: "${{ env.LINTER_VERSION }}"
+          args: --timeout=5m
 
   build:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v6
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
 
-    - name: Set up Go
-      uses: actions/setup-go@v6
-      with:
-        go-version: "${{ env.GOLANG_VERSION }}"
-
-    - name: Verify that the application builds successfully
-      uses: goreleaser/goreleaser-action@v7
-      with:
-        version: '~> v2'
-        args: build --snapshot --clean --single-target
+      - name: Verify that the application builds successfully
+        uses: goreleaser/goreleaser-action@v7
+        with:
+          version: '~> v2'
+          args: build --snapshot --clean --single-target
 
   test:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v6
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
 
-    - name: Set up Go
-      uses: actions/setup-go@v6
-      with:
-        go-version: "${{ env.GOLANG_VERSION }}"
+      - name: Install Gotestsum
+        run: go install gotest.tools/gotestsum@latest
 
-    - name: Install Gotestsum
-      run: go install gotest.tools/gotestsum@latest
-
-    - name: Run unit tests and generate coverage report
-      run: make cover
+      - name: Run unit tests and generate coverage report
+        run: make cover

@@ -20,7 +20,7 @@ deps:
 	@echo "Installing required tools..."
 	go install gotest.tools/gotestsum@latest
 	go install github.com/goreleaser/goreleaser/v2@latest
-	go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.7
+	go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.11
 
 .PHONY: install
 install: ${GOPATH}/bin/batch-tool
