@@ -47,16 +47,16 @@ func (lg LabelGroup) String() string {
 	var setBuilder strings.Builder
 
 	if lg.Forced.Cardinality() > 0 {
-		setBuilder.WriteString(fmt.Sprintf("(%s) %s ", lg.Forced.String(), union))
+		fmt.Fprintf(&setBuilder, "(%s) %s ", lg.Forced.String(), union)
 		if lg.Excluded.Cardinality() > 0 {
 			setBuilder.WriteString("( ")
 		}
 	}
 
-	setBuilder.WriteString(fmt.Sprintf("(%s)", lg.Included.String()))
+	fmt.Fprintf(&setBuilder, "(%s)", lg.Included.String())
 
 	if lg.Excluded.Cardinality() > 0 {
-		setBuilder.WriteString(fmt.Sprintf(" %s (%s)", minus, lg.Excluded.String()))
+		fmt.Fprintf(&setBuilder, " %s (%s)", minus, lg.Excluded.String())
 		if lg.Forced.Cardinality() > 0 {
 			setBuilder.WriteString(" )")
 		}

@@ -1,4 +1,4 @@
-# $schema: https://golangci-lint.run/jsonschema/golangci.v2.7.jsonschema.json
+# $schema: https://golangci-lint.run/jsonschema/golangci.v2.11.jsonschema.json
 version: "2"
 
 run:
