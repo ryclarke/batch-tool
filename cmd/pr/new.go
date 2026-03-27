@@ -97,7 +97,7 @@ func New(ctx context.Context, ch output.Channel) error {
 		return err
 	}
 
-	fmt.Fprintf(ch, "New pull request (#%d) %s %v\n", pr.Number, pr.Branch, pr.Reviewers)
+	fmt.Fprint(ch, printPRInfo(pr, "New pull request", true))
 
 	return nil
 }

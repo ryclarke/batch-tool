@@ -256,6 +256,7 @@ func (b *Bitbucket) genPR(name, branch, baseBranch, title, description string, r
 }
 
 func parsePR(resp *prResp) *scm.PullRequest {
+	// TODO: expand to include missing fields from response
 	pr := &scm.PullRequest{
 		ID:          int(resp.ID),
 		Number:      int(resp.ID),

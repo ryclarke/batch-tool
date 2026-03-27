@@ -68,6 +68,10 @@ func (g *Github) UpdatePullRequest(repo, branch string, opts *scm.PROptions) (*s
 		return nil, err
 	}
 
+	if opts.Draft != nil {
+		return nil, fmt.Errorf("updating draft status is not currently supported by the GitHub provider")
+	}
+
 	req, changes := g.processChanges(opts)
 	if changes {
 		if pr, err = g.editPullRequest(repo, pr.GetNumber(), req); err != nil {
@@ -251,17 +255,35 @@ func (g *Github) processChanges(opts *scm.PROptions) (req *github.PullRequest, c
 
 func parsePR(resp *github.PullRequest) *scm.PullRequest {
 	pr := &scm.PullRequest{
-		ID:          int(resp.GetID()),
-		Number:      resp.GetNumber(),
-		Title:       resp.GetTitle(),
-		Description: resp.GetBody(),
-		Reviewers:   make([]string, 0, len(resp.RequestedReviewers)),
-		Draft:       resp.GetDraft(),
-		Mergeable:   resp.GetMergeable(),
+		ID:        int(resp.GetID()),
+		Number:    resp.GetNumber(),
+		Draft:     resp.GetDraft(),
+		Mergeable: resp.GetMergeable(),
+
+		Title:         resp.GetTitle(),
+		Description:   resp.GetBody(),
+		Reviewers:     make([]string, 0, len(resp.RequestedReviewers)),
+		TeamReviewers: make([]string, 0, len(resp.RequestedTeams)),
+	}
+
+	if resp.GetHead() != nil {
+		pr.Branch = resp.GetHead().GetRef()
+	}
+
+	if resp.GetBase() != nil {
+		pr.BaseBranch = resp.GetBase().GetRef()
+
+		if resp.GetBase().GetRepo() != nil {
+			pr.Repo = resp.GetBase().GetRepo().GetName()
+		}
 	}
 
 	for _, reviewer := range resp.RequestedReviewers {
 		pr.Reviewers = append(pr.Reviewers, reviewer.GetLogin())
+	}
+
+	for _, team := range resp.RequestedTeams {
+		pr.TeamReviewers = append(pr.TeamReviewers, team.GetSlug())
 	}
 
 	return pr
