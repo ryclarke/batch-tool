@@ -89,7 +89,7 @@ func Edit(ctx context.Context, ch output.Channel) error {
 		return err
 	}
 
-	fmt.Fprintf(ch, "Updated pull request (#%d) %s %v\n", pr.Number, pr.Title, pr.Reviewers)
+	fmt.Fprint(ch, printPRInfo(pr, "Updated pull request", false))
 
 	return nil
 }

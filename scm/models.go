@@ -16,8 +16,9 @@ type PullRequest struct {
 	Title         string   `json:"title"`
 	Description   string   `json:"description"`
 	Branch        string   `json:"branch"`
-	Repo          string   `json:"repo"`
-	Reviewers     []string `json:"reviewers"`
+	BaseBranch    string   `json:"base_branch,omitempty"`
+	Repo          string   `json:"repo,omitempty"`
+	Reviewers     []string `json:"reviewers,omitempty"`
 	TeamReviewers []string `json:"team_reviewers,omitempty"`
 
 	ID        int  `json:"id"`

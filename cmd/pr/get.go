@@ -62,10 +62,7 @@ func Get(ctx context.Context, ch output.Channel) error {
 		return fmt.Errorf("failed to get pull request for %s: %w", repoName, err)
 	}
 
-	fmt.Fprintf(ch, "(PR #%d) %s %v\n", pr.Number, pr.Title, pr.Reviewers)
-	if pr.Description != "" {
-		fmt.Fprintln(ch, pr.Description)
-	}
+	fmt.Fprint(ch, printPRInfo(pr, "", true))
 
 	return nil
 }
