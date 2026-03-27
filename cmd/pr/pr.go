@@ -2,6 +2,8 @@ package pr
 
 import (
 	"context"
+	"fmt"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -65,6 +67,7 @@ Branch Validation:
 			viper.BindPFlag(config.PrTitle, cmd.Flags().Lookup(prTitleFlag))
 			viper.BindPFlag(config.PrDescription, cmd.Flags().Lookup(prDescriptionFlag))
 			viper.BindPFlag(config.PrReviewers, cmd.Flags().Lookup(prReviewerFlag))
+			viper.BindPFlag(config.PrTeamReviewers, cmd.Flags().Lookup(prTeamReviewerFlag))
 
 			if err := utils.BindBoolFlags(cmd, config.PrDraft, prDraftFlag, prNoDraftFlag); err != nil {
 				return err
@@ -139,4 +142,39 @@ func buildPROptions(cmd *cobra.Command) {
 	}
 
 	viper.Set(config.PrOptions, opts)
+}
+
+func printPRInfo(pr *scm.PullRequest, header string, verbose bool) string {
+	var info strings.Builder
+
+	// print custom header message if provided
+	if header != "" {
+		fmt.Fprintf(&info, "%s ", header)
+	}
+
+	// print common metadata onto title line
+	if len(pr.TeamReviewers) > 0 {
+		fmt.Fprintf(&info, "(PR #%d) %s %v %v\n", pr.Number, pr.Title, pr.Reviewers, pr.TeamReviewers)
+	} else {
+		fmt.Fprintf(&info, "(PR #%d) %s %v\n", pr.Number, pr.Title, pr.Reviewers)
+	}
+
+	if verbose && (pr.Branch != "" || pr.BaseBranch != "") {
+		head, base := pr.Branch, pr.BaseBranch
+		if head == "" {
+			head = "???"
+		}
+		if base == "" {
+			base = "???"
+		}
+
+		fmt.Fprintf(&info, "Branch: %s → %s\n", head, base)
+	}
+
+	// print description if verbose and description is not empty
+	if verbose && pr.Description != "" {
+		fmt.Fprintf(&info, "Description:\n%s\n", pr.Description)
+	}
+
+	return info.String()
 }

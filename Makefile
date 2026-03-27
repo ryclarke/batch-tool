@@ -20,13 +20,13 @@ deps:
 	@echo "Installing required tools..."
 	go install gotest.tools/gotestsum@latest
 	go install github.com/goreleaser/goreleaser/v2@latest
-	go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.7.2
+	go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.7
 
 .PHONY: install
 install: ${GOPATH}/bin/batch-tool
 ${GOPATH}/bin/batch-tool: $(SOURCES)
 	@echo "Installing batch-tool to ${GOPATH}/bin"
-	@go install -ldflags "-s -w -X github.com/ryclarke/batch-tool/config.Version=$(shell git tag | tail -n1)"
+	@go install -ldflags "-s -w -X github.com/ryclarke/batch-tool/config.Version=$(shell git tag --sort=-v:refname | head -n1)"
 
 .PHONY: completions
 completions: ~/.local/share/bash-completion/completions/batch-tool
@@ -75,12 +75,12 @@ veryclean: clean
 
 .PHONY: .gotestsum
 .gotestsum:
-	@which gotestsum > /dev/null || (echo "Error: gotestsum is not installed. Please install it first: https://github.com/gotestyourself/gotestsum#install"; exit 1)
+	@command -v gotestsum > /dev/null || (echo "Error: gotestsum is not installed. Please install it first: https://github.com/gotestyourself/gotestsum#install"; exit 1)
 
 .PHONY: .goreleaser
 .goreleaser:
-	@which goreleaser > /dev/null || (echo "Error: goreleaser is not installed. Please install it first: https://goreleaser.com/install/"; exit 1)
+	@command -v goreleaser > /dev/null || (echo "Error: goreleaser is not installed. Please install it first: https://goreleaser.com/install/"; exit 1)
 
 .PHONY: .golangci-lint
 .golangci-lint:
-	@which golangci-lint > /dev/null || (echo "Error: golangci-lint is not installed. Please install it first: https://golangci-lint.run/docs/welcome/install/"; exit 1)
+	@command -v golangci-lint > /dev/null || (echo "Error: golangci-lint is not installed. Please install it first: https://golangci-lint.run/docs/welcome/install/"; exit 1)
