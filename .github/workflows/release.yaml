@@ -1,0 +1,32 @@
+name: Release
+permissions:
+  contents: write
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+env:
+  GOLANG_VERSION: "1.25"
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: "${{ env.GOLANG_VERSION }}"
+
+      - name: Perform release
+        uses: goreleaser/goreleaser-action@v7
+        with:
+          version: '~> v2'
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
