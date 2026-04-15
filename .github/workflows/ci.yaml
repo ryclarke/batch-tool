@@ -15,11 +15,23 @@ env:
 jobs:
   lint:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
       - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
+
+      - name: Install dependencies
+        env:
+          SEMVER_VERSION: "3.4.0"
+          YQ_VERSION: "v4.50.1"
+        run: |
+          curl -L https://raw.githubusercontent.com/fsaintjacques/semver-tool/${SEMVER_VERSION}/src/semver -o $HOME/go/bin/semver
+          go install github.com/mikefarah/yq/v4@${YQ_VERSION}
 
       - name: Run linter checks
         uses: golangci/golangci-lint-action@v9
