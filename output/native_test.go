@@ -270,3 +270,44 @@ func TestNativeLabels_PrintSet(t *testing.T) {
 		})
 	}
 }
+
+// TestNativeCatalog_Archived verifies the native catalog renderer appends
+// an "(archived)" indicator for archived repositories.
+func TestNativeCatalog_Archived(t *testing.T) {
+	ctx := loadFixture(t)
+
+	catalog.Catalog = map[string]scm.Repository{
+		"active-repo": {
+			Name:          "active-repo",
+			Description:   "Active repo",
+			Project:       "test-project",
+			DefaultBranch: "main",
+			Public:        true,
+		},
+		"archived-repo": {
+			Name:          "archived-repo",
+			Description:   "Archived repo",
+			Project:       "test-project",
+			DefaultBranch: "main",
+			Public:        false,
+			Archived:      true,
+		},
+	}
+
+	var buf bytes.Buffer
+	cmd := fakeCmd(t, ctx, &buf)
+	output.NativeCatalog(cmd)
+
+	out := buf.String()
+
+	testhelper.AssertContains(t, out, []string{
+		"## active-repo",
+		"## archived-repo",
+		"Visibility: public",
+		"Visibility: private (archived)",
+	})
+
+	if bytes.Contains([]byte(out), []byte("Visibility: public (archived)")) {
+		t.Error("Did not expect active-repo to be marked (archived)")
+	}
+}

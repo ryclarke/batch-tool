@@ -2,6 +2,7 @@ package output
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -254,6 +255,7 @@ func TestRepoWithMetadata(t *testing.T) {
 		description: "Test description",
 		labels:      []string{"label1", "label2"},
 		isPublic:    true,
+		isArchived:  true,
 	}
 
 	if repo.name != "test-repo" {
@@ -268,7 +270,97 @@ func TestRepoWithMetadata(t *testing.T) {
 		t.Error("Expected isPublic to be true")
 	}
 
+	if !repo.isArchived {
+		t.Error("Expected isArchived to be true")
+	}
+
 	if len(repo.labels) != 2 {
 		t.Errorf("Expected 2 labels, got %d", len(repo.labels))
+	}
+}
+
+// TestNewCatalogModelArchived verifies the archived flag is propagated from the
+// catalog into the rendered model metadata.
+func TestNewCatalogModelArchived(t *testing.T) {
+	ctx := loadFixture(t)
+
+	catalog.Catalog = map[string]scm.Repository{
+		"active-repo": {
+			Name:          "active-repo",
+			Project:       "test-project",
+			DefaultBranch: "main",
+			Public:        true,
+		},
+		"archived-repo": {
+			Name:          "archived-repo",
+			Project:       "test-project",
+			DefaultBranch: "main",
+			Public:        true,
+			Archived:      true,
+		},
+	}
+
+	m := newCatalogModel(ctx)
+
+	got := map[string]bool{}
+	for _, r := range m.repos {
+		got[r.name] = r.isArchived
+	}
+	if got["active-repo"] {
+		t.Error("Expected active-repo isArchived=false")
+	}
+	if !got["archived-repo"] {
+		t.Error("Expected archived-repo isArchived=true")
+	}
+}
+
+// TestCatalogModelBuildContentArchived verifies the rendered catalog content
+// includes the "(archived)" badge for archived repositories.
+func TestCatalogModelBuildContentArchived(t *testing.T) {
+	ctx := loadFixture(t)
+
+	catalog.Catalog = map[string]scm.Repository{
+		"archived-repo": {
+			Name:          "archived-repo",
+			Description:   "An archived test repository",
+			Project:       "test-project",
+			DefaultBranch: "main",
+			Public:        true,
+			Archived:      true,
+			Labels:        []string{"legacy"},
+		},
+	}
+
+	m := newCatalogModel(ctx)
+	m.width = 100
+
+	content := m.buildContent()
+
+	if !strings.Contains(content, "archived-repo") {
+		t.Error("Expected content to contain 'archived-repo'")
+	}
+	if !strings.Contains(content, "(archived)") {
+		t.Error("Expected content to contain '(archived)' badge")
+	}
+	if !strings.Contains(content, "An archived test repository") {
+		t.Error("Expected content to contain repo description")
+	}
+}
+
+// TestCatalogStylesArchived verifies the archived styles are initialized
+// with the muted Dracula comment color.
+func TestCatalogStylesArchived(t *testing.T) {
+	styles := newCatalogStyles(100)
+
+	if got := styles.archivedRepo.GetForeground(); got == nil {
+		t.Error("Expected archivedRepo style to have a foreground color set")
+	} else if fmt.Sprint(got) != colorComment {
+		t.Errorf("Expected archivedRepo foreground %q, got %q", colorComment, got)
+	}
+
+	if got := styles.archivedDim.GetForeground(); got == nil {
+		t.Error("Expected archivedDim style to have a foreground color set")
+	} else if fmt.Sprint(got) != colorComment {
+		t.Errorf("Expected archivedDim foreground %q, got %q", colorComment, got)
 	}
 }

@@ -6,6 +6,7 @@ type Repository struct {
 	Name          string   `json:"name"`
 	Description   string   `json:"description"`
 	Public        bool     `json:"public"`
+	Archived      bool     `json:"archived,omitempty"`
 	Project       string   `json:"project"`
 	DefaultBranch string   `json:"default_branch"`
 	Labels        []string `json:"labels,omitempty"`

@@ -1926,3 +1926,110 @@ func TestFlushTTL(t *testing.T) {
 		t.Error("Expected to refetch with flush despite valid cache")
 	}
 }
+
+// TestRepositoryListWithArchived verifies that archived repositories are filtered
+// out of label/topic-based selection by default and can be opted in via config or
+// the forced-include token.
+func TestRepositoryListWithArchived(t *testing.T) {
+	ctx := loadFixture(t)
+	viper := config.Viper(ctx)
+
+	// Disable the unwanted-label filter to keep the matrix focused on archived behavior.
+	viper.Set(config.SkipUnwanted, false)
+
+	tests := []struct {
+		name          string
+		skipArchived  bool
+		args          []string
+		wantRepos     []string
+		unwantedRepos []string
+	}{
+		{
+			name:          "label selector excludes archived when flag true",
+			skipArchived:  true,
+			args:          []string{"~all"},
+			wantRepos:     []string{"web-app", "api-server"},
+			unwantedRepos: []string{"old-app", "legacy-app"},
+		},
+		{
+			name:         "label selector includes archived when flag false",
+			skipArchived: false,
+			args:         []string{"~all"},
+			wantRepos:    []string{"web-app", "api-server", "old-app", "legacy-app"},
+		},
+		{
+			name:          "forced selector overrides archived filter",
+			skipArchived:  true,
+			args:          []string{"~all", "+old-app"},
+			wantRepos:     []string{"web-app", "api-server", "old-app"},
+			unwantedRepos: []string{"legacy-app"},
+		},
+		{
+			name:          "explicit unforced name still filtered when archived",
+			skipArchived:  true,
+			args:          []string{"old-app"},
+			wantRepos:     []string{},
+			unwantedRepos: []string{"old-app"},
+		},
+		{
+			name:         "explicit unforced name included when flag false",
+			skipArchived: false,
+			args:         []string{"old-app"},
+			wantRepos:    []string{"old-app"},
+		},
+		{
+			name:          "non-archived repos unaffected",
+			skipArchived:  true,
+			args:          []string{"~frontend"},
+			wantRepos:     []string{"web-app"},
+			unwantedRepos: []string{"old-app"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			viper.Set(config.SkipArchived, tt.skipArchived)
+
+			Labels = map[string]mapset.Set[string]{
+				"all":      mapset.NewSet("web-app", "api-server", "old-app", "legacy-app"),
+				"frontend": mapset.NewSet("web-app"),
+			}
+			Catalog = map[string]scm.Repository{
+				"web-app":    {Name: "web-app"},
+				"api-server": {Name: "api-server"},
+				"old-app":    {Name: "old-app", Archived: true},
+				"legacy-app": {Name: "legacy-app", Archived: true},
+			}
+
+			repoList := RepositoryList(ctx, tt.args...)
+			repos := repoList.ToSlice()
+
+			if len(tt.wantRepos) > 0 {
+				testhelper.AssertContains(t, repos, tt.wantRepos)
+			}
+			if len(tt.unwantedRepos) > 0 {
+				testhelper.AssertNotContains(t, repos, tt.unwantedRepos)
+			}
+			if len(tt.wantRepos) == 0 && len(repos) != 0 {
+				t.Errorf("Expected empty result, got %v", repos)
+			}
+		})
+	}
+}
+
+func TestArchivedRepos(t *testing.T) {
+	Catalog = map[string]scm.Repository{
+		"a": {Name: "a"},
+		"b": {Name: "b", Archived: true},
+		"c": {Name: "c", Archived: true},
+		"d": {Name: "d"},
+	}
+
+	got := archivedRepos()
+	if got.Cardinality() != 2 {
+		t.Errorf("Expected 2 archived repos, got %d", got.Cardinality())
+	}
+	if !got.Contains("b") || !got.Contains("c") {
+		t.Errorf("Expected archived set to contain b and c, got %v", got.ToSlice())
+	}
+}

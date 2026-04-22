@@ -164,8 +164,23 @@ func RepositoryList(ctx context.Context, filters ...string) mapset.Set[string] {
 		}
 	}
 
+	// If configured to skip archived repos, add them to the exclude set
+	if viper.GetBool(config.SkipArchived) {
+		excludeSet = excludeSet.Union(archivedRepos())
+	}
+
 	// Final set is (forced ∪ (include \ exclude)) - forced repos and matched repos which aren't excluded
 	return forcedSet.Union(includeSet.Difference(excludeSet))
+}
+
+func archivedRepos() mapset.Set[string] {
+	archived := mapset.NewSet[string]()
+	for name, repo := range Catalog {
+		if repo.Archived {
+			archived.Add(name)
+		}
+	}
+	return archived
 }
 
 func initRepositoryCatalog(ctx context.Context, flush bool) error {

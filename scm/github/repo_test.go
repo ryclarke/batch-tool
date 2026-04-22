@@ -19,6 +19,14 @@ func mockRepoResponse(name, description string, private bool, defaultBranch stri
 	}
 }
 
+// mockArchivedRepoResponse creates a GitHub repository API response with the
+// archived flag set, allowing tests to verify archived-aware mapping.
+func mockArchivedRepoResponse(name, description string, private bool, defaultBranch string, topics []string, archived bool) map[string]interface{} {
+	resp := mockRepoResponse(name, description, private, defaultBranch, topics)
+	resp["archived"] = archived
+	return resp
+}
+
 func TestListRepositories_Organization(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Verify it's requesting org repos
@@ -72,6 +80,41 @@ func TestListRepositories_Organization(t *testing.T) {
 	// Verify third repo
 	if repos[2].DefaultBranch != "develop" {
 		t.Errorf("Expected default branch 'develop', got '%s'", repos[2].DefaultBranch)
+	}
+
+	// Default Archived should be false when the API response omits it
+	for _, r := range repos {
+		if r.Archived {
+			t.Errorf("Expected Archived=false for repo %q when not set, got true", r.Name)
+		}
+	}
+}
+
+func TestListRepositories_Archived(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		repos := []map[string]interface{}{
+			mockArchivedRepoResponse("active-repo", "Active repo", false, "main", nil, false),
+			mockArchivedRepoResponse("archived-repo", "Old repo", false, "main", nil, true),
+		}
+		json.NewEncoder(w).Encode(repos)
+	}))
+	defer server.Close()
+
+	g := newTestGithub(t, server)
+	repos, err := g.ListRepositories()
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+
+	if len(repos) != 2 {
+		t.Fatalf("Expected 2 repositories, got %d", len(repos))
+	}
+
+	if repos[0].Archived {
+		t.Errorf("Expected active-repo Archived=false, got true")
+	}
+	if !repos[1].Archived {
+		t.Errorf("Expected archived-repo Archived=true, got false")
 	}
 }
 

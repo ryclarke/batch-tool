@@ -494,6 +494,62 @@ func TestAddRepository(t *testing.T) {
 	}
 }
 
+func TestArchivedFieldPropagation(t *testing.T) {
+	ctx := loadFixture(t)
+
+	archived := &scm.Repository{
+		Name:          "archived-repo",
+		Project:       "test-project",
+		DefaultBranch: "main",
+		Archived:      true,
+	}
+	active := &scm.Repository{
+		Name:          "active-repo",
+		Project:       "test-project",
+		DefaultBranch: "main",
+		Archived:      false,
+	}
+
+	// NewFake should preserve Archived through its deep copy.
+	f := NewFake("test-project", []*scm.Repository{archived, active})
+	repos, err := f.ListRepositories()
+	if err != nil {
+		t.Fatalf("Failed to list repositories: %v", err)
+	}
+
+	got := map[string]bool{}
+	for _, r := range repos {
+		got[r.Name] = r.Archived
+	}
+	if !got["archived-repo"] {
+		t.Error("Expected archived-repo to report Archived=true after NewFake/ListRepositories")
+	}
+	if got["active-repo"] {
+		t.Error("Expected active-repo to report Archived=false after NewFake/ListRepositories")
+	}
+
+	// AddRepository should also preserve Archived.
+	f2 := New(ctx, "test-project").(*Fake)
+	f2.AddRepository(archived)
+	if !f2.Repositories[0].Archived {
+		t.Error("Expected AddRepository to preserve Archived=true")
+	}
+
+	// GetRepositoryByName should return the Archived flag on its copy.
+	got2 := f.GetRepositoryByName("archived-repo")
+	if got2 == nil || !got2.Archived {
+		t.Error("Expected GetRepositoryByName to return Archived=true for archived-repo")
+	}
+
+	// GetRepositoriesByLabel should also preserve Archived.
+	archived.Labels = []string{"legacy"}
+	f3 := NewFake("test-project", []*scm.Repository{archived})
+	matched := f3.GetRepositoriesByLabel("legacy")
+	if len(matched) != 1 || !matched[0].Archived {
+		t.Error("Expected GetRepositoriesByLabel to preserve Archived=true")
+	}
+}
+
 func TestGetRepositoryByName(t *testing.T) {
 	testRepos := CreateTestRepositories("test-project")
 	f := NewFake("test-project", testRepos)

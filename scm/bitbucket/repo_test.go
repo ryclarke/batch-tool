@@ -114,6 +114,13 @@ func TestListRepositories(t *testing.T) {
 	if len(repos[1].Labels) != 1 {
 		t.Errorf("Expected 1 label, got %d", len(repos[1].Labels))
 	}
+
+	// BitBucket has no archived concept; all returned repos must report Archived=false.
+	for _, r := range repos {
+		if r.Archived {
+			t.Errorf("Expected Archived=false for BitBucket repo %q, got true", r.Name)
+		}
+	}
 }
 
 func TestListRepositories_LargeLimit(t *testing.T) {

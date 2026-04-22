@@ -56,10 +56,14 @@ func NativeCatalog(cmd *cobra.Command) {
 
 		fmt.Fprintf(cmd.OutOrStdout(), "   Project: %s | Branch: %s | ", repo.Project, repo.DefaultBranch)
 		if repo.Public {
-			fmt.Fprintf(cmd.OutOrStdout(), "Visibility: public\n")
+			fmt.Fprintf(cmd.OutOrStdout(), "Visibility: public")
 		} else {
-			fmt.Fprintf(cmd.OutOrStdout(), "Visibility: private\n")
+			fmt.Fprintf(cmd.OutOrStdout(), "Visibility: private")
 		}
+		if repo.Archived {
+			fmt.Fprintf(cmd.OutOrStdout(), " (archived)")
+		}
+		fmt.Fprintln(cmd.OutOrStdout())
 
 		if len(repo.Labels) > 0 {
 			labels := repo.Labels

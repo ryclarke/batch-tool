@@ -168,13 +168,15 @@ type catalogStyles struct {
 	repoName    lipgloss.Style
 	description lipgloss.Style
 
-	metaLabel   lipgloss.Style
-	metaValue   lipgloss.Style
-	publicRepo  lipgloss.Style
-	privateRepo lipgloss.Style
-	label       lipgloss.Style
-	separator   lipgloss.Style
-	help        lipgloss.Style
+	metaLabel    lipgloss.Style
+	metaValue    lipgloss.Style
+	publicRepo   lipgloss.Style
+	privateRepo  lipgloss.Style
+	label        lipgloss.Style
+	separator    lipgloss.Style
+	help         lipgloss.Style
+	archivedRepo lipgloss.Style
+	archivedDim  lipgloss.Style
 }
 
 func newCatalogStyles(width int) catalogStyles {
@@ -185,13 +187,15 @@ func newCatalogStyles(width int) catalogStyles {
 		repoName:    color(colorGreen).Bold(true),
 		description: wrapColor(colorForeground, width),
 
-		metaLabel:   color(colorComment),
-		metaValue:   color(colorPurple),
-		publicRepo:  color(colorPink),
-		privateRepo: color(colorPink),
-		label:       color(colorYellow),
-		separator:   color(colorCurrentLine),
-		help:        color(colorComment),
+		metaLabel:    color(colorComment),
+		metaValue:    color(colorPurple),
+		publicRepo:   color(colorPink),
+		privateRepo:  color(colorPink),
+		label:        color(colorYellow),
+		separator:    color(colorCurrentLine),
+		help:         color(colorComment),
+		archivedRepo: color(colorComment).Bold(true).Italic(true),
+		archivedDim:  wrapColor(colorComment, width).Italic(true),
 	}
 }
 
