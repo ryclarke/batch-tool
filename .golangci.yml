@@ -16,10 +16,13 @@ linters:
 
     # Style
     - revive          # Fast, configurable, extensible, flexible, and beautiful linter
+    - gocritic        # Comprehensive opinionated checks for style, performance, and bugs
 
     # Code quality
     - dupl            # Code clone detection
     - misspell        # Spell checker for comments
+    - nilnil          # Check for simultaneous return of nil error and an invalid value
+    - noctx           # Detect HTTP requests sent without a context.Context
     - unconvert       # Remove unnecessary type conversions
     - unparam         # Report unused function parameters
     - whitespace      # Detection of leading/trailing whitespace
@@ -30,6 +33,9 @@ linters:
 
     # Performance
     - prealloc        # Find slice declarations that could potentially be pre-allocated
+
+    # Security
+    - gosec           # Inspect source code for security problems
 
     # Architecture
     - depguard        # Enforce import restrictions
@@ -43,6 +49,15 @@ linters:
           deny:
             - pkg: "github.com/spf13/viper"
               desc: "viper should only be imported in the config package; use config.Viper(ctx) instead"
+
+    gosec:
+      excludes:
+        # G104 (unhandled errors) is fully covered by errcheck, which has curated
+        # exclusions for known-safe call sites (BindPFlag, MarkHidden, Write*, etc.).
+        - G104
+        # G101 (hardcoded credentials) flags TokenLabel/TokenSkip/TokenForced
+        # in config/configurations.go — these are filter delimiters, not secrets.
+        - G101
 
   exclusions:
     generated: strict
@@ -58,6 +73,8 @@ linters:
         linters:
           - dupl
           - errcheck
+          - gosec
+          - gocritic
 
       # Exclude unwanted revive style rules from test files
       - path: _test\.go|utils/testing/.*\.go
@@ -81,6 +98,27 @@ linters:
       - text: "Error return value of.*(Write(String)?|Fprint(f|ln)?|Close|RemoveAll|Set|MarkHidden|BindPFlag).* is not checked"
         linters:
           - errcheck
+
+      # gosec: subprocess execution is intrinsic to batch-tool's purpose
+      - text: "G204:"
+        linters:
+          - gosec
+
+      # gosec: file inclusion via variable is required for user-provided config & repo paths
+      - text: "G304:"
+        linters:
+          - gosec
+
+      # gosec G704: bitbucket SCM client.Do executes user-configured SCM API URLs by design.
+      - path: scm/bitbucket/provider\.go
+        text: "G704:"
+        linters:
+          - gosec
+
+      # dupl: catalog and labels TUI Update methods follow the same bubbletea pattern by design.
+      - path: output/tui_(catalog|labels)\.go
+        linters:
+          - dupl
 
 formatters:
   enable:

@@ -90,22 +90,23 @@ func ParseLabels(ctx context.Context, filters ...string) (LabelGroup, []string) 
 		Excluded: Label{mapset.NewSet[string]()},
 	}
 
-	// Exclude unwanted labels by default
+	// If configured to skip unwanted labels, add them to the excluded list
 	if viper.GetBool(config.SkipUnwanted) {
-		for _, unwanted := range viper.GetStringSlice(config.UnwantedLabels) {
-			filters = append(filters, unwanted+viper.GetString(config.TokenSkip)+viper.GetString(config.TokenLabel))
-		}
+		labels.Excluded.Append(viper.GetStringSlice(config.UnwantedLabels)...)
 	}
 
 	for _, filter := range filters {
 		// standardize formatting of provided filters
 		filterName := cleanName(ctx, filter)
 
-		if strings.Contains(filter, viper.GetString(config.TokenForced)) {
-			labels.Forced.Add(filterName)
-		} else if strings.Contains(filter, viper.GetString(config.TokenSkip)) {
+		switch {
+		case strings.Contains(filter, viper.GetString(config.TokenSkip)):
 			labels.Excluded.Add(filterName)
-		} else {
+
+		case strings.Contains(filter, viper.GetString(config.TokenForced)):
+			labels.Forced.Add(filterName)
+
+		default:
 			labels.Included.Add(filterName)
 		}
 	}
@@ -125,7 +126,7 @@ func cleanName(ctx context.Context, filter string) string {
 	name := utils.CleanFilter(ctx, filter)
 
 	if strings.Contains(filter, viper.GetString(config.TokenLabel)) {
-		name = name + viper.GetString(config.TokenLabel)
+		name += viper.GetString(config.TokenLabel)
 	}
 
 	return name

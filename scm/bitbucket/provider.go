@@ -85,7 +85,7 @@ func (b *Bitbucket) url(repo string, queryParams url.Values, path ...string) str
 
 // convenience function to perform a GET request and unmarshal the response into the specified type.
 func get[T any](b *Bitbucket, path string) (*T, error) {
-	req, err := http.NewRequest(http.MethodGet, path, nil)
+	req, err := http.NewRequestWithContext(b.ctx, http.MethodGet, path, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}

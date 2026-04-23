@@ -135,3 +135,16 @@ func TestGetHandlerIntegration(t *testing.T) {
 		t.Fatal("getDefaultHandler returned nil with bubbletea config")
 	}
 }
+
+// TestGetCatalogHandler verifies catalog handler dispatch by output style.
+func TestGetCatalogHandler(t *testing.T) {
+	ctx := loadFixture(t)
+	viper := config.Viper(ctx)
+
+	for _, style := range []string{output.Native, output.TUI, "unknown"} {
+		viper.Set(config.OutputStyle, style)
+		if h := output.GetCatalogHandler(ctx); h == nil {
+			t.Errorf("GetCatalogHandler(%q) returned nil", style)
+		}
+	}
+}

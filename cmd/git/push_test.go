@@ -83,7 +83,7 @@ func TestPushCommandRun(t *testing.T) {
 			testViper := config.Viper(testCtx)
 
 			if tt.force {
-				testViper.Set(config.GitCommitAmend, true)
+				testViper.Set(config.GitPushForce, true)
 			}
 
 			cmd := addPushCmd()
@@ -121,7 +121,7 @@ func TestPushCommandRunWithForce(t *testing.T) {
 	testViper := config.Viper(testCtx)
 
 	// Set force flag
-	testViper.Set(config.GitCommitAmend, true)
+	testViper.Set(config.GitPushForce, true)
 
 	cmd2 := addPushCmd()
 

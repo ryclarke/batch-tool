@@ -4,6 +4,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"math"
 	"os"
 	"runtime"
 	"strings"
@@ -175,7 +176,8 @@ func setTerminalWait(cmd *cobra.Command) error {
 
 		// Auto-detect environment type if no flags are explicitly set
 		// This prevents hanging in pipes, redirects, and CI/CD environments
-		if !term.IsTerminal(int(os.Stdout.Fd())) {
+		stdoutFd := os.Stdout.Fd()
+		if stdoutFd <= math.MaxInt && !term.IsTerminal(int(stdoutFd)) { //nolint:gosec // bounds checked above
 			viper.Set(config.WaitOnExit, false)
 		}
 	}
@@ -290,7 +292,7 @@ Cache Management:
 		},
 	}
 
-	cmd.Flags().BoolP(catalogFlushFlag, "f", false, "Force refresh of catalog cache")
+	cmd.Flags().BoolP(catalogFlushFlag, "f", false, "force refresh of catalog cache")
 
 	return cmd
 }

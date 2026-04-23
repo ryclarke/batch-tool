@@ -934,21 +934,24 @@ func TestHandleKeyPressQ(t *testing.T) {
 	m.ready = true
 	m.viewport = viewport.New(80, 24)
 
-	// Test 'q' when not done - should not quit
+	// 'q' should always cancel & quit, even mid-run.
 	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}}
 	newModel, _ := m.handleKeyPress(msg)
 	m = newModel.(*model)
 
-	if m.quitting {
-		t.Error("Expected 'q' to not quit when processing is not done")
+	if !m.quitting {
+		t.Error("Expected 'q' to quit immediately, even before completion")
 	}
 
-	// Test 'q' when done - should quit
-	m.allDone = true
-	newModel, _ = m.handleKeyPress(msg)
-	m = newModel.(*model)
+	// 'q' should also quit cleanly when all processing is done.
+	m2 := initialModel(cmd, channels, testCancelFunc)
+	m2.ready = true
+	m2.viewport = viewport.New(80, 24)
+	m2.allDone = true
+	newModel, _ = m2.handleKeyPress(msg)
+	m2 = newModel.(*model)
 
-	if !m.quitting {
+	if !m2.quitting {
 		t.Error("Expected 'q' to quit when all processing is done")
 	}
 }

@@ -42,7 +42,7 @@ func (b *Bitbucket) OpenPullRequest(repo, branch string, opts *scm.PROptions) (*
 
 	payload := b.genPR(repo, branch, opts.BaseBranch, opts.Title, opts.Description, opts.Reviewers)
 
-	request, err := http.NewRequest(http.MethodPost, b.url(repo, nil, "pull-requests"), strings.NewReader(payload))
+	request, err := http.NewRequestWithContext(b.ctx, http.MethodPost, b.url(repo, nil, "pull-requests"), strings.NewReader(payload))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
@@ -102,7 +102,7 @@ func (b *Bitbucket) UpdatePullRequest(repo, branch string, opts *scm.PROptions) 
 		return nil, fmt.Errorf("failed to marshal pull request payload: %w", err)
 	}
 
-	request, err := http.NewRequest(http.MethodPut, b.url(repo, nil, "pull-requests", strconv.Itoa(int(pr.ID))), strings.NewReader(string(payload)))
+	request, err := http.NewRequestWithContext(b.ctx, http.MethodPut, b.url(repo, nil, "pull-requests", strconv.Itoa(int(pr.ID))), strings.NewReader(string(payload)))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
@@ -124,7 +124,7 @@ func (b *Bitbucket) MergePullRequest(repo, branch string, _ *scm.PRMergeOptions)
 
 	queryParams := url.Values{}
 	queryParams.Set("version", strconv.Itoa(pr.Version))
-	req, err := http.NewRequest(http.MethodPost, b.url(repo, queryParams, "pull-requests", strconv.Itoa(pr.ID), "merge"), nil)
+	req, err := http.NewRequestWithContext(b.ctx, http.MethodPost, b.url(repo, queryParams, "pull-requests", strconv.Itoa(pr.ID), "merge"), nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
@@ -189,6 +189,7 @@ type prRefRepoProj struct {
 	Key string `json:"key"`
 }
 
+// GetReviewers returns the configured default reviewers for the pull request.
 func (pr *prResp) GetReviewers() []string {
 	output := make([]string, len(pr.Reviewers))
 
@@ -199,6 +200,7 @@ func (pr *prResp) GetReviewers() []string {
 	return output
 }
 
+// AddReviewers appends the given reviewer usernames to the pull request.
 func (pr *prResp) AddReviewers(reviewers []string) {
 	for _, rev := range reviewers {
 		pr.Reviewers = append(pr.Reviewers, prRev{
@@ -207,6 +209,7 @@ func (pr *prResp) AddReviewers(reviewers []string) {
 	}
 }
 
+// SetReviewers replaces the pull request's reviewers with the given usernames.
 func (pr *prResp) SetReviewers(reviewers []string) {
 	pr.Reviewers = make([]prRev, 0, len(reviewers))
 	pr.AddReviewers(reviewers)

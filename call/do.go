@@ -22,7 +22,14 @@ import (
 // Output formatting can be fully customized by optionally providing one or more OutputHandler functions. Each
 // repository will also be cloned first if it is missing from the local file system.
 func Do(cmd *cobra.Command, repos []string, callFunc Func, handler ...output.Handler) {
-	ctx := cmd.Context()
+	// Establish a single cancellable context for the entire batch run. The cancel function is
+	// attached to the context as a value so that output handlers (e.g. the TUI) can trigger
+	// cancellation in response to user input, propagating SIGKILL to all in-flight subprocesses.
+	ctx, cancel := config.WithCancel(cmd.Context())
+	defer cancel()
+
+	cmd.SetContext(ctx)
+
 	viper := config.Viper(ctx)
 	repos = processArguments(ctx, repos)
 
@@ -79,7 +86,7 @@ func runCallFunc(ctx context.Context, ch output.Channel, callFunc Func) {
 		repoDir := utils.RepoPath(ctx, ch.Name())
 		if _, err := os.Stat(repoDir); os.IsNotExist(err) {
 			// Create the directory if it doesn't exist yet
-			if err := os.MkdirAll(repoDir, 0755); err != nil {
+			if err := os.MkdirAll(repoDir, 0o750); err != nil {
 				ch.WriteError(err)
 				return
 			}

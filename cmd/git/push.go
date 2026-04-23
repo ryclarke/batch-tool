@@ -46,7 +46,7 @@ especially on shared branches.`,
 		ValidArgsFunction: catalog.CompletionFunc(),
 		PreRun: func(cmd *cobra.Command, _ []string) {
 			viper := config.Viper(cmd.Context())
-			viper.BindPFlag(config.GitCommitAmend, cmd.Flags().Lookup(forceFlag))
+			viper.BindPFlag(config.GitPushForce, cmd.Flags().Lookup(forceFlag))
 		},
 		Run: func(cmd *cobra.Command, args []string) {
 			call.Do(cmd, args, call.Wrap(ValidateBranch(), Push))
@@ -67,7 +67,7 @@ func Push(ctx context.Context, ch output.Channel) error {
 	}
 
 	args := []string{"push", "-u", "origin", branch}
-	if viper.GetBool(config.GitCommitAmend) {
+	if viper.GetBool(config.GitPushForce) {
 		args = append(args, "-f")
 	}
 

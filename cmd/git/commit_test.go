@@ -17,8 +17,8 @@ func TestAddCommitCmd(t *testing.T) {
 		t.Fatal("addCommitCmd() returned nil")
 	}
 
-	if cmd.Use != "commit {-m <message>|-a [-m <message>]} [--push] <repository>..." {
-		t.Errorf("Expected Use to be 'commit {-m <message>|-a [-m <message>]} [--push] <repository>...', got %s", cmd.Use)
+	if cmd.Use != "commit {-m <message>|--amend [-m <message>]} [--push] <repository>..." {
+		t.Errorf("Expected Use to be 'commit {-m <message>|--amend [-m <message>]} [--push] <repository>...', got %s", cmd.Use)
 	}
 
 	if cmd.Short == "" {
@@ -84,6 +84,28 @@ func TestCommitCmdPreRunE(t *testing.T) {
 	err := cmd.PreRunE(cmd, []string{})
 	if err != nil {
 		t.Errorf("Expected no error when amend flag is set, got %v", err)
+	}
+}
+
+func TestCommitCmdPreRunEAmendPushSetsForce(t *testing.T) {
+	cmd := addCommitCmd()
+	ctx := loadFixture(t)
+	cmd.SetContext(ctx)
+
+	viper := config.Viper(ctx)
+	viper.Set(config.GitPushForce, false)
+	viper.Set(config.GitCommitPush, true)
+
+	if err := cmd.Flags().Set("amend", "true"); err != nil {
+		t.Fatalf("Failed setting amend flag: %v", err)
+	}
+
+	if err := cmd.PreRunE(cmd, []string{}); err != nil {
+		t.Fatalf("Expected no error when amend+push are set, got %v", err)
+	}
+
+	if !viper.GetBool(config.GitPushForce) {
+		t.Fatal("Expected GitPushForce to be true when both amend and push are true")
 	}
 }
 

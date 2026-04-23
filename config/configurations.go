@@ -75,6 +75,7 @@ const (
 	GitCommitMessage = "git.args.commit.message"
 	GitCommitAmend   = "git.args.commit.amend"
 	GitCommitPush    = "git.args.commit.push"
+	GitPushForce     = "git.args.push.force"
 	GitStashAllowAny = "git.args.stash.allow-any"
 
 	// pr
@@ -193,13 +194,12 @@ func defaultGitdir() string {
 		if path, err := cmd.Output(); err == nil {
 			dir = strings.TrimSpace(string(path))
 		} else {
-			// If that fails, use the current working directory.
-			dir, err = os.Getwd()
-			if err != nil {
-				panic(fmt.Sprintf("Failed to determine current working directory: %v", err))
+			// As a last resort, fall back to using the current working directory.
+			if cwd, err := os.Getwd(); err == nil {
+				return cwd
 			}
 
-			return dir
+			return "."
 		}
 	}
 

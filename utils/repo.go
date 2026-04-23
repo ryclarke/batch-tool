@@ -108,7 +108,7 @@ func LookupBranch(ctx context.Context, name string) (string, error) {
 	branch := viper.GetString(config.Branch)
 	if branch == "" {
 		// don't use Cmd helper because of infinite recursion
-		cmd := exec.Command("git", "rev-parse", "--abbrev-ref", "HEAD")
+		cmd := exec.CommandContext(ctx, "git", "rev-parse", "--abbrev-ref", "HEAD")
 		cmd.Dir = RepoPath(ctx, name)
 
 		output, err := cmd.Output()

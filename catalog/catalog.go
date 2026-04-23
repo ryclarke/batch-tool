@@ -113,41 +113,40 @@ func GetBranchForRepo(ctx context.Context, repoName string) string {
 
 // RepositoryList returns the set of repository names matching the given filters.
 func RepositoryList(ctx context.Context, filters ...string) mapset.Set[string] {
-	viper := config.Viper(ctx)
-
 	// Parse filters into include/exclude/forced sets for set-theory operations
 	includeSet, excludeSet, forcedSet := parseLabelFilters(ctx, filters...)
-
-	// If configured to skip unwanted labels, expand each label to its repos and exclude them
-	if viper.GetBool(config.SkipUnwanted) {
-		for _, label := range viper.GetStringSlice(config.UnwantedLabels) {
-			addFilterToSet(ctx, viper.GetString(config.TokenLabel)+label, excludeSet)
-		}
-	}
-
-	// If configured to skip archived repos, add them to the exclude set
-	if viper.GetBool(config.SkipArchived) {
-		excludeSet.Append(archivedRepos()...)
-	}
 
 	// Final set is (forced ∪ (include \ exclude)) - forced repos and matched repos which aren't excluded
 	return forcedSet.Union(includeSet.Difference(excludeSet))
 }
 
 func parseLabelFilters(ctx context.Context, filters ...string) (include, exclude, forced mapset.Set[string]) {
+	viper := config.Viper(ctx)
 	include, exclude, forced = mapset.NewSet[string](), mapset.NewSet[string](), mapset.NewSet[string]()
 
 	for _, filter := range filters {
 		switch {
-		case strings.Contains(filter, config.Viper(ctx).GetString(config.TokenSkip)):
+		case strings.Contains(filter, viper.GetString(config.TokenSkip)):
 			addFilterToSet(ctx, filter, exclude)
 
-		case strings.Contains(filter, config.Viper(ctx).GetString(config.TokenForced)):
+		case strings.Contains(filter, viper.GetString(config.TokenForced)):
 			addFilterToSet(ctx, filter, forced)
 
 		default:
 			addFilterToSet(ctx, filter, include)
 		}
+	}
+
+	// If configured to skip unwanted labels, expand each label to its repos and exclude them
+	if viper.GetBool(config.SkipUnwanted) {
+		for _, label := range viper.GetStringSlice(config.UnwantedLabels) {
+			addFilterToSet(ctx, viper.GetString(config.TokenLabel)+label, exclude)
+		}
+	}
+
+	// If configured to skip archived repos, add them to the exclude set
+	if viper.GetBool(config.SkipArchived) {
+		exclude.Append(archivedRepos()...)
 	}
 
 	return include, exclude, forced
@@ -261,11 +260,11 @@ func saveCatalogCache(ctx context.Context) error {
 		return err
 	}
 
-	if err := os.MkdirAll(filepath.Dir(catalogCachePath(ctx)), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(catalogCachePath(ctx)), 0o750); err != nil {
 		return err
 	}
 
-	return os.WriteFile(catalogCachePath(ctx), data, 0644)
+	return os.WriteFile(catalogCachePath(ctx), data, 0o600)
 }
 
 func fetchRepositoryData(ctx context.Context) error {

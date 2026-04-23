@@ -201,7 +201,9 @@ func (f *Fake) UpdatePullRequest(repo, branch string, opts *scm.PROptions) (*scm
 		pr.Reviewers = opts.Reviewers
 		pr.TeamReviewers = opts.TeamReviewers
 	} else {
-		allReviewers := append(pr.Reviewers, opts.Reviewers...)
+		allReviewers := make([]string, 0, len(pr.Reviewers)+len(opts.Reviewers))
+		allReviewers = append(allReviewers, pr.Reviewers...)
+		allReviewers = append(allReviewers, opts.Reviewers...)
 
 		// Remove duplicates
 		reviewerSet := make(map[string]bool)
@@ -215,7 +217,9 @@ func (f *Fake) UpdatePullRequest(repo, branch string, opts *scm.PROptions) (*scm
 		pr.Reviewers = uniqueReviewers
 
 		// Do the same for team reviewers
-		allTeamReviewers := append(pr.TeamReviewers, opts.TeamReviewers...)
+		allTeamReviewers := make([]string, 0, len(pr.TeamReviewers)+len(opts.TeamReviewers))
+		allTeamReviewers = append(allTeamReviewers, pr.TeamReviewers...)
+		allTeamReviewers = append(allTeamReviewers, opts.TeamReviewers...)
 		teamReviewerSet := make(map[string]bool)
 		uniqueTeamReviewers := make([]string, 0)
 		for _, teamReviewer := range allTeamReviewers {

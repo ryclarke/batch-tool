@@ -122,7 +122,7 @@ the --allow-any flag is used.`,
 		},
 	}
 
-	stashPopCmd.Flags().Bool(stashAllowAnyFlag, false, "Allow popping any stash, not just batch-tool stashes")
+	stashPopCmd.Flags().Bool(stashAllowAnyFlag, false, "allow popping any stash, not just batch-tool stashes")
 
 	return stashPopCmd
 }

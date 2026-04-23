@@ -12,7 +12,7 @@ import (
 func ExecCommand(t *testing.T, dir string, name string, args ...string) {
 	t.Helper()
 
-	cmd := exec.Command(name, args...)
+	cmd := exec.CommandContext(t.Context(), name, args...)
 	cmd.Dir = dir
 
 	output, err := cmd.CombinedOutput()

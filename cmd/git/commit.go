@@ -23,7 +23,7 @@ const (
 func addCommitCmd() *cobra.Command {
 	// commitCmd represents the commit command
 	commitCmd := &cobra.Command{
-		Use:   "commit {-m <message>|-a [-m <message>]} [--push] <repository>...",
+		Use:   "commit {-m <message>|--amend [-m <message>]} [--push] <repository>...",
 		Short: "Commit code changes across repositories",
 		Long: `Commit staged changes across multiple repositories.
 
@@ -51,6 +51,10 @@ Safety Features:
 			}
 
 			if viper.GetBool(config.GitCommitAmend) {
+				if viper.GetBool(config.GitCommitPush) {
+					viper.Set(config.GitPushForce, true) // force push is implied when pushing an amended commit
+				}
+
 				return nil // amended commits do not require a message
 			}
 
@@ -64,7 +68,7 @@ Safety Features:
 	commitCmd.Flags().BoolP(amendFlag, "a", false, "amend the latest existing commit")
 	commitCmd.Flags().StringP(messageFlag, "m", "", "commit message (required for new commits)")
 
-	utils.BuildBoolFlags(commitCmd, pushFlag, "u", noPushFlag, "", "push the commit to the remote repository")
+	utils.BuildBoolFlags(commitCmd, pushFlag, "", noPushFlag, "", "push the commit to the remote repository")
 
 	return commitCmd
 }

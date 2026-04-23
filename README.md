@@ -469,6 +469,9 @@ batch-tool sh -c "rm -f *.tmp" '~myproject'
 - **Repository not found**: Check that repository names match your git provider
 - **Sync issues**: Use `--sync` flag for operations that need to run sequentially
 - **Config issues**: Verify your `batch-tool.yaml` syntax and paths
+- **Cancelling a run**: In the interactive TUI, press `q`, `Esc`, or `Ctrl+C` to cancel
+  in-flight work — running subprocesses are signaled and the command exits cleanly. The
+  same key bindings dismiss the TUI once the run has finished.
 
 For more detailed help on any command, use:
 ```bash
