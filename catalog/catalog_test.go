@@ -2025,7 +2025,7 @@ func TestArchivedRepos(t *testing.T) {
 		"d": {Name: "d"},
 	}
 
-	got := archivedRepos()
+	got := mapset.NewSet(archivedRepos()...)
 	if got.Cardinality() != 2 {
 		t.Errorf("Expected 2 archived repos, got %d", got.Cardinality())
 	}
