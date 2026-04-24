@@ -25,10 +25,11 @@ func RunProviderContract(t *testing.T, name string, provider Provider) {
 // RepositoryContract tests the Repository struct for consistency
 func TestRepositoryContract(t *testing.T) {
 	tests := []struct {
-		name       string
-		repo       *Repository
-		wantName   string
-		wantPublic bool
+		name         string
+		repo         *Repository
+		wantName     string
+		wantPublic   bool
+		wantArchived bool
 	}{
 		{
 			name: "BasicRepository",
@@ -61,6 +62,15 @@ func TestRepositoryContract(t *testing.T) {
 			wantName:   "tagged-repo",
 			wantPublic: false,
 		},
+		{
+			name: "ArchivedRepository",
+			repo: &Repository{
+				Name:     "archived-repo",
+				Archived: true,
+			},
+			wantName:     "archived-repo",
+			wantArchived: true,
+		},
 	}
 
 	for _, tc := range tests {
@@ -70,6 +80,9 @@ func TestRepositoryContract(t *testing.T) {
 			}
 			if tc.repo.Public != tc.wantPublic {
 				t.Errorf("Expected public=%v, got %v", tc.wantPublic, tc.repo.Public)
+			}
+			if tc.repo.Archived != tc.wantArchived {
+				t.Errorf("Expected archived=%v, got %v", tc.wantArchived, tc.repo.Archived)
 			}
 		})
 	}

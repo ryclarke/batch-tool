@@ -9,6 +9,7 @@ func TestRepositoryStruct(t *testing.T) {
 		Name:          "test-repo",
 		Description:   "A test repository",
 		Public:        true,
+		Archived:      true,
 		Project:       "test-project",
 		DefaultBranch: "main",
 		Labels:        []string{"backend", "go", "testing"},
@@ -24,6 +25,10 @@ func TestRepositoryStruct(t *testing.T) {
 
 	if !repo.Public {
 		t.Error("Expected repository to be public")
+	}
+
+	if !repo.Archived {
+		t.Error("Expected repository to be archived")
 	}
 
 	if repo.Project != "test-project" {
@@ -43,5 +48,13 @@ func TestRepositoryStruct(t *testing.T) {
 		if label != expectedLabels[i] {
 			t.Errorf("Expected label %s at position %d, got %s", expectedLabels[i], i, label)
 		}
+	}
+}
+
+func TestRepositoryStructDefaults(t *testing.T) {
+	// Zero-valued Repository should report Archived=false by default.
+	repo := Repository{Name: "default-repo"}
+	if repo.Archived {
+		t.Error("Expected Archived to default to false for zero-valued Repository")
 	}
 }

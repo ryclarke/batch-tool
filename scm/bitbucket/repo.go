@@ -48,7 +48,10 @@ func (b *Bitbucket) ListRepositories() ([]*scm.Repository, error) {
 			Name:        bbRepo.Name,
 			Description: bbRepo.Description,
 			Public:      bbRepo.Public,
-			Project:     bbRepo.Project.Key, // Extract the key from the project object
+			// BitBucket Server has no native concept of an archived repository,
+			// so this is always false. Revisit if upstream API support is added.
+			Archived: false,
+			Project:  bbRepo.Project.Key, // Extract the key from the project object
 		}
 
 		// Get labels for this repository

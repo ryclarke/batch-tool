@@ -115,57 +115,75 @@ func GetBranchForRepo(ctx context.Context, repoName string) string {
 func RepositoryList(ctx context.Context, filters ...string) mapset.Set[string] {
 	viper := config.Viper(ctx)
 
-	includeSet := mapset.NewSet[string]()
-	excludeSet := mapset.NewSet[string]()
-	forcedSet := mapset.NewSet[string]()
+	// Parse filters into include/exclude/forced sets for set-theory operations
+	includeSet, excludeSet, forcedSet := parseLabelFilters(ctx, filters...)
 
-	// Exclude unwanted labels by default
+	// If configured to skip unwanted labels, expand each label to its repos and exclude them
 	if viper.GetBool(config.SkipUnwanted) {
-		for _, unwanted := range viper.GetStringSlice(config.UnwantedLabels) {
-			filters = append(filters, unwanted+viper.GetString(config.TokenLabel)+viper.GetString(config.TokenSkip))
+		for _, label := range viper.GetStringSlice(config.UnwantedLabels) {
+			addFilterToSet(ctx, viper.GetString(config.TokenLabel)+label, excludeSet)
 		}
 	}
 
-	for _, filter := range filters {
-		replacer := strings.NewReplacer(
-			viper.GetString(config.TokenLabel), "",
-			viper.GetString(config.TokenSkip), "",
-			viper.GetString(config.TokenForced), "",
-		)
-		filterName := replacer.Replace(filter)
-
-		if strings.Contains(filter, viper.GetString(config.TokenForced)) {
-			// if force token is present, add repo (or label) to forced include set
-			if strings.Contains(filter, viper.GetString(config.TokenLabel)) {
-				if set, ok := Labels[filterName]; ok {
-					forcedSet = forcedSet.Union(set)
-				}
-			} else {
-				forcedSet.Add(filterName)
-			}
-		} else if strings.Contains(filter, viper.GetString(config.TokenSkip)) {
-			// if skip token is present, add repo (or label) to exclude set
-			if strings.Contains(filter, viper.GetString(config.TokenLabel)) {
-				if set, ok := Labels[filterName]; ok {
-					excludeSet = excludeSet.Union(set)
-				}
-			} else {
-				excludeSet.Add(filterName)
-			}
-		} else {
-			// otherwise, add repo (or label) to include set
-			if strings.Contains(filter, viper.GetString(config.TokenLabel)) {
-				if set, ok := Labels[filterName]; ok {
-					includeSet = includeSet.Union(set)
-				}
-			} else {
-				includeSet.Add(filterName)
-			}
-		}
+	// If configured to skip archived repos, add them to the exclude set
+	if viper.GetBool(config.SkipArchived) {
+		excludeSet.Append(archivedRepos()...)
 	}
 
 	// Final set is (forced ∪ (include \ exclude)) - forced repos and matched repos which aren't excluded
 	return forcedSet.Union(includeSet.Difference(excludeSet))
+}
+
+func parseLabelFilters(ctx context.Context, filters ...string) (include, exclude, forced mapset.Set[string]) {
+	include, exclude, forced = mapset.NewSet[string](), mapset.NewSet[string](), mapset.NewSet[string]()
+
+	for _, filter := range filters {
+		switch {
+		case strings.Contains(filter, config.Viper(ctx).GetString(config.TokenSkip)):
+			addFilterToSet(ctx, filter, exclude)
+
+		case strings.Contains(filter, config.Viper(ctx).GetString(config.TokenForced)):
+			addFilterToSet(ctx, filter, forced)
+
+		default:
+			addFilterToSet(ctx, filter, include)
+		}
+	}
+
+	return include, exclude, forced
+}
+
+func addFilterToSet(ctx context.Context, filter string, set mapset.Set[string]) {
+	replacer := strings.NewReplacer(
+		config.Viper(ctx).GetString(config.TokenLabel), "",
+		config.Viper(ctx).GetString(config.TokenSkip), "",
+		config.Viper(ctx).GetString(config.TokenForced), "",
+	)
+	filterName := replacer.Replace(filter)
+
+	if strings.Contains(filter, config.Viper(ctx).GetString(config.TokenLabel)) {
+		// if it's a label filter, add all repos matching that label to the set
+		if labelSet, ok := Labels[filterName]; ok {
+			set.Append(labelSet.ToSlice()...)
+		} else {
+			fmt.Fprintf(os.Stderr, "WARNING: Label '%s' not recognized\n", filterName)
+		}
+	} else {
+		// if it's a repo filter, add the repo name directly to the set
+		set.Add(filterName)
+	}
+}
+
+func archivedRepos() []string {
+	archived := []string{}
+
+	for name, repo := range Catalog {
+		if repo.Archived {
+			archived = append(archived, name)
+		}
+	}
+
+	return archived
 }
 
 func initRepositoryCatalog(ctx context.Context, flush bool) error {

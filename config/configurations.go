@@ -42,6 +42,7 @@ const (
 	SortRepos        = "repos.sort"
 	RepoAliases      = "repos.aliases"
 	UnwantedLabels   = "repos.unwanted-labels"
+	SkipArchived     = "repos.skip-archived"
 	SkipUnwanted     = "repos.skip-unwanted"
 	SuperSetLabel    = "repos.catch-all"
 	DefaultReviewers = "repos.reviewers"
@@ -145,6 +146,7 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault(SortRepos, true)
 	v.SetDefault(DefaultMergeMethod, "squash") // "merge", "squash", or "rebase" (only supported by GitHub provider for now)
 
+	v.SetDefault(SkipArchived, true)
 	v.SetDefault(SkipUnwanted, true)
 	v.SetDefault(UnwantedLabels, []string{"deprecated", "poc"})
 	v.SetDefault(SuperSetLabel, "all")

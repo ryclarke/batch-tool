@@ -39,6 +39,7 @@ func (g *Github) ListRepositories() ([]*scm.Repository, error) {
 				Name:          repo.GetName(),
 				Description:   repo.GetDescription(),
 				Public:        !repo.GetPrivate(),
+				Archived:      repo.GetArchived(),
 				Project:       g.project,
 				DefaultBranch: repo.GetDefaultBranch(),
 				Labels:        repo.Topics,

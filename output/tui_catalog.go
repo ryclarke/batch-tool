@@ -8,6 +8,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/spf13/cobra"
 
 	"github.com/ryclarke/batch-tool/catalog"
@@ -59,6 +60,7 @@ type repoWithMetadata struct {
 	defaultBranch string
 	labels        []string
 	isPublic      bool
+	isArchived    bool
 }
 
 func newCatalogModel(ctx context.Context) catalogModel {
@@ -86,6 +88,7 @@ func newCatalogModel(ctx context.Context) catalogModel {
 			defaultBranch: repo.DefaultBranch,
 			labels:        labels,
 			isPublic:      repo.Public,
+			isArchived:    repo.Archived,
 		})
 	}
 
@@ -160,19 +163,36 @@ func (m catalogModel) buildContent() string {
 	var b strings.Builder
 
 	for i, repo := range m.repos {
-		// Repository name
-		b.WriteString(styles.repoName.Render(strings.TrimPrefix(repo.name, repo.project+"/")))
+		// Repository name (greyed out + badge for archived repos)
+		nameStyle := styles.repoName
+		descStyle := styles.description
+		metaLabelStyle := styles.metaLabel
+		metaValueStyle := styles.metaValue
+		labelStyle := styles.label
+		if repo.isArchived {
+			nameStyle = styles.archivedRepo
+			descStyle = styles.archivedDim
+			metaLabelStyle = styles.archivedRepo
+			metaValueStyle = styles.archivedRepo
+			labelStyle = styles.archivedRepo
+		}
+
+		b.WriteString(nameStyle.Render(strings.TrimPrefix(repo.name, repo.project+"/")))
+		if repo.isArchived {
+			b.WriteString(" ")
+			b.WriteString(styles.archivedRepo.Render("(archived)"))
+		}
 		b.WriteString("\n")
 
 		// Description
 		if repo.description != "" {
-			b.WriteString(styles.description.Render(repo.description))
+			b.WriteString(descStyle.Render(repo.description))
 			b.WriteString("\n")
 		}
 
 		// Labels
 		if len(repo.labels) > 0 {
-			m.buildLabels(&b, repo.labels, styles)
+			m.buildLabels(&b, repo.labels, styles, labelStyle)
 			b.WriteString("\n")
 		}
 
@@ -180,20 +200,27 @@ func (m catalogModel) buildContent() string {
 		metadata := strings.Builder{}
 
 		// Project
-		metadata.WriteString(styles.metaLabel.Render("Project: "))
-		metadata.WriteString(styles.metaValue.Render(repo.project))
+		metadata.WriteString(metaLabelStyle.Render("Project: "))
+		metadata.WriteString(metaValueStyle.Render(repo.project))
 		metadata.WriteString("  ")
 
 		// Default branch``
-		metadata.WriteString(styles.metaLabel.Render("Default Branch: "))
-		metadata.WriteString(styles.metaValue.Render(repo.defaultBranch))
+		metadata.WriteString(metaLabelStyle.Render("Default Branch: "))
+		metadata.WriteString(metaValueStyle.Render(repo.defaultBranch))
 		metadata.WriteString("  ")
 
 		// Visibility
-		metadata.WriteString(styles.metaLabel.Render("Visibility: "))
-		if repo.isPublic {
+		metadata.WriteString(metaLabelStyle.Render("Visibility: "))
+		switch {
+		case repo.isArchived:
+			if repo.isPublic {
+				metadata.WriteString(styles.archivedRepo.Render("public"))
+			} else {
+				metadata.WriteString(styles.archivedRepo.Render("private"))
+			}
+		case repo.isPublic:
 			metadata.WriteString(styles.publicRepo.Render("public"))
-		} else {
+		default:
 			metadata.WriteString(styles.privateRepo.Render("private"))
 		}
 
@@ -211,10 +238,10 @@ func (m catalogModel) buildContent() string {
 }
 
 // buildLabels appends the labels line to the provided string builder
-func (m catalogModel) buildLabels(b *strings.Builder, labels []string, styles catalogStyles) {
+func (m catalogModel) buildLabels(b *strings.Builder, labels []string, styles catalogStyles, labelStyle lipgloss.Style) {
 	labelStrs := make([]string, 0, len(labels))
 	for _, label := range labels {
-		labelStrs = append(labelStrs, styles.label.Render(strings.TrimSpace(label)))
+		labelStrs = append(labelStrs, labelStyle.Render(strings.TrimSpace(label)))
 	}
 
 	b.WriteString(styles.wrap().Render("  ( " + strings.Join(labelStrs, ", ") + " )"))

@@ -11,8 +11,11 @@ git:
 
 repos:
   sort: true
-  unwanted-labels: deprecated,poc
-  skip-unwanted: true
+  skip-archived: true   # if true, exclude archived repositories from selection (default: true)
+  skip-unwanted: true   # if true, exclude repositories with any of the specified unwanted labels (default: true)
+  unwanted-labels:      # repos with any of these labels are considered unwanted (default: [deprecated, poc])
+    - deprecated
+    - poc
   aliases: # mapping of repository names to custom aliases
     utils:
       - batch-tool
