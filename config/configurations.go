@@ -39,13 +39,16 @@ const (
 	// CloneSSHURLTmpl is the SSH URL template with placeholders: User, Host, Project, Repo
 	CloneSSHURLTmpl = "ssh://%s@%s/%s/%s.git"
 
-	SortRepos        = "repos.sort"
-	RepoAliases      = "repos.aliases"
-	UnwantedLabels   = "repos.unwanted-labels"
-	SkipArchived     = "repos.skip-archived"
-	SkipUnwanted     = "repos.skip-unwanted"
-	SuperSetLabel    = "repos.catch-all"
-	DefaultReviewers = "repos.reviewers"
+	SortRepos      = "repos.sort"
+	RepoAliases    = "repos.aliases"
+	UnwantedLabels = "repos.unwanted-labels"
+	SkipArchived   = "repos.skip-archived"
+	SkipUnwanted   = "repos.skip-unwanted"
+	SuperSetLabel  = "repos.catch-all"
+
+	DefaultReviewers     = "repos.reviewers"
+	DefaultTeamReviewers = "repos.team-reviewers"
+
 	CatalogCachePath = "repos.cache.path"
 	CatalogCacheTTL  = "repos.cache.ttl"
 
@@ -86,7 +89,6 @@ const (
 	PrReviewers      = "pr.args.reviewers"
 	PrTeamReviewers  = "pr.args.team-reviewers"
 	PrResetReviewers = "pr.args.reset-reviewers"
-	PrAllReviewers   = "pr.args.all-reviewers"
 	PrBaseBranch     = "pr.args.base-branch"
 	PrMergeCheck     = "pr.args.merge-check"
 	PrMergeMethod    = "pr.args.merge-method"
@@ -149,7 +151,7 @@ func setDefaults(v *viper.Viper) {
 
 	v.SetDefault(SkipArchived, true)
 	v.SetDefault(SkipUnwanted, true)
-	v.SetDefault(UnwantedLabels, []string{"deprecated", "poc"})
+	v.SetDefault(UnwantedLabels, []string{})
 	v.SetDefault(SuperSetLabel, "all")
 
 	v.SetDefault(CatalogCachePath, "") // empty means use default: gitdir/host/.batch-tool-cache.json
@@ -169,6 +171,7 @@ func setDefaults(v *viper.Viper) {
 
 	// default reviewers in the form `repo: [reviewers...]`
 	v.SetDefault(DefaultReviewers, map[string][]string{})
+	v.SetDefault(DefaultTeamReviewers, map[string][]string{})
 
 	// aliases in the form `alias: [repos...]`
 	v.SetDefault(RepoAliases, map[string][]string{})

@@ -6,6 +6,8 @@ import (
 
 	"github.com/spf13/cobra"
 
+	mapset "github.com/deckarep/golang-set/v2"
+
 	"github.com/ryclarke/batch-tool/call"
 	"github.com/ryclarke/batch-tool/catalog"
 	"github.com/ryclarke/batch-tool/cmd/git"
@@ -16,14 +18,13 @@ import (
 )
 
 const (
-	allReviewersFlag = "all-reviewers"
-	baseBranchFlag   = "base-branch"
+	baseBranchFlag = "base-branch"
 )
 
 // addNewCmd initializes the pr new command
 func addNewCmd() *cobra.Command {
 	newCmd := &cobra.Command{
-		Use:   "new [--draft] [-t <title>] [-d <description>] [-r <reviewer>]... [-a] [-b <base-branch>] <repository>...",
+		Use:   "new [--draft] [-t <title>] [-d <description>] [-r <reviewer>]... [-b <base-branch>] <repository>...",
 		Short: "Submit new pull requests",
 		Long: `Create new pull requests for the current branch in each repository.
 
@@ -40,19 +41,16 @@ Branch Validation:
   PRs cannot be created from the default branch. Ensure you're not on
   the default branch before running this command.`,
 		Example: `  # Create PR with description and multiple reviewers
-  batch-tool pr new -t "Fix bug" -d "Fixes issue #123" -a -r alice -r bob repo1 repo2
+  batch-tool pr new -t "Fix bug" -d "Fixes issue #123" -r alice -r bob repo1 repo2
 
   # Create draft PR
   batch-tool pr new -t "WIP" --draft repo1 repo2`,
 		Args:              cobra.MinimumNArgs(1),
 		ValidArgsFunction: catalog.CompletionFunc(),
 		PreRunE: func(cmd *cobra.Command, _ []string) error {
-			viper := config.Viper(cmd.Context())
+			config.Viper(cmd.Context()).BindPFlag(config.PrBaseBranch, cmd.Flags().Lookup(baseBranchFlag))
 
-			viper.BindPFlag(config.PrAllReviewers, cmd.Flags().Lookup(allReviewersFlag))
-			viper.BindPFlag(config.PrBaseBranch, cmd.Flags().Lookup(baseBranchFlag))
-
-			return nil
+			return parseCommonPRFlags(cmd)
 		},
 		Run: func(cmd *cobra.Command, args []string) {
 			viper := config.Viper(cmd.Context())
@@ -63,7 +61,7 @@ Branch Validation:
 		},
 	}
 
-	newCmd.Flags().BoolP(allReviewersFlag, "a", false, "use all provided reviewers for a new PR (default: only the first)")
+	buildCommonPRFlags(newCmd)
 	newCmd.Flags().StringP(baseBranchFlag, "b", "", "base branch for the pull request (default: repository default branch)")
 
 	return newCmd
@@ -91,6 +89,7 @@ func New(ctx context.Context, ch output.Channel) error {
 
 	// get reviewers from config if not set via flags
 	opts.Reviewers = lookupReviewers(ctx, repoName)
+	opts.TeamReviewers = lookupTeamReviewers(ctx, repoName)
 
 	pr, err := provider.OpenPullRequest(repoName, branch, &opts)
 	if err != nil {
@@ -102,7 +101,9 @@ func New(ctx context.Context, ch output.Channel) error {
 	return nil
 }
 
-// lookupReviewers returns the list of reviewers for the given repository
+// lookupReviewers returns the list of individual reviewers for the given repository.
+// It merges reviewers configured by repo name with those configured for any labels
+// the repository belongs to (keyed by the label token, e.g. "~backend").
 func lookupReviewers(ctx context.Context, name string) []string {
 	viper := config.Viper(ctx)
 
@@ -111,13 +112,37 @@ func lookupReviewers(ctx context.Context, name string) []string {
 		return revs
 	}
 
-	// Use default reviewers for the given repository
-	revs := viper.GetStringMapStringSlice(config.DefaultReviewers)[name]
+	reviewerMap := viper.GetStringMapStringSlice(config.DefaultReviewers)
+	tokenLabel := viper.GetString(config.TokenLabel)
 
-	// Only use the first reviewer from the default list unless allReviewers is set
-	if !viper.GetBool(config.PrAllReviewers) && len(revs) > 1 {
-		revs = []string{revs[0]}
+	// Collect reviewers for this repo by name, then by any labels it belongs to
+	revs := mapset.NewSet(reviewerMap[name]...)
+	for _, label := range catalog.GetLabelsForRepo(name) {
+		revs.Append(reviewerMap[tokenLabel+label]...)
 	}
 
-	return revs
+	return revs.ToSlice()
+}
+
+// lookupTeamReviewers returns the list of team reviewers for the given repository.
+// It merges team reviewers configured by repo name with those configured for any labels
+// the repository belongs to (keyed by the label token, e.g. "~backend").
+func lookupTeamReviewers(ctx context.Context, name string) []string {
+	viper := config.Viper(ctx)
+
+	// Use the provided list of team reviewers
+	if revs := viper.GetStringSlice(config.PrTeamReviewers); len(revs) > 0 {
+		return revs
+	}
+
+	teamReviewerMap := viper.GetStringMapStringSlice(config.DefaultTeamReviewers)
+	tokenLabel := viper.GetString(config.TokenLabel)
+
+	// Collect team reviewers for this repo by name, then by any labels it belongs to
+	revs := mapset.NewSet(teamReviewerMap[name]...)
+	for _, label := range catalog.GetLabelsForRepo(name) {
+		revs.Append(teamReviewerMap[tokenLabel+label]...)
+	}
+
+	return revs.ToSlice()
 }

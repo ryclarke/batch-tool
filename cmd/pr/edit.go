@@ -50,7 +50,7 @@ Branch Requirement:
 
 			viper.BindPFlag(config.PrResetReviewers, cmd.Flags().Lookup(resetReviewersFlag))
 
-			return nil
+			return parseCommonPRFlags(cmd)
 		},
 		Run: func(cmd *cobra.Command, args []string) {
 			buildPROptions(cmd)
@@ -59,6 +59,7 @@ Branch Requirement:
 		},
 	}
 
+	buildCommonPRFlags(editCmd)
 	editCmd.Flags().Bool(resetReviewersFlag, false, "replace the reviewer list instead of appending to it")
 
 	return editCmd

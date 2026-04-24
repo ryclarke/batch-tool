@@ -4,37 +4,16 @@ import (
 	"bytes"
 	"testing"
 
+	mapset "github.com/deckarep/golang-set/v2"
+
+	"github.com/ryclarke/batch-tool/catalog"
 	"github.com/ryclarke/batch-tool/config"
 	testhelper "github.com/ryclarke/batch-tool/utils/testing"
 )
 
 func TestAddNewCmd(t *testing.T) {
-	cmd := addNewCmd()
-
-	if cmd == nil {
+	if addNewCmd() == nil {
 		t.Fatal("addNewCmd() returned nil")
-	}
-
-	if cmd.Use != "new [--draft] [-t <title>] [-d <description>] [-r <reviewer>]... [-a] [-b <base-branch>] <repository>..." {
-		t.Errorf("Expected Use to be 'new [--draft] [-t <title>] [-d <description>] [-r <reviewer>]... [-a] [-b <base-branch>] <repository>...', got %s", cmd.Use)
-	}
-
-	if cmd.Short == "" {
-		t.Error("Expected Short description to be set")
-	}
-}
-
-func TestNewCmdFlags(t *testing.T) {
-	cmd := addNewCmd()
-
-	// Test all-reviewers flag
-	allReviewersFlag := cmd.Flags().Lookup("all-reviewers")
-	if allReviewersFlag == nil {
-		t.Fatal("all-reviewers flag not found")
-	}
-
-	if allReviewersFlag.Shorthand != "a" {
-		t.Errorf("Expected all-reviewers flag shorthand to be 'a', got %s", allReviewersFlag.Shorthand)
 	}
 }
 
@@ -61,23 +40,11 @@ func TestNewCommandRun(t *testing.T) {
 	tests := []struct {
 		name           string
 		repos          []string
-		allReviewers   bool
 		expectedOutput []string
 	}{
 		{
-			name:         "New PR with single reviewer",
-			repos:        []string{"repo-1"},
-			allReviewers: false,
-			expectedOutput: []string{
-				"New pull request",
-				"feature-branch",
-				"reviewer1",
-			},
-		},
-		{
-			name:         "New PR with all reviewers",
-			repos:        []string{"repo-1"},
-			allReviewers: true,
+			name:  "New PR with reviewers",
+			repos: []string{"repo-1"},
 			expectedOutput: []string{
 				"New pull request",
 				"feature-branch",
@@ -86,9 +53,8 @@ func TestNewCommandRun(t *testing.T) {
 			},
 		},
 		{
-			name:         "New PR for multiple repos",
-			repos:        []string{"repo-1", "repo-2"},
-			allReviewers: false,
+			name:  "New PR for multiple repos",
+			repos: []string{"repo-1", "repo-2"},
 			expectedOutput: []string{
 				"New pull request",
 				"repo-1",
@@ -106,7 +72,6 @@ func TestNewCommandRun(t *testing.T) {
 			testViper.Set(config.PrTitle, "Test PR Title")
 			testViper.Set(config.PrDescription, "Test PR Description")
 			testViper.Set(config.PrReviewers, []string{"reviewer1", "reviewer2"})
-			testViper.Set(config.PrAllReviewers, tt.allReviewers)
 
 			cmd := addNewCmd()
 
@@ -114,10 +79,6 @@ func TestNewCommandRun(t *testing.T) {
 			cmd.SetOut(&buf)
 			cmd.SetErr(&buf)
 			cmd.SetArgs(tt.repos)
-
-			if tt.allReviewers {
-				cmd.Flags().Set("all-reviewers", "true")
-			}
 
 			err := cmd.ExecuteContext(testCtx)
 			if err != nil {
@@ -168,48 +129,135 @@ func TestLookupReviewers(t *testing.T) {
 	ctx := loadFixture(t)
 	viper := config.Viper(ctx)
 
-	// Test with command-line reviewers (always returns all, regardless of allReviewers flag)
+	// CLI-provided reviewers always take precedence
 	viper.Set(config.PrReviewers, []string{"reviewer1", "reviewer2"})
-	viper.Set(config.PrAllReviewers, false) // Flag doesn't affect manually-provided reviewers
 	reviewers := lookupReviewers(ctx, "test-repo")
 
 	if len(reviewers) != 2 {
 		t.Errorf("Expected 2 manually-provided reviewers, got %d", len(reviewers))
 	}
-	if reviewers[0] != "reviewer1" || reviewers[1] != "reviewer2" {
-		t.Errorf("Expected [reviewer1, reviewer2], got %v", reviewers)
-	}
 
-	// Test with default reviewers - limited to first unless allReviewers is set
-	viper.Set(config.PrReviewers, []string{}) // Clear command-line reviewers
+	// Default reviewers — all returned
+	viper.Set(config.PrReviewers, []string{})
 	defaultReviewers := map[string][]string{
 		"test-repo":  {"default1", "default2"},
 		"other-repo": {"other1"},
 	}
 	viper.Set(config.DefaultReviewers, defaultReviewers)
-	viper.Set(config.PrAllReviewers, false)
 
-	reviewers = lookupReviewers(ctx, "test-repo")
-	if len(reviewers) != 1 {
-		t.Errorf("Expected 1 default reviewer (limited), got %d", len(reviewers))
-	}
-	if reviewers[0] != "default1" {
-		t.Errorf("Expected [default1], got %v", reviewers)
-	}
-
-	// Test with default reviewers and allReviewers flag set
-	viper.Set(config.PrAllReviewers, true)
 	reviewers = lookupReviewers(ctx, "test-repo")
 	if len(reviewers) != 2 {
-		t.Errorf("Expected 2 default reviewers (with allReviewers flag), got %d", len(reviewers))
-	}
-	if reviewers[0] != "default1" || reviewers[1] != "default2" {
-		t.Errorf("Expected [default1, default2], got %v", reviewers)
+		t.Errorf("Expected 2 default reviewers, got %d", len(reviewers))
 	}
 
-	// Test with non-existent repository
+	// Non-existent repository returns empty
 	reviewers = lookupReviewers(ctx, "nonexistent-repo")
 	if len(reviewers) != 0 {
 		t.Errorf("Expected 0 reviewers for nonexistent repo, got %d", len(reviewers))
+	}
+}
+
+func TestLookupReviewersWithLabels(t *testing.T) {
+	ctx := loadFixture(t)
+	viper := config.Viper(ctx)
+
+	// Populate catalog labels so GetLabelsForRepo can find them
+	catalog.Labels["backend"] = mapset.NewSet("test-repo", "other-repo")
+	catalog.Labels["shared"] = mapset.NewSet("test-repo")
+	t.Cleanup(func() {
+		delete(catalog.Labels, "backend")
+		delete(catalog.Labels, "shared")
+	})
+
+	viper.Set(config.PrReviewers, []string{})
+	viper.Set(config.DefaultReviewers, map[string][]string{
+		"test-repo": {"repo-reviewer"},
+		"~backend":  {"backend-reviewer1", "backend-reviewer2"},
+		"~shared":   {"shared-reviewer"},
+	})
+	viper.Set(config.TokenLabel, "~")
+
+	reviewers := lookupReviewers(ctx, "test-repo")
+
+	// Should include: repo-specific + backend label + shared label (deduped)
+	got := make(map[string]bool)
+	for _, r := range reviewers {
+		got[r] = true
+	}
+
+	for _, want := range []string{"repo-reviewer", "backend-reviewer1", "backend-reviewer2", "shared-reviewer"} {
+		if !got[want] {
+			t.Errorf("Expected reviewer %q in results, got %v", want, reviewers)
+		}
+	}
+}
+
+func TestLookupReviewersDeduplication(t *testing.T) {
+	ctx := loadFixture(t)
+	viper := config.Viper(ctx)
+
+	catalog.Labels["team"] = mapset.NewSet("test-repo")
+	t.Cleanup(func() { delete(catalog.Labels, "team") })
+
+	viper.Set(config.PrReviewers, []string{})
+	viper.Set(config.DefaultReviewers, map[string][]string{
+		"test-repo": {"alice", "bob"},
+		"~team":     {"bob", "carol"}, // "bob" appears in both
+	})
+	viper.Set(config.TokenLabel, "~")
+
+	reviewers := lookupReviewers(ctx, "test-repo")
+
+	bobCount := 0
+	for _, r := range reviewers {
+		if r == "bob" {
+			bobCount++
+		}
+	}
+
+	if bobCount != 1 {
+		t.Errorf("Expected 'bob' to appear exactly once after dedup, got %d times in %v", bobCount, reviewers)
+	}
+
+	if len(reviewers) != 3 {
+		t.Errorf("Expected 3 unique reviewers (alice, bob, carol), got %d: %v", len(reviewers), reviewers)
+	}
+}
+
+func TestLookupTeamReviewers(t *testing.T) {
+	ctx := loadFixture(t)
+	viper := config.Viper(ctx)
+
+	// Test CLI flag takes precedence
+	viper.Set(config.PrTeamReviewers, []string{"cli-team"})
+	teamRevs := lookupTeamReviewers(ctx, "test-repo")
+	if len(teamRevs) != 1 || teamRevs[0] != "cli-team" {
+		t.Errorf("Expected [cli-team] from CLI flag, got %v", teamRevs)
+	}
+
+	// Test default team reviewers by repo name — all returned
+	viper.Set(config.PrTeamReviewers, []string{})
+	viper.Set(config.DefaultTeamReviewers, map[string][]string{
+		"test-repo":  {"team-a", "team-b"},
+		"other-repo": {"team-c"},
+	})
+
+	teamRevs = lookupTeamReviewers(ctx, "test-repo")
+	if len(teamRevs) != 2 {
+		t.Errorf("Expected 2 team reviewers, got %d: %v", len(teamRevs), teamRevs)
+	}
+
+	// Test label-based team reviewers
+	catalog.Labels["platform"] = mapset.NewSet("test-repo")
+	t.Cleanup(func() { delete(catalog.Labels, "platform") })
+
+	viper.Set(config.DefaultTeamReviewers, map[string][]string{
+		"~platform": {"infra-team"},
+	})
+	viper.Set(config.TokenLabel, "~")
+
+	teamRevs = lookupTeamReviewers(ctx, "test-repo")
+	if len(teamRevs) != 1 || teamRevs[0] != "infra-team" {
+		t.Errorf("Expected [infra-team] from label, got %v", teamRevs)
 	}
 }

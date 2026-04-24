@@ -65,10 +65,18 @@ func SetupRepos(t *testing.T, repos []string, branches ...bool) string {
 			ExecCommand(t, firstRepoDir, cmdArgs[0], cmdArgs[1:]...)
 		}
 
-		// Create test file
+		// Create and commit test file so the worktree is clean
 		testFile := filepath.Join(firstRepoDir, "test.txt")
 		if err := os.WriteFile(testFile, []byte("test content\n"), 0644); err != nil {
 			t.Fatalf("Failed to create test file: %v", err)
+		}
+
+		for _, cmdArgs := range [][]string{
+			{"git", "add", "test.txt"},
+			{"git", "commit", "-m", "Add test file"},
+			{"git", "push", "origin", "main"},
+		} {
+			ExecCommand(t, firstRepoDir, cmdArgs[0], cmdArgs[1:]...)
 		}
 
 		if len(branches) > 0 && branches[0] {
@@ -96,10 +104,17 @@ func SetupRepos(t *testing.T, repos []string, branches ...bool) string {
 			ExecCommand(t, repoDir, cmdArgs[0], cmdArgs[1:]...)
 		}
 
-		// Create test file
+		// Create and commit test file so the worktree is clean
 		testFile := filepath.Join(repoDir, "test.txt")
 		if err := os.WriteFile(testFile, []byte("test content\n"), 0644); err != nil {
 			t.Fatalf("Failed to create test file: %v", err)
+		}
+
+		for _, cmdArgs := range [][]string{
+			{"git", "add", "test.txt"},
+			{"git", "commit", "-m", "Add test file"},
+		} {
+			ExecCommand(t, repoDir, cmdArgs[0], cmdArgs[1:]...)
 		}
 
 		if len(branches) > 0 && branches[0] {

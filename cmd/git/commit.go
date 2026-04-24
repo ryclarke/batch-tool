@@ -15,9 +15,7 @@ import (
 const (
 	messageFlag = "message"
 	amendFlag   = "amend"
-
-	pushFlag   = "push"
-	noPushFlag = "no-" + pushFlag
+	pushFlag    = "push"
 )
 
 func addCommitCmd() *cobra.Command {
@@ -45,10 +43,7 @@ Safety Features:
 
 			viper.BindPFlag(config.GitCommitMessage, cmd.Flags().Lookup(messageFlag))
 			viper.BindPFlag(config.GitCommitAmend, cmd.Flags().Lookup(amendFlag))
-
-			if err := utils.BindBoolFlags(cmd, config.GitCommitPush, pushFlag, noPushFlag); err != nil {
-				return err
-			}
+			viper.BindPFlag(config.GitCommitPush, cmd.Flags().Lookup(pushFlag))
 
 			if viper.GetBool(config.GitCommitAmend) {
 				if viper.GetBool(config.GitCommitPush) {
@@ -65,10 +60,9 @@ Safety Features:
 		},
 	}
 
-	commitCmd.Flags().BoolP(amendFlag, "a", false, "amend the latest existing commit")
 	commitCmd.Flags().StringP(messageFlag, "m", "", "commit message (required for new commits)")
-
-	utils.BuildBoolFlags(commitCmd, pushFlag, "", noPushFlag, "", "push the commit to the remote repository")
+	commitCmd.Flags().BoolP(amendFlag, "a", false, "amend the latest existing commit")
+	commitCmd.Flags().BoolP(pushFlag, "p", false, "push the commit to the remote repository")
 
 	return commitCmd
 }

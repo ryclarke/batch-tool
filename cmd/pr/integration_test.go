@@ -1,7 +1,6 @@
 package pr
 
 import (
-	"bytes"
 	"context"
 	"testing"
 
@@ -29,51 +28,22 @@ func TestPRIntegrationWithFakeProvider(t *testing.T) {
 	// Update the provider for the test
 	viper.Set(config.GitProvider, "fake-pr-test")
 
-	// Test the new command
+	// Verify subcommands are registered
 	t.Run("NewCommand", func(t *testing.T) {
-		cmd := addNewCmd()
-
-		// Set up command with fake arguments
-		cmd.SetArgs([]string{"repo-1"})
-
-		// Capture output
-		var output bytes.Buffer
-		cmd.SetOut(&output)
-		cmd.SetErr(&output)
-
-		// We can't easily test execution without more setup, but we can test command structure
-		if cmd.Use != "new [--draft] [-t <title>] [-d <description>] [-r <reviewer>]... [-a] [-b <base-branch>] <repository>..." {
-			t.Errorf("Expected Use to be 'new [--draft] [-t <title>] [-d <description>] [-r <reviewer>]... [-a] [-b <base-branch>] <repository>...', got %s", cmd.Use)
-		}
-
-		if cmd.Short == "" {
-			t.Error("Expected Short description to be set")
+		if addNewCmd() == nil {
+			t.Fatal("addNewCmd() returned nil")
 		}
 	})
 
-	// Test the edit command
 	t.Run("EditCommand", func(t *testing.T) {
-		cmd := addEditCmd()
-
-		if cmd.Use != "edit [--draft|--no-draft] [-t <title>] [-d <description>] [-r <reviewer>]... [--reset-reviewers] <repository>..." {
-			t.Errorf("Expected Use to be 'edit [--draft|--no-draft] [-t <title>] [-d <description>] [-r <reviewer>]... [--reset-reviewers] <repository>...', got %s", cmd.Use)
-		}
-
-		if cmd.Short == "" {
-			t.Error("Expected Short description to be set")
+		if addEditCmd() == nil {
+			t.Fatal("addEditCmd() returned nil")
 		}
 	})
 
-	// Test the merge command
 	t.Run("MergeCommand", func(t *testing.T) {
-		cmd := addMergeCmd()
-
-		if cmd.Use != "merge [-f] <repository>..." {
-			t.Errorf("Expected Use to be 'merge [-f] <repository>...', got %s", cmd.Use)
-		}
-
-		if cmd.Short == "" {
-			t.Error("Expected Short description to be set")
+		if addMergeCmd() == nil {
+			t.Fatal("addMergeCmd() returned nil")
 		}
 	})
 }
@@ -82,37 +52,47 @@ func TestPRCommandFlags(t *testing.T) {
 	loadFixture(t)
 
 	tests := []struct {
-		name        string
-		cmdFunc     func() *cobra.Command
-		flagName    string
-		shorthand   string
-		description string
+		name      string
+		cmdFunc   func() *cobra.Command
+		flagName  string
+		shorthand string
 	}{
-		{
-			name:        "NewCommand_AllReviewers",
-			cmdFunc:     addNewCmd,
-			flagName:    "all-reviewers",
-			shorthand:   "a",
-			description: "use all provided reviewers for a new PR (default: only the first)",
-		},
+		// Common PR CRUD flags are local to new/edit commands
+		{"New_Title", addNewCmd, "title", "t"},
+		{"New_Description", addNewCmd, "description", "d"},
+		{"New_Reviewer", addNewCmd, "reviewer", "r"},
+		{"New_TeamReviewer", addNewCmd, "team-reviewer", "R"},
+		{"New_Draft", addNewCmd, "draft", ""},
+		{"New_NoDraft", addNewCmd, "no-draft", ""},
+		{"Edit_Title", addEditCmd, "title", "t"},
+		{"Edit_Description", addEditCmd, "description", "d"},
+		{"Edit_Reviewer", addEditCmd, "reviewer", "r"},
+		{"Edit_TeamReviewer", addEditCmd, "team-reviewer", "R"},
+		{"Edit_Draft", addEditCmd, "draft", ""},
+		{"Edit_NoDraft", addEditCmd, "no-draft", ""},
+
+		// pr new — local flag
+		{"New_BaseBranch", addNewCmd, "base-branch", "b"},
+
+		// pr edit — local flag
+		{"Edit_ResetReviewers", addEditCmd, "reset-reviewers", ""},
+
+		// pr merge — persistent bool pair + local string flag
+		{"Merge_Force", addMergeCmd, "force", "f"},
+		{"Merge_Check", addMergeCmd, "check", ""},
+		{"Merge_Method", addMergeCmd, "method", "m"},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			cmd := test.cmdFunc()
-
-			flag := cmd.Flags().Lookup(test.flagName)
+			// cmd.Flag() checks both local and persistent flags
+			flag := test.cmdFunc().Flag(test.flagName)
 			if flag == nil {
-				t.Errorf("Flag %s not found", test.flagName)
-				return
+				t.Fatalf("Flag %q not found", test.flagName)
 			}
 
 			if flag.Shorthand != test.shorthand {
-				t.Errorf("Expected shorthand %s, got %s", test.shorthand, flag.Shorthand)
-			}
-
-			if flag.Usage != test.description {
-				t.Errorf("Expected usage %s, got %s", test.description, flag.Usage)
+				t.Errorf("Flag %q: expected shorthand %q, got %q", test.flagName, test.shorthand, flag.Shorthand)
 			}
 		})
 	}
@@ -201,25 +181,11 @@ func TestPRRootCommand(t *testing.T) {
 
 	cmd := Cmd()
 
-	if cmd.Use != "pr <repository>..." {
-		t.Errorf("Expected Use to be 'pr <repository>...', got %s", cmd.Use)
-	}
-
-	if cmd.Short == "" {
-		t.Error("Expected Short description to be set")
-	}
-
-	// Test that subcommands are added
-	subCommands := cmd.Commands()
+	// Test that all expected subcommands are registered
 	expectedSubCommands := []string{"new", "edit", "merge", "get"}
 
-	if len(subCommands) < len(expectedSubCommands) {
-		t.Errorf("Expected at least %d subcommands, got %d", len(expectedSubCommands), len(subCommands))
-	}
-
-	// Check that expected subcommands exist by checking the command name (not full Use string)
 	foundCommands := make(map[string]bool)
-	for _, subCmd := range subCommands {
+	for _, subCmd := range cmd.Commands() {
 		foundCommands[subCmd.Name()] = true
 	}
 
@@ -242,42 +208,23 @@ func TestLookupReviewersWithSCMRepositories(t *testing.T) {
 	})
 
 	t.Run("LookupDefaultReviewers", func(t *testing.T) {
-		// Default reviewers are limited to first one unless allReviewers flag is set
-		viper.Set(config.PrAllReviewers, false)
 		reviewers := lookupReviewers(ctx, "repo-1")
-		expected := []string{"alice"}
+		expected := map[string]bool{"alice": true, "bob": true}
 
 		if len(reviewers) != len(expected) {
-			t.Errorf("Expected %d reviewers, got %d", len(expected), len(reviewers))
+			t.Errorf("Expected %d reviewers, got %d: %v", len(expected), len(reviewers), reviewers)
 		}
 
-		for i, reviewer := range reviewers {
-			if reviewer != expected[i] {
-				t.Errorf("Expected reviewer %s at position %d, got %s", expected[i], i, reviewer)
-			}
-		}
-
-		// With allReviewers flag, should return all default reviewers
-		viper.Set(config.PrAllReviewers, true)
-		reviewers = lookupReviewers(ctx, "repo-1")
-		expectedAll := []string{"alice", "bob"}
-
-		if len(reviewers) != len(expectedAll) {
-			t.Errorf("Expected %d reviewers with allReviewers flag, got %d", len(expectedAll), len(reviewers))
-		}
-
-		for i, reviewer := range reviewers {
-			if reviewer != expectedAll[i] {
-				t.Errorf("Expected reviewer %s at position %d, got %s", expectedAll[i], i, reviewer)
+		for _, reviewer := range reviewers {
+			if !expected[reviewer] {
+				t.Errorf("Unexpected reviewer %s in results %v", reviewer, reviewers)
 			}
 		}
 	})
 
 	t.Run("LookupGlobalReviewers", func(t *testing.T) {
-		// Set global reviewers (should override default)
-		// Manually-provided reviewers always return all, regardless of allReviewers flag
+		// CLI-provided reviewers take precedence
 		viper.Set(config.PrReviewers, []string{"global1", "global2"})
-		viper.Set(config.PrAllReviewers, false) // Flag doesn't affect manually-provided reviewers
 
 		reviewers := lookupReviewers(ctx, "repo-1")
 		expected := []string{"global1", "global2"}

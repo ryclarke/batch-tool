@@ -13,18 +13,28 @@ repos:
   sort: true
   skip-archived: true   # if true, exclude archived repositories from selection (default: true)
   skip-unwanted: true   # if true, exclude repositories with any of the specified unwanted labels (default: true)
-  unwanted-labels:      # repos with any of these labels are considered unwanted (default: [deprecated, poc])
+  unwanted-labels:      # repos with any of these labels are considered unwanted
     - deprecated
     - poc
+
   aliases: # mapping of repository names to custom aliases
     utils:
       - batch-tool
       - another-repo
-  reviewers: # default reviewers for each repository
+
+  reviewers: # default individual reviewers per repository or label (use ~label to apply to all repos in that label)
     batch-tool:
       - ryclarke
     another-repo:
-      - ryclarke
+      - alice
+      - bob
+    ~utils: # applies to all repos in the "utils" label
+      - charlie
+
+  team-reviewers: # default team reviewers per repository or label
+    ~utils:
+      - platform-team
+
   cache:
     path:               # optional custom path for catalog cache (default: <git.directory>/<git.host>/.batch-tool-cache.json)
     ttl: 24h            # cache time-to-live

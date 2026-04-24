@@ -100,6 +100,19 @@ func GetProjectForRepo(ctx context.Context, repoName string) string {
 	return config.Viper(ctx).GetString(config.GitProject)
 }
 
+// GetLabelsForRepo returns the names of all labels that include the given repository name.
+func GetLabelsForRepo(name string) []string {
+	var labels []string
+
+	for label, repos := range Labels {
+		if repos.Contains(name) {
+			labels = append(labels, label)
+		}
+	}
+
+	return labels
+}
+
 // GetBranchForRepo returns the default branch for a given repository name.
 // It checks the catalog first, then falls back to the configured default.
 func GetBranchForRepo(ctx context.Context, repoName string) string {

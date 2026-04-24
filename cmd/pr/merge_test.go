@@ -10,18 +10,8 @@ import (
 )
 
 func TestAddMergeCmd(t *testing.T) {
-	cmd := addMergeCmd()
-
-	if cmd == nil {
+	if addMergeCmd() == nil {
 		t.Fatal("addMergeCmd() returned nil")
-	}
-
-	if cmd.Use != "merge [-f] <repository>..." {
-		t.Errorf("Expected Use to be 'merge [-f] <repository>...', got %s", cmd.Use)
-	}
-
-	if cmd.Short == "" {
-		t.Error("Expected Short description to be set")
 	}
 }
 

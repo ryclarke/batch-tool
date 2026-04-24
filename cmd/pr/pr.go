@@ -62,26 +62,9 @@ Branch Validation:
 				}
 			}
 
-			viper := config.Viper(cmd.Context())
-
-			viper.BindPFlag(config.PrTitle, cmd.Flags().Lookup(prTitleFlag))
-			viper.BindPFlag(config.PrDescription, cmd.Flags().Lookup(prDescriptionFlag))
-			viper.BindPFlag(config.PrReviewers, cmd.Flags().Lookup(prReviewerFlag))
-			viper.BindPFlag(config.PrTeamReviewers, cmd.Flags().Lookup(prTeamReviewerFlag))
-
-			if err := utils.BindBoolFlags(cmd, config.PrDraft, prDraftFlag, prNoDraftFlag); err != nil {
-				return err
-			}
-
 			return utils.ValidateRequiredConfig(cmd.Context(), config.AuthToken)
 		},
 	}
-
-	prCmd.PersistentFlags().StringP(prTitleFlag, "t", "", "pull request title")
-	prCmd.PersistentFlags().StringP(prDescriptionFlag, "d", "", "pull request description")
-	prCmd.PersistentFlags().StringSliceP(prReviewerFlag, "r", nil, "pull request reviewer (repeatable)")
-	prCmd.PersistentFlags().StringSliceP(prTeamReviewerFlag, "R", nil, "pull request team reviewer (repeatable)")
-	utils.BuildBoolFlags(prCmd, prDraftFlag, "", prNoDraftFlag, "", "mark pull request as a draft")
 
 	prCmd.AddCommand(
 		addGetCmd(),
@@ -177,4 +160,23 @@ func printPRInfo(pr *scm.PullRequest, header string, verbose bool) string {
 	}
 
 	return info.String()
+}
+
+func parseCommonPRFlags(cmd *cobra.Command) error {
+	viper := config.Viper(cmd.Context())
+
+	viper.BindPFlag(config.PrTitle, cmd.Flags().Lookup(prTitleFlag))
+	viper.BindPFlag(config.PrDescription, cmd.Flags().Lookup(prDescriptionFlag))
+	viper.BindPFlag(config.PrReviewers, cmd.Flags().Lookup(prReviewerFlag))
+	viper.BindPFlag(config.PrTeamReviewers, cmd.Flags().Lookup(prTeamReviewerFlag))
+
+	return utils.BindBoolFlags(cmd, config.PrDraft, prDraftFlag, prNoDraftFlag)
+}
+
+func buildCommonPRFlags(cmd *cobra.Command) {
+	cmd.Flags().StringP(prTitleFlag, "t", "", "pull request title")
+	cmd.Flags().StringP(prDescriptionFlag, "d", "", "pull request description")
+	cmd.Flags().StringSliceP(prReviewerFlag, "r", nil, "pull request reviewer (repeatable)")
+	cmd.Flags().StringSliceP(prTeamReviewerFlag, "R", nil, "pull request team reviewer (repeatable)")
+	utils.BuildBoolFlags(cmd, prDraftFlag, "", prNoDraftFlag, "", "mark pull request as a draft")
 }

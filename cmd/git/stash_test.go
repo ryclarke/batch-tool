@@ -226,10 +226,8 @@ func TestLookupChanges(t *testing.T) {
 	reposPath := testhelper.SetupRepos(t, []string{"repo-1"})
 	testCtx := setupTestGitContext(t, reposPath)
 
-	// SetupRepos creates test.txt but doesn't commit it - commit it so repo is clean
+	// Repo is clean after SetupRepos
 	repoDir := filepath.Join(reposPath, "example.com", "test-project", "repo-1")
-	testhelper.ExecCommand(t, repoDir, "git", "add", "test.txt")
-	testhelper.ExecCommand(t, repoDir, "git", "commit", "-m", "Add test.txt")
 
 	// Now repo should be clean
 	hasChanges, err := lookupChanges(testCtx, "repo-1")
@@ -322,13 +320,6 @@ func TestValidateStash(t *testing.T) {
 func TestStashMultipleRepos(t *testing.T) {
 	reposPath := testhelper.SetupRepos(t, []string{"repo-1", "repo-2"})
 	testCtx := setupTestGitContext(t, reposPath)
-
-	// Commit the test.txt file that SetupRepos created to ensure repo has a commit history
-	for _, repoName := range []string{"repo-1", "repo-2"} {
-		repoDir := filepath.Join(reposPath, "example.com", "test-project", repoName)
-		testhelper.ExecCommand(t, repoDir, "git", "add", "test.txt")
-		testhelper.ExecCommand(t, repoDir, "git", "commit", "-m", "Add test.txt")
-	}
 
 	// Create changes in both repos
 	for _, repoName := range []string{"repo-1", "repo-2"} {

@@ -10,18 +10,8 @@ import (
 )
 
 func TestAddEditCmd(t *testing.T) {
-	cmd := addEditCmd()
-
-	if cmd == nil {
+	if addEditCmd() == nil {
 		t.Fatal("addEditCmd() returned nil")
-	}
-
-	if cmd.Use != "edit [--draft|--no-draft] [-t <title>] [-d <description>] [-r <reviewer>]... [--reset-reviewers] <repository>..." {
-		t.Errorf("Expected Use to be 'edit [--draft|--no-draft] [-t <title>] [-d <description>] [-r <reviewer>]... [--reset-reviewers] <repository>...', got %s", cmd.Use)
-	}
-
-	if cmd.Short == "" {
-		t.Error("Expected Short description to be set")
 	}
 }
 

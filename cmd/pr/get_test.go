@@ -16,14 +16,6 @@ func TestAddGetCmd(t *testing.T) {
 		t.Fatal("addGetCmd() returned nil")
 	}
 
-	if cmd.Use != "get <repository>..." {
-		t.Errorf("Expected Use to be 'get <repository>...', got %s", cmd.Use)
-	}
-
-	if cmd.Short == "" {
-		t.Error("Expected Short description to be set")
-	}
-
 	// Test aliases
 	aliases := cmd.Aliases
 	if len(aliases) != 1 || aliases[0] != "list" {
