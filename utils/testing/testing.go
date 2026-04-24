@@ -76,6 +76,7 @@ type MockChannel struct {
 	name   string
 	output []byte
 	err    error
+	failed bool
 }
 
 // NewMockChannel creates a new MockChannel with the given name.
@@ -112,7 +113,13 @@ func (m *MockChannel) Write(p []byte) (int, error) {
 
 // WriteError stores an error in the mock.
 func (m *MockChannel) WriteError(err error) {
+	m.failed = true
 	m.err = err
+}
+
+// Failed returns whether the channel has recorded a failure.
+func (m *MockChannel) Failed() bool {
+	return m.failed
 }
 
 // Start is a no-op for the mock.

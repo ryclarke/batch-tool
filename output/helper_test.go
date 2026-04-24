@@ -52,6 +52,9 @@ func (tc *testChannel) Write(p []byte) (n int, _ error) {
 func (tc *testChannel) WriteError(err error) {
 	tc.err <- err
 }
+func (tc *testChannel) Failed() bool {
+	return false
+}
 func (tc *testChannel) Start(_ int64) error { return nil }
 func (tc *testChannel) Close() error {
 	close(tc.output)

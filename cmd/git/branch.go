@@ -47,7 +47,7 @@ This ensures all new branches start from a consistent, up-to-date baseline.`,
 
 			return utils.ValidateRequiredConfig(cmd.Context(), config.Branch)
 		},
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			var callFunc call.Func
 
 			// Determine whether to stash or discard uncommitted changes
@@ -57,7 +57,7 @@ This ensures all new branches start from a consistent, up-to-date baseline.`,
 				callFunc = call.Wrap(StashPush, Update, Branch, StashPop)
 			}
 
-			call.Do(cmd, args, callFunc)
+			return call.Do(cmd, args, callFunc)
 		},
 	}
 

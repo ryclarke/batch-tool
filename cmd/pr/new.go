@@ -51,12 +51,12 @@ Branch Validation:
 
 			return parseCommonPRFlags(cmd)
 		},
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			viper := config.Viper(cmd.Context())
 
 			buildPROptions(cmd)
 
-			call.Do(cmd, args, call.Wrap(git.ValidateBranch(viper.GetString(config.PrBaseBranch)), New))
+			return call.Do(cmd, args, call.Wrap(git.ValidateBranch(viper.GetString(config.PrBaseBranch)), New))
 		},
 	}
 

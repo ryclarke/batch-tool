@@ -52,10 +52,10 @@ Branch Requirement:
 
 			return parseCommonPRFlags(cmd)
 		},
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			buildPROptions(cmd)
 
-			call.Do(cmd, args, Edit)
+			return call.Do(cmd, args, Edit)
 		},
 	}
 

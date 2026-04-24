@@ -48,8 +48,8 @@ especially on shared branches.`,
 			viper := config.Viper(cmd.Context())
 			viper.BindPFlag(config.GitPushForce, cmd.Flags().Lookup(forceFlag))
 		},
-		Run: func(cmd *cobra.Command, args []string) {
-			call.Do(cmd, args, call.Wrap(ValidateBranch(), Push))
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return call.Do(cmd, args, call.Wrap(ValidateBranch(), Push))
 		},
 	}
 

@@ -33,14 +33,14 @@ if the --cached flag is used.`,
   batch-tool git diff --cached ~backend`,
 		Args:              cobra.MinimumNArgs(1),
 		ValidArgsFunction: catalog.CompletionFunc(),
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			gitArgs := []string{"diff"}
 
 			if cached, err := cmd.Flags().GetBool(cachedFlag); err == nil && cached {
 				gitArgs = append(gitArgs, "--cached")
 			}
 
-			call.Do(cmd, args, call.Exec("git", gitArgs...))
+			return call.Do(cmd, args, call.Exec("git", gitArgs...))
 		},
 	}
 

@@ -35,8 +35,8 @@ Branch Requirement:
   batch-tool pr get repo1 repo2`,
 		Args:              cobra.MinimumNArgs(1),
 		ValidArgsFunction: catalog.CompletionFunc(),
-		Run: func(cmd *cobra.Command, args []string) {
-			call.Do(cmd, args, Get)
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return call.Do(cmd, args, Get)
 		},
 	}
 

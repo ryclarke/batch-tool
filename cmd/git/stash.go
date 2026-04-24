@@ -57,8 +57,8 @@ and stashes created by other tools are left untouched for safety.`,
   batch-tool git update ~backend
   batch-tool git stash pop ~backend`,
 		ValidArgsFunction: catalog.CompletionFunc(),
-		Run: func(cmd *cobra.Command, args []string) {
-			call.Do(cmd, args, call.Exec("git", "stash", "list"))
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return call.Do(cmd, args, call.Exec("git", "stash", "list"))
 		},
 	}
 
@@ -86,8 +86,8 @@ without error.`,
   batch-tool git stash push ~backend`,
 		Args:              cobra.MinimumNArgs(1),
 		ValidArgsFunction: catalog.CompletionFunc(),
-		Run: func(cmd *cobra.Command, args []string) {
-			call.Do(cmd, args, StashPush)
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return call.Do(cmd, args, StashPush)
 		},
 	}
 
@@ -117,8 +117,8 @@ the --allow-any flag is used.`,
 		PreRunE: func(cmd *cobra.Command, _ []string) error {
 			return config.Viper(cmd.Context()).BindPFlag(config.GitStashAllowAny, cmd.Flags().Lookup(stashAllowAnyFlag))
 		},
-		Run: func(cmd *cobra.Command, args []string) {
-			call.Do(cmd, args, call.Wrap(ValidateStash, StashPop))
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return call.Do(cmd, args, call.Wrap(ValidateStash, StashPop))
 		},
 	}
 

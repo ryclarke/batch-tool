@@ -55,8 +55,8 @@ Safety Features:
 
 			return utils.ValidateRequiredConfig(cmd.Context(), config.GitCommitMessage)
 		},
-		Run: func(cmd *cobra.Command, args []string) {
-			call.Do(cmd, args, call.Wrap(ValidateBranch(), Commit))
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return call.Do(cmd, args, call.Wrap(ValidateBranch(), Commit))
 		},
 	}
 

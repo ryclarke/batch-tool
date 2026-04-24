@@ -148,8 +148,10 @@ func TestMergeCommandRunPRNotFound(t *testing.T) {
 	cmd.SetErr(&buf)
 	cmd.SetArgs([]string{"repo-1"})
 
-	// The command itself doesn't return an error, but prints it to output
-	_ = cmd.ExecuteContext(ctx)
+	err := cmd.ExecuteContext(ctx)
+	if err == nil {
+		t.Fatal("Expected error when pull request is not found")
+	}
 
 	output := buf.String()
 	if !bytes.Contains([]byte(output), []byte("pull request not found")) {
@@ -248,7 +250,13 @@ func TestMergeCommandWithUnmergeablePR(t *testing.T) {
 			}
 			cmd.SetArgs(args)
 
-			_ = cmd.ExecuteContext(testCtx)
+			err = cmd.ExecuteContext(testCtx)
+			if tt.expectSuccess && err != nil {
+				t.Fatalf("Expected merge command success, got error: %v", err)
+			}
+			if !tt.expectSuccess && err == nil {
+				t.Fatal("Expected merge command failure")
+			}
 
 			output := buf.String()
 
@@ -295,7 +303,10 @@ func TestMergeCommandCheckFlagBypassesFalseNegative(t *testing.T) {
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
 	cmd.SetArgs([]string{"--check", "hotfix-repo"}) // use --check flag to verify mergeability
-	_ = cmd.ExecuteContext(testCtx)
+	err = cmd.ExecuteContext(testCtx)
+	if err == nil {
+		t.Fatal("Expected mergeability check failure with --check")
+	}
 
 	output := buf.String()
 	if !bytes.Contains([]byte(output), []byte("is not mergeable")) {
@@ -317,7 +328,10 @@ func TestMergeCommandCheckFlagBypassesFalseNegative(t *testing.T) {
 	cmd2.SetOut(&buf2)
 	cmd2.SetErr(&buf2)
 	cmd2.SetArgs([]string{"hotfix-repo"}) // no --check flag means bypass checking
-	_ = cmd2.ExecuteContext(testCtx)
+	err = cmd2.ExecuteContext(testCtx)
+	if err != nil {
+		t.Fatalf("Expected merge success without --check, got: %v", err)
+	}
 
 	output2 := buf2.String()
 	if !bytes.Contains([]byte(output2), []byte("Merged pull request")) {

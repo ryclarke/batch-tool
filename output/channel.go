@@ -28,6 +28,8 @@ type Channel interface {
 
 	// WriteError writes an error to the error channel.
 	WriteError(err error)
+	// Failed indicates whether an error has been written to the error channel.
+	Failed() bool
 
 	// Start begins processing with the specified weight for semaphore acquisition.
 	Start(weight int64) error
@@ -53,6 +55,7 @@ type channel struct {
 	name   string
 	output chan []byte
 	err    chan error
+	failed bool
 
 	ctx context.Context
 	sem *semaphore.Weighted
@@ -99,7 +102,12 @@ func (c *channel) WriteString(s string) (n int, _ error) {
 
 // WriteError writes an error to the error channel.
 func (c *channel) WriteError(err error) {
+	c.failed = true
 	c.err <- err
+}
+
+func (c *channel) Failed() bool {
+	return c.failed
 }
 
 func (c *channel) Start(weight int64) error {

@@ -49,12 +49,12 @@ HEAD reference or uses a configured default.`,
 		PreRunE: func(cmd *cobra.Command, _ []string) error {
 			return utils.BindBoolFlags(cmd, config.StashUpdates, stashFlag, noStashFlag)
 		},
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if config.Viper(cmd.Context()).GetBool(config.StashUpdates) {
-				call.Do(cmd, args, call.Wrap(StashPush, Update, StashPop))
-			} else {
-				call.Do(cmd, args, call.Wrap(Clean, Update))
+				return call.Do(cmd, args, call.Wrap(StashPush, Update, StashPop))
 			}
+
+			return call.Do(cmd, args, call.Wrap(Clean, Update))
 		},
 	}
 

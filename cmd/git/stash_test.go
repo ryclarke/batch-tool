@@ -141,10 +141,14 @@ func TestStashPopEmptyStash(t *testing.T) {
 	cmd.SetErr(&buf)
 	cmd.SetArgs([]string{"pop", "repo-1"})
 
-	// Pop without prior stash should succeed (no-op)
+	// Pop without prior stash now returns an error propagated by call.Do.
 	err := cmd.ExecuteContext(testCtx)
-	if err != nil {
-		t.Fatalf("Expected no error when popping without stashed state, got: %v", err)
+	if err == nil {
+		t.Fatal("Expected error when popping without stashed state")
+	}
+
+	if !bytes.Contains(buf.Bytes(), []byte("no stash found to pop")) {
+		t.Fatalf("Expected stash lookup failure in output, got: %s", buf.String())
 	}
 }
 

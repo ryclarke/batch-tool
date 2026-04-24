@@ -119,8 +119,10 @@ func TestGetCommandRunPRNotFound(t *testing.T) {
 	cmd.SetErr(&buf)
 	cmd.SetArgs([]string{"repo-1"})
 
-	// The command itself doesn't return an error, but prints it to output
-	_ = cmd.ExecuteContext(ctx)
+	err := cmd.ExecuteContext(ctx)
+	if err == nil {
+		t.Fatal("Expected error when pull request is not found")
+	}
 
 	output := buf.String()
 	if !bytes.Contains([]byte(output), []byte("pull request not found")) {

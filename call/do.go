@@ -2,6 +2,7 @@ package call
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"runtime"
 	"sort"
@@ -21,7 +22,7 @@ import (
 // concurrency limits. Repository aliases are also expanded here to allow for configurable repository grouping.
 // Output formatting can be fully customized by optionally providing one or more OutputHandler functions. Each
 // repository will also be cloned first if it is missing from the local file system.
-func Do(cmd *cobra.Command, repos []string, callFunc Func, handler ...output.Handler) {
+func Do(cmd *cobra.Command, repos []string, callFunc Func, handler ...output.Handler) error {
 	// Establish a single cancellable context for the entire batch run. The cancel function is
 	// attached to the context as a value so that output handlers (e.g. the TUI) can trigger
 	// cancellation in response to user input, propagating SIGKILL to all in-flight subprocesses.
@@ -66,6 +67,19 @@ func Do(cmd *cobra.Command, repos []string, callFunc Func, handler ...output.Han
 	}
 
 	wg.Wait()
+
+	var numFailed int
+	for _, ch := range channels {
+		if ch.Failed() {
+			numFailed++
+		}
+	}
+
+	if numFailed > 0 {
+		return fmt.Errorf("%d failures reported (see output for details)", numFailed)
+	}
+
+	return nil
 }
 
 // runCallFunc executes the provided Func for a single repository, managing concurrency via the provided semaphore and wait group.

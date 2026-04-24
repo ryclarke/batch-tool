@@ -55,8 +55,8 @@ Synchronous vs Concurrent:
 
 			return nil
 		},
-		Run: func(cmd *cobra.Command, repos []string) {
-			call.Do(cmd, repos, Make)
+		RunE: func(cmd *cobra.Command, repos []string) error {
+			return call.Do(cmd, repos, Make)
 		},
 	}
 
