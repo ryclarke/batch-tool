@@ -4,4 +4,10 @@ updates:
   - package-ecosystem: gomod
     directory: / # location of go.mod
     schedule:
-      interval: daily
+      interval: weekly
+    groups:
+      minor-and-patch:
+        applies-to: version-updates
+        update-types:
+          - "minor"
+          - "patch"
