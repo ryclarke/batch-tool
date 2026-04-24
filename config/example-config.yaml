@@ -1,6 +1,6 @@
 git:
   provider: github      # also supports bitbucket (SaaS or private cloud)
-  host: github.com      # only SaaS Github is currently supported for this provider
+  host: github.com      # for GitHub Enterprise, set this to your instance hostname (e.g. github.example.com)
   project: ryclarke     # username or organization name (default project)
   projects:             # optional list of additional projects to include in catalog (default project is included implicitly)
     - other-org

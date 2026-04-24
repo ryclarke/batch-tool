@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/google/go-github/v74/github"
@@ -14,6 +15,8 @@ import (
 	"github.com/ryclarke/batch-tool/config"
 	"github.com/ryclarke/batch-tool/scm"
 )
+
+const githubSaaSHost = "github.com"
 
 const (
 	// weights designed to avoid secondary rate limiting for creative requests
@@ -44,9 +47,21 @@ func init() {
 // New creates a new GitHub provider instance.
 func New(ctx context.Context, project string) scm.Provider {
 	viper := config.Viper(ctx)
+	client := github.NewClient(http.DefaultClient).WithAuthToken(viper.GetString(config.AuthToken))
+
+	if host := cleanHostname(viper.GetString(config.GitHost)); host != githubSaaSHost && host != "" {
+		var err error
+
+		if client, err = client.WithEnterpriseURLs(
+			fmt.Sprintf("https://%s/api/v3/", host),
+			fmt.Sprintf("https://%s/api/uploads/", host),
+		); err != nil {
+			panic(fmt.Sprintf("github: invalid enterprise URLs for host %q: %v", host, err))
+		}
+	}
+
 	return &Github{
-		// TODO: Add support for enterprise GitHub instances (currently SaaS only)
-		client:  github.NewClient(http.DefaultClient).WithAuthToken(viper.GetString(config.AuthToken)),
+		client:  client,
 		project: project,
 		ctx:     ctx,
 	}
@@ -134,4 +149,13 @@ func (g *Github) writeLock() (done func()) {
 		time.Sleep(config.Viper(g.ctx).GetDuration(config.WriteBackoff))
 		sem.Release(writeWeight)
 	}
+}
+
+// cleanHostname normalizes the GitHub host by removing protocol prefixes and trailing slashes.
+func cleanHostname(host string) string {
+	host = strings.TrimSpace(host)
+	host = strings.TrimPrefix(host, "https://")
+	host = strings.TrimPrefix(host, "http://")
+	host = strings.TrimSuffix(host, "/")
+	return host
 }
