@@ -178,5 +178,5 @@ func buildCommonPRFlags(cmd *cobra.Command) {
 	cmd.Flags().StringP(prDescriptionFlag, "d", "", "pull request description")
 	cmd.Flags().StringSliceP(prReviewerFlag, "r", nil, "pull request reviewer (repeatable)")
 	cmd.Flags().StringSliceP(prTeamReviewerFlag, "R", nil, "pull request team reviewer (repeatable)")
-	utils.BuildBoolFlags(cmd, prDraftFlag, "", prNoDraftFlag, "", "mark pull request as a draft")
+	utils.BuildBoolFlagsDefault(cmd, prDraftFlag, "", prNoDraftFlag, "", false, "mark pull request as a draft")
 }

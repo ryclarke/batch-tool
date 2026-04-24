@@ -22,24 +22,24 @@ const (
 // addEditCmd initializes the pr edit command
 func addEditCmd() *cobra.Command {
 	editCmd := &cobra.Command{
-		Use:   "edit [--draft|--no-draft] [-t <title>] [-d <description>] [-r <reviewer>]... [--reset-reviewers] <repository>...",
+		Use:   "edit [-t <title>] [-d <description>] [-r <reviewer>]... [--reset-reviewers] <repository>...",
 		Short: "Update existing pull requests",
 		Long: `Update existing pull requests for the current branch.
 
 This command updates PR details for existing pull requests using the SCM
-provider API. You can update one or more of the following fields:
+provider API. You can update one or more of the following properties:
   - Title
   - Description
   - Reviewers
-  - Draft status
+  - Team Reviewers
 
 Branch Requirement:
   Must be on a feature branch with an existing PR.`,
 		Example: `  # Update PR title and description
   batch-tool pr edit -t "Updated title" -d "Updated description" repo1 repo2
 
-  # Add reviewer and mark as ready for review
-  batch-tool pr edit -r charlie --no-draft repo1
+  # Add reviewer to the PR
+  batch-tool pr edit -r charlie repo1
 
   # Replace existing reviewers with new list
   batch-tool pr edit -r alice -r bob --reset-reviewers repo1`,

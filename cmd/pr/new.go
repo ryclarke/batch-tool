@@ -4,9 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/spf13/cobra"
-
 	mapset "github.com/deckarep/golang-set/v2"
+	"github.com/spf13/cobra"
 
 	"github.com/ryclarke/batch-tool/call"
 	"github.com/ryclarke/batch-tool/catalog"

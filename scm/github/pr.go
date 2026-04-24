@@ -54,7 +54,7 @@ func (g *Github) OpenPullRequest(repo, branch string, opts *scm.PROptions) (*scm
 	}
 
 	opts.ResetReviewers = false // suppress ResetReviewers when opening a new PR
-	if resp, err = g.applyReviewers(repo, resp, opts); err != nil {
+	if resp, err = g.applyAllReviewers(repo, resp, opts); err != nil {
 		return nil, err
 	}
 
@@ -79,7 +79,8 @@ func (g *Github) UpdatePullRequest(repo, branch string, opts *scm.PROptions) (*s
 		}
 	}
 
-	if pr, err = g.applyReviewers(repo, pr, opts); err != nil {
+	// if there are reviewer changes, apply them regardless of whether other changes were made
+	if pr, err = g.applyAllReviewers(repo, pr, opts); err != nil {
 		return nil, err
 	}
 
