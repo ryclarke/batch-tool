@@ -1,80 +1,77 @@
 # Contributing to batch-tool
 
-This is a short guide on how to contribute to the project.
+This guide covers local development, validation, and pull request expectations for contributors.
 
-## Submitting a pull request ##
+## Prerequisites
 
-If you find a bug that you'd like to fix, or a new feature that you'd like to implement then please submit a pull request via Github.
+- Go 1.26 or later
+- Make
+- Git
 
-You'll need a Go environment set up with GOPATH set. See [the Go getting started docs](https://golang.org/doc/install) for more info.
+## Local Setup
 
-Now in your terminal
+Clone the repository and create a feature branch:
 
 ```bash
 git clone git@github.com:ryclarke/batch-tool.git
 cd batch-tool
+git checkout -b feature/my-change
 ```
 
-Make a branch to add your new feature
+Install the development toolchain used by the project:
 
 ```bash
-git checkout -b feature/my-new-feature
+make deps
 ```
 
-And get hacking.
+This installs:
 
-Make sure you
+- `gotestsum` for test output
+- `goreleaser` for build and release packaging
+- `golangci-lint` for linting and formatting enforcement
 
-  * Add documentation for a new feature
-  * squash commits down to one per feature
-  * rebase to the main branch `git rebase main`
-
-When you are done with that
-
-````bash
-git push origin feature/my-new-feature
-````
-
-Go to the repoistory in Github and click [New pull request](https://github.com/ryclarke/batch-tool/compare).
-
-### Code Style and Quality
-
-This project uses [golangci-lint](https://golangci-lint.run/) with a curated set of linters
-(see [.golangci.yml](.golangci.yml)). Before submitting a pull request, please verify that
-your changes pass both lint and tests:
+## Common Development Commands
 
 ```bash
-make lint    # runs golangci-lint with the project's configuration
-make test    # runs the full test suite with -race
-make cover   # runs tests with coverage reporting
+make test      # run the test suite with -race
+make cover     # run tests with coverage output
+make lint      # run golangci-lint
+make lint-fix  # apply safe lint-driven fixes
+make build     # build the current platform binary via goreleaser
+make install   # install batch-tool into your Go bin directory
+make release   # build release artifacts for all configured platforms
+make help      # list all available targets
 ```
 
-Notes on conventions:
+## Code Conventions
 
-  * **Imports** are grouped via `gci` into standard, third-party, internal (`github.com/ryclarke/batch-tool`),
-    and blank import sections — `make lint-fix` will sort them automatically.
-  * **Viper access** must go through `config.Viper(ctx)` — direct imports of `github.com/spf13/viper`
-    are restricted to the `config` package by `depguard`.
-  * **Context propagation**: long-running operations (subprocesses, HTTP requests) must accept and
-    honor a `context.Context`. Use `exec.CommandContext` and `http.NewRequestWithContext` rather
-    than the non-context variants.
-  * **Tests** prefer table-driven style and live in the same package (`package foo`, not `package foo_test`),
-    using common helpers from `utils/testing` where applicable.
+- Keep `cmd/` focused on Cobra command wiring, flag binding, and argument validation.
+- Keep execution behavior in `call/`, not in command handlers.
+- Keep rendering and interaction logic in `output/`.
+- Access Viper only through `config.Viper(ctx)`. Direct imports of `github.com/spf13/viper` are restricted to the `config` package.
+- Long-running subprocesses and HTTP requests should honor `context.Context` by using `exec.CommandContext` and `http.NewRequestWithContext`.
+- Prefer same-package tests (`package foo`) and reuse helpers from `utils/testing`.
+- Add or update docs when behavior, flags, or configuration expectations change.
 
-### Building from Source
+## Pull Request Workflow
 
-Make provides several build targets:
+Before opening a pull request:
+
+1. Rebase onto `main`.
+2. Run `make lint` and `make test`.
+3. Update tests for behavior changes.
+4. Update user-facing docs if the CLI, config, or workflows changed.
+
+Then push your branch:
 
 ```bash
-# Install to your Go bin directory (recommended for new users)
-make install
-
-# Build for current platform only
-make build
-
-# Create release packages for all platforms
-make release
-
-# View all available targets
-make help
+git push origin feature/my-change
 ```
+
+Open a pull request at [github.com/ryclarke/batch-tool/compare](https://github.com/ryclarke/batch-tool/compare).
+
+## Review Checklist
+
+- The change stays in the owning package instead of duplicating behavior elsewhere.
+- Tests cover new behavior or changed edge cases.
+- New config keys, flags, or workflow changes are reflected in documentation.

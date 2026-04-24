@@ -94,8 +94,7 @@ func TestStashPushCleanWorktree(t *testing.T) {
 	// With a clean worktree, stash push should report "Nothing to stash" or succeed silently
 	if !bytes.Contains([]byte(output), []byte("Nothing to stash")) &&
 		!bytes.Contains([]byte(output), []byte("worktree is clean")) &&
-		!bytes.Contains([]byte(output), []byte("No local changes")) &&
-		err != nil {
+		!bytes.Contains([]byte(output), []byte("No local changes")) {
 		t.Errorf("Expected clean worktree message or success, got: %s, err: %v", output, err)
 	}
 }

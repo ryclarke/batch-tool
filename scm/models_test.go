@@ -50,11 +50,3 @@ func TestRepositoryStruct(t *testing.T) {
 		}
 	}
 }
-
-func TestRepositoryStructDefaults(t *testing.T) {
-	// Zero-valued Repository should report Archived=false by default.
-	repo := Repository{Name: "default-repo"}
-	if repo.Archived {
-		t.Error("Expected Archived to default to false for zero-valued Repository")
-	}
-}

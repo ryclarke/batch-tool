@@ -1,548 +1,200 @@
 # Batch Tool
 
-This tool provides a suite of functionality for performing common tasks across multiple git repositories, including branch management and pull request creation.
+Batch Tool is a command-line utility for running the same workflow across many repositories at once. Make, git, pull request, and shell operations are supported.
 
-## Features
+It is built for people who routinely work across a repo fleet and want one consistent way to:
 
-- **Git Operations**: Create and push branches and commits, and manage history
-- **Pull Request Management**: Create, edit, and merge pull requests (supports GitHub and Bitbucket)
-- **Repository Catalog**: Cache repository metadata for quick matching and topical grouping
-- **Make Target Execution**: Run make targets across multiple repositories
-- **Flexible Configuration**: YAML-based configuration with repository aliases and default reviewers
+- select repositories by name, SCM label, or locally-configured alias
+- fan out git operations safely
+- open, edit, and merge pull requests across supported providers
+- run make targets or custom commands across a coordinated set of repositories
 
-## Getting Started
+## Why Use It
 
-**TL;DR for new users:**
-1. `make install` - Installs batch-tool to your system
-2. Create a `batch-tool.yaml` file with your git provider and repositories
-3. Run `batch-tool git status <repo-names>` to get started
+- One command surface for multi-repository work
+- Fast repository selection with aliases, labels, and exclusions
+- Interactive TUI output by default, with plain line-by-line output for scripts and CI
+- Shared configuration for repository groups, unwanted labels, and reviewers
+- Support for GitHub and Bitbucket pull request workflows
 
-For detailed setup instructions, see the sections below.
+## Install
 
-## Installation
+Choose the lowest-friction option that fits your environment.
 
-### Pre-built Binaries
+### Pre-built Binary
 
-Download and unpack the binary for your platform from [the latest release](https://github.com/ryclarke/batch-tool/releases/latest).
+Download the archive for your platform from [the latest release](https://github.com/ryclarke/batch-tool/releases/latest), unpack it, and place `batch-tool` somewhere on your `PATH`.
 
-### Build and Install from Source
+### Go Install
 
-For the fastest setup, use Make to install directly to your Go bin directory:
+If you already use Go locally, install the latest tagged release with:
 
 ```bash
-git clone git@github.com:ryclarke/batch-tool.git
-cd batch-tool
-
-make install
+go install github.com/ryclarke/batch-tool@latest
 ```
 
-You'll need a Go environment set up with GOPATH set. See [the Go getting started docs](https://golang.org/doc/install) for more info.
+This installs the binary into your Go bin directory, typically `$GOPATH/bin` or `~/go/bin`. Make sure that directory is on your `PATH`.
 
-This will automatically build the tool and install it to `$GOPATH/bin` (or `~/go/bin` if `GOPATH` is not set).
+For local builds, release packaging, and contributor setup, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Quick Start
 
-### 1. Install
+### 1. Create a Config File
 
-If building from source, install the tool to your system:
+Batch Tool looks for `batch-tool.yaml` in:
 
-```bash
-make install
-```
+- the current working directory
+- your user config directory
+- `$XDG_CONFIG_HOME` when set
+- the directory containing the executable
 
-Make sure `$GOPATH/bin` (or `~/go/bin`) is in your `PATH`.
+You can also point to a specific file with `--config`.
 
-### 2. Configuration
-
-Create a configuration file `batch-tool.yaml` in your working directory or user config directory (`~/.config`), or specify a file path manually with `--config`:
+Start with this minimal example:
 
 ```yaml
 git:
   provider: github
-  host: github.com
-  project: your-username-or-org
-  default-branch: main # fallback for a repo with no default branch
-  stash-updates: false # if true, automatically stash/restore changes during git update
-
-channels:
-  output-style: tui  # Modern TUI interface (default); use "native" for scripts
+  project: your-org-or-username
 
 repos:
-  sort: true  # sort output alphabetically by repository name
-
-  # don't match repos containing the following topics unless explicitly added
-  skip-unwanted: true
-  unwanted-labels: deprecated,poc
-
-  # aliases act like custom topics for referencing and grouping repoistories
+  unwanted-labels:
+    - deprecated
+    - poc
   aliases:
-    myproject:
-      - repo1
-      - repo2
-      - repo3
-
-  # list of default reviewers to request for each repository
+    app:
+      - web-app
+      - mobile-app
+    platform:
+      - api
+      - worker
   reviewers:
-    repo1:
-      - reviewer1
-      - reviewer2
+    api:
+      - backend-team
 ```
 
-The only required field is `git.project`, the rest of the configuration has safe default values.
+The only field you must set to get started is `git.project`.
 
-### 3. Authentication
+### 2. Configure Authentication
 
-For repository discovery and pull request operations, you'll need to configure authentication:
+Repository discovery and pull request operations require an API token.
 
-- **GitHub**: Set up a [personal access token](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens)
-- **Bitbucket**: Configure an [API token](https://support.atlassian.com/bitbucket-cloud/docs/using-api-tokens/)
+- GitHub: create a [personal access token](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens)
+- Bitbucket: create an [API token](https://support.atlassian.com/bitbucket-cloud/docs/using-api-tokens/)
 
-The authentication token should be provided via the `AUTH_TOKEN` environment variable (recommended) or the `auth-token` field in the batch-tool config file.
+Prefer setting the token through `AUTH_TOKEN` in your environment.
 
-### 4. Basic Usage
-
-Check the status of multiple repositories:
-```bash
-batch-tool git status repo1 repo2 repo3
-```
-
-Repositories can also be referenced by Github [Topics](https://github.com/topics) or Bitbucket [Labels](https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-labels#api-group-labels):
-```bash
-batch-tool git status '~libraries'
-```
-
-You may also use the same syntax to refer to aliases defined locally in the config file.
-
-- To refer to an alias or topic, include `~` in the argument as seen above.
-- To invert a match to *exclude* a repository or alias/topic, include a `!`.
-- To force selection of a repository or alias/topic, include a `+`.
-  - This bypasses unwanted label filtering and ignores exclusions from other arguments.
-  - If applied to an alias/topic, _every_ member will be included regardless of other filters.
-- To operate on the current working directory only, pass `.` as the sole repository argument.
-  - In this mode, argument expansion (aliases/topics/labels) is skipped.
-  - No repository batching occurs; the command runs once against the current directory.
-
--------------------------------
-
-ℹ️ The `~all` alias is defined implicitly and refers to all discovered repositories for the configured namespace (user profile or organization).
-
--------------------------------
-
-Example:
-```bash
-# repos.aliases:
-#   myservice: [repo1 repo2 repo3 repo4]
-#   deprecated: [repo4]
-# repos.unwanted_labels: [deprecated]
-#
-batch-tool git status '~myservice' '!repo3' # matches repo1 and repo2 only
-batch-tool git status '~myservice' '+repo4' # forces inclusion of repo4
-batch-tool git status '+~myservice' '!~deprecated' # matches all 4 repos
-batch-tool pr get . # run against current directory without alias/label expansion
-```
-
-⚠️ When using special characters for matching and exclusion, ensure that all arguments are quoted properly to avoid improper shell expansion.
-
-## Interactive Mode
-
-When the `--style=tui` flag is provided, batch-tool launches an interactive terminal user interface (TUI) for command selection and navigation.
-
-### Using Interactive Mode
+### 3. Try a Safe Read-Only Command
 
 ```bash
-# Launch the interactive command selector
-batch-tool --style=tui
+batch-tool git status repo1 repo2
+batch-tool labels '~app'
+batch-tool catalog
 ```
 
-The TUI provides:
-- **Visual command navigation**: Browse through available commands and subcommands
-- **Help information**: View command descriptions at each level
-- **Keyboard navigation**: Use arrow keys, vim-style (hjkl), or Enter to navigate
-- **Breadcrumb trail**: See your current location in the command hierarchy
+## Repository Selection
 
-### Keyboard Controls
+Most commands accept one or more repository selectors.
 
-- `↑/k` - Move cursor up
-- `↓/j` - Move cursor down
-- `←/h/backspace` - Go back to parent command
-- `→/l/enter` - Select command or enter subcommand
-- `q/ctrl+c` - Quit
+- `repo1` or `project/repo1`: select a repository directly
+- `'~backend'`: select all repositories with the SCM label or configured alias
+- `'!repo2'` or `'!~deprecated'`: exclude repositories from the working set
+- `'+repo3'` or `'+~experimental'`: force inclusion even if the repo would normally be filtered out
+- `.`: run the command once against the current working directory only
 
-### Output Styles
+ℹ️ `~all` is always available and expands to every discovered repository in the configured project.
 
-The `--style` flag also controls how command output is displayed:
+Examples:
 
-- `tui` (default): Modern TUI with interactive progress display, real-time updates, and scrollable output
-- `native`: Traditional terminal output with streaming updates
-
-Example with output style:
 ```bash
-# Use interactive TUI for output display
-batch-tool git status repo1 repo2 --style=tui
+batch-tool git status '~app' '!mobile-app'
+batch-tool git status '+~experimental' '!~deprecated'
+batch-tool pr get .
 ```
 
-## Commands
+Quote selectors that contain `!`, `+`, or `~` so your shell does not expand them first.
+
+## Core Workflows
 
 ### Git Operations
 
 ```bash
-# Check status across repositories
-batch-tool git status <repos...>
-
-# Create new branches for each repository
-batch-tool git branch -b "<branch-name>" <repos...>
-
-# Checkout the default branches and pull any upstream changes (destroys uncommitted changes)
-batch-tool git update <repos...>
-
-# Show diff information in the working trees
-batch-tool git diff <repos...>
-
-# Commit and push changes
-batch-tool git commit -m "commit message" <repos...>
-```
-
-#### Git Update with Stash
-
-The `git update` command can automatically save and restore uncommitted changes using `git stash`. This is useful when you have local modifications that you want to preserve while updating to the latest default branch.
-
-**Configuration:**
-```yaml
-git:
-  stash-updates: true  # Enable automatic stash by default
-```
-
-**Usage:**
-```bash
-# Enable stash just for this command
-batch-tool git update --stash <repos...>
-
-# Or use the inverted flag to disable stash if it's enabled in config
-batch-tool git update --no-stash <repos...>
-```
-
-**Safety Features:**
-- Only works with stashes created by batch-tool (identified by `batch-tool YYYY-MM-DDTHH:MM:SSZ` message)
-- Safely handles clean working directories (no changes to stash)
-- Fails explicitly if stashed changes cannot be restored
-- Can be globally enabled in config, but can be disabled per-command with `--no-stash`
-
-### Pull Request Management
-
-**Note**: Requires authentication token configuration.
-
-```bash
-# Create new pull requests
-batch-tool pr new -t "PR Title" -d "Description" <repos...>
-
-# Create PRs with user and team reviewers
-batch-tool pr new -r reviewer1 -R my-org/platform-team <repos...>
-
-# Edit existing pull requests
-batch-tool pr edit -t "New Title" -d "New Description" <repos...>
-
-# Add requested reviewers by username
-batch-tool pr edit -r reviewer1 -r reviewer2 <repos...>
-
-# Add requested team reviewers by slug (GitHub provider)
-batch-tool pr edit -R my-org/backend-team -R my-org/frontend-team <repos...>
-
-# Replace existing reviewers (users and teams) instead of appending
-batch-tool pr edit -r reviewer1 -R my-org/platform-team --reset-reviewers <repos...>
-
-# Merge with explicit method and status check behavior
-batch-tool pr merge -m squash --check <repos...>
-batch-tool pr merge --force <repos...>
-
-# Merge all accepted pull requests
-batch-tool pr merge <repos...>
-```
-
-### Miscellaneous
-
-```bash
-# Generate autocompletion script for the specified shell
-batch-tool completion <bash|fish|powershell|zsh>
-
-# Execute make targets
-batch-tool make -t <make target> <repos...>
-
-# Execute arbitrary shell commands across repositories
-## (DANGEROUS - use with caution) ##
-batch-tool sh -c "command to execute" <repos...>
-
-# Execute a script file or executable binary across repositories
-## (DANGEROUS - use with caution) ##
-batch-tool sh -f /path/to/script.sh <repos...>
-
-# Pass arguments to the script using -a/--args flag (repeatable)
-batch-tool sh -f /path/to/script.sh -a arg1 -a arg2 <repos...>
-
-# Skip confirmation prompt with -y flag
-batch-tool sh -y -c "echo 'safe command'" <repos...>
-
-# Test repository filter rules against topics and local aliases
-batch-tool labels <repos...>
-
-# View local repository metadata
-batch-tool catalog
-
-# Run synchronously (useful for computationally-expensive operations)
-batch-tool --sync <command> <repos...>
-```
-
-## Global Flags
-
-- `--config string`: Specify config file (default: `batch-tool.yaml`)
-- `--style string` / `-o`: Output style (`tui` or `native`, default: `tui`)
-- `--print` / `-p`: Print results to stdout after processing is complete
-- `--wait` / `--no-wait`: Wait for user input after processing (auto-disabled in non-interactive output)
-- `--env` / `-e` (repeatable): Environment variables to set for command execution (`KEY=VALUE`)
-- `--sync`: Execute commands synchronously (alias for `--max-concurrency=1`)
-- `--max-concurrency int`: Maximum number of concurrent operations (default: number of logical CPUs)
-- `--sort`: Sort repositories (default: true)
-- `--skip-unwanted`: Skip repositories with unwanted labels (default: true)
-
-## Configuration Reference
-
-### Git Provider Settings
-
-```yaml
-git:
-  provider: github | bitbucket
-  host: github.com  # or your Bitbucket server
-  project: your-org-or-username
-  default-branch: main | develop
-  stash-updates: false          # Stash/restore local changes during git update by default
-  default-merge-method: squash  # PR merge method: merge | squash | rebase
-  directory: /path/to/git/repos  # Base directory for repository clones
-```
-
-#### Repository Directory Structure
-
-The `git.directory` option configures the base directory where repositories will be cloned. When specified, repositories are automatically organized in subdirectories that mirror the git provider's structure:
-
-```
-$GIT_DIRECTORY/
-├── github.com/
-│   ├── myorg/
-│   │   ├── repo1/
-│   │   ├── repo2/
-│   │   └── repo3/
-│   └── anothorg/
-│       └── shared-repo/
-└── bitbucket.example.com/
-    └── myproject/
-        └── api-service/
-```
-
-**Default behavior**: If not specified, defaults to `$GOPATH/src` if `GOPATH` is set, otherwise uses the current working directory.
-
-### Repository Settings
-
-```yaml
-repos:
-  sort: true                   # Sort repository output
-  skip-unwanted: true          # Skip repos with unwanted labels
-  unwanted-labels:             # Labels to skip when skip-unwanted is true
-    - deprecated
-    - poc
-    - archived
-
-  aliases:                     # Group repositories under aliases
-    frontend:
-      - web-app
-      - mobile-app
-    backend:
-      - api-server
-      - worker-service
-
-  reviewers:                   # Default reviewers per repository
-    web-app:
-      - frontend-team
-    api-server:
-      - backend-team
-```
-
-### Output Style and Concurrency Settings
-
-```yaml
-channels:
-  output-style: tui          # Output style: "tui" (default) or "native" (fallback)
-  buffer-size: 100           # Channel buffer size for console output (default: 100)
-  max-concurrency: 8         # Maximum concurrent operations (default: number of logical CPUs)
-```
-
-#### Output Styles
-
-The `output-style` setting controls how command output is displayed:
-
-- **`tui`** (default): Modern terminal UI with real-time updates, styled output, and progress indicators. Features include:
-  - Live progress tracking with completion status
-  - Styled repository names and status indicators
-  - Real-time output streaming with full scrolling support
-  - Color-coded errors and messages
-  - Elapsed time display
-  - Keyboard controls for navigation, including support for Vim keybinds!
-
-- **`native`**: Low-complexity fallback with traditional sequential output with repository headers. Suitable for legacy or non-interactive environments, scripts, and CI/CD pipelines.
-
-> **Note**: The TUI style is recommended for interactive use and provides a better experience for operations across many repositories and/or using long-running commands.
-
-#### Concurrency Control
-
-The `max-concurrency` setting controls how many repositories are processed simultaneously. This is useful for:
-
-- **Resource-intensive operations**: Reduce concurrency to avoid overwhelming the system
-- **Rate-limited APIs**: Prevent hitting API rate limits when working with pull requests
-- **Network-bound operations**: Balance between speed and stability
-
-**Examples:**
-- `max-concurrency: 1` - Process repositories one at a time (equivalent to `--sync`)
-- `max-concurrency: 5` - Conservative setting for API operations
-- `max-concurrency: 20` - Aggressive setting for local git operations
-
-**Tip**: The default concurrency is set to the number of logical CPUs on your system. Start with this default and adjust based on your specific use case and system capabilities.
-
-## Examples
-
-### Daily Workflow
-
-1. **Morning sync**: Update all repositories to latest
-```bash
+batch-tool git status '~app'
+batch-tool git branch -b feature/new-checkout '~app' '~platform'
+batch-tool git diff '~platform'
+batch-tool git commit -m "Roll out config update" '~platform'
+batch-tool git push '~platform'
 batch-tool git update '~all'
 ```
 
-2. **Create feature branch**: Start new work across multiple repos
+`git update` can optionally stash and restore local changes if `git.stash-updates` is enabled or you pass `--stash`.
+
+### Pull Request Operations
+
 ```bash
-batch-tool git branch -b feature/new-feature '~frontend' '~backend'
+batch-tool pr new -t "Add checkout flow" -d "Summary of changes" '~app'
+batch-tool pr edit -r alice -R my-org/platform-team '~platform'
+batch-tool pr merge -m squash --check '~platform'
 ```
 
-3. **Check status**: See what's changed
+PR commands validate that you are not operating from the repository's base branch.
+
+### Make and Exec
+
 ```bash
-batch-tool git status '~frontend' '~backend'
+batch-tool make -t test '~platform'
+batch-tool exec -c "go test ./..." '~platform'
+batch-tool exec -f ./scripts/deploy.sh -a staging '~app'
 ```
 
-4. **Create pull requests**: Submit your changes
-```bash
-batch-tool pr new -t "Add new feature" -d "Detailed description" '~frontend' '~backend'
-```
+⚠️ `exec` is intentionally explicit and prompts for confirmation before running unless you pass `-y`. This feature is powerful but __dangerous__, so use it with caution, especially with destructive commands.
 
-### Maintenance Tasks
+## Output Modes
 
-1. **Run tests across projects**:
-```bash
-batch-tool make -t test '~myproject'
-```
+Batch Tool supports two output styles:
 
-2. **Format code**:
-```bash
-batch-tool make -t format '~myproject'
-```
+- `tui` (default): interactive progress display with scrolling and per-repository output
+- `native`: plain line-by-line stdout — each repository's output is printed as it arrives, with no TUI chrome. Reliable in scripts, CI pipelines, and non-interactive terminals.
 
-3. **Synchronous operations** (when needed):
-```bash
-batch-tool --sync make -t build '~myproject'
-```
+Use `--style native` when you want straightforward terminal output without the interactive display.
 
-4. **Execute custom commands** (use with caution):
-```bash
-# Example: Check Go version across repositories
-batch-tool sh -c "go version" '~myproject'
+The TUI can be cancelled at any time with `q`, `Esc`, or `Ctrl+C`. Cancellation propagates to in-flight subprocesses, not just the screen.
 
-# Example: Clean up temporary files
-batch-tool sh -c "rm -f *.tmp" '~myproject'
-```
+Useful global flags:
 
-## Tips
+- `--config`: use a specific config file
+- `--style` / `-o`: choose `tui` or `native`
+- `--print` / `-p`: print accumulated output after the run completes
+- `--sync`: run repositories one at a time
+- `--max-concurrency`: control parallelism directly
+- `--env` / `-e`: inject environment variables into executed commands
 
-- Use repository aliases in your config to group related repositories
-- The `--sync` flag is useful for operations that must run sequentially
-- Repository labels help organize and filter your catalog
-- Default reviewers in config save time when creating pull requests
-- The tool works from any directory - it will find repositories based on your configuration
-- **⚠️ Shell Command Safety**: The `sh` command is powerful but dangerous. It will prompt for confirmation before executing any command across multiple repositories. Use with extreme caution, especially with destructive commands.
+## Configuration Notes
+
+### Repository Directory
+
+Repositories are cloned beneath `git.directory` using the provider host, project, and repository name. If you do not set `git.directory`, Batch Tool defaults to `$GOPATH/src` when `GOPATH` is available and otherwise falls back to the current working directory.
+
+### Aliases and Unwanted Labels
+
+Use `repos.aliases` to define local groupings that behave like labels. Use `repos.unwanted-labels` together with `repos.skip-unwanted` to keep deprecated or experimental repositories out of broad operations unless you explicitly force them in.
+
+### Default Reviewers
+
+Use `repos.reviewers` or `repos.team_reviewers` to preconfigure the reviewers you usually request for a given repository or label.
 
 ## Troubleshooting
 
-- **Authentication errors**: Ensure your API token is properly configured
-- **Repository not found**: Check that repository names match your git provider
-- **Sync issues**: Use `--sync` flag for operations that need to run sequentially
-- **Config issues**: Verify your `batch-tool.yaml` syntax and paths
-- **Cancelling a run**: In the interactive TUI, press `q`, `Esc`, or `Ctrl+C` to cancel
-  in-flight work — running subprocesses are signaled and the command exits cleanly. The
-  same key bindings dismiss the TUI once the run has finished.
+- Authentication errors: verify `AUTH_TOKEN` and your provider configuration
+- Repository not found: confirm the repository name, default project, and cached catalog data
+- Unexpected matches: run `batch-tool labels <selectors...>` to inspect how your filters resolve
+- Interactive hangs in automation: use `--style native` or `--no-wait`
+- Long-running commands: reduce concurrency with `--sync` or `--max-concurrency` limits
 
-For more detailed help on any command, use:
+For command-specific help, run:
+
 ```bash
 batch-tool [command] --help
 ```
-## Development
 
-### Prerequisites
-
-- Go 1.25 or later
-- Make
-
-### Setup
-
-1. Clone the repository:
-```bash
-git clone git@github.com:ryclarke/batch-tool.git
-cd batch-tool
-```
-
-2. Install development tools:
-```bash
-make deps
-```
-
-This installs:
-- `gotestsum` - Enhanced test output
-- `goreleaser` - Release automation
-- `golangci-lint` - Code quality and style enforcement
-
-### Building
-
-Build for your current platform:
-```bash
-make build
-```
-
-### Testing
-
-Run tests:
-```bash
-make test
-```
-
-Run tests with coverage:
-```bash
-make cover
-```
-
-### Linting
-
-Run linters to check code quality:
-```bash
-make lint
-```
-
-Auto-fix linting issues where possible:
-```bash
-make lint-fix
-```
-
-### Code Style
-
-This project uses `golangci-lint` to enforce consistent code style. Key requirements:
-
-- **Import Grouping**: Imports must be grouped in order:
-  1. Standard library packages
-  2. Third-party dependencies
-  3. Internal project packages (github.com/ryclarke/batch-tool/*)
-
-- **Error Handling**: All errors must be checked (use `_ =` to explicitly ignore)
-- **Code Quality**: Follow standard Go idioms and best practices
-
-The CI pipeline runs linting automatically on all pull requests.
+If you are contributing to the project itself, see [CONTRIBUTING.md](CONTRIBUTING.md).
