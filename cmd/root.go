@@ -3,6 +3,7 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"os"
@@ -12,6 +13,7 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 
+	"github.com/ryclarke/batch-tool/call"
 	"github.com/ryclarke/batch-tool/catalog"
 	"github.com/ryclarke/batch-tool/cmd/exec"
 	"github.com/ryclarke/batch-tool/cmd/git"
@@ -50,8 +52,9 @@ const (
 // RootCmd configures the top-level root command along with all subcommands and flags
 func RootCmd() *cobra.Command {
 	rootCmd := &cobra.Command{
-		Use:   "batch-tool",
-		Short: "Batch tool for working across multiple git repositories",
+		Use:          "batch-tool",
+		Short:        "Batch tool for working across multiple git repositories",
+		SilenceUsage: true,
 		Long: `Batch tool for working across multiple git repositories
 
 This tool provides a collection of utility functions that facilitate work across
@@ -156,9 +159,20 @@ func Execute() {
 		catalog.Init(ctx, false)
 	})
 
-	if err := RootCmd().ExecuteContext(ctx); err != nil {
+	rootCmd := RootCmd()
+	if err := rootCmd.ExecuteContext(ctx); err != nil {
+		// Only print usage for setup or argument-parsing errors.
+		// Printing help for runtime errors would be redundant and confusing.
+		if !errors.Is(err, &call.Error{}) {
+			_ = rootCmd.UsageFunc()(rootCmd)
+
+			fmt.Println(err)
+			os.Exit(1)
+		}
+
+		// Runtime errors from call package
 		fmt.Println(err)
-		os.Exit(1)
+		os.Exit(2)
 	}
 }
 

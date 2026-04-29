@@ -76,7 +76,7 @@ func Do(cmd *cobra.Command, repos []string, callFunc Func, handler ...output.Han
 	}
 
 	if numFailed > 0 {
-		return fmt.Errorf("%d failures reported (see output for details)", numFailed)
+		return &Error{fmt.Errorf("%d failures reported (see output for details)", numFailed)}
 	}
 
 	return nil

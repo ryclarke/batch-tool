@@ -34,7 +34,7 @@ import (
 // within the context of a Func will result in a panic.
 type Func func(ctx context.Context, ch output.Channel) error
 
-// Wrap each provided Func into a new one that executes them order before terminating.
+// Wrap each provided Func into a new one that executes them in order before terminating.
 func Wrap(calls ...Func) Func {
 	return func(ctx context.Context, ch output.Channel) error {
 		// execute each Func, stopping if an error is encountered
@@ -62,4 +62,28 @@ func Exec(command string, arguments ...string) Func {
 
 		return cmd.Run()
 	}
+}
+
+// Error wraps runtime errors that occur during subprocess execution.
+type Error struct {
+	error
+}
+
+// Error implements the error interface.
+func (e *Error) Error() string {
+	if e.error != nil {
+		return e.error.Error()
+	}
+	return ""
+}
+
+// Unwrap returns the wrapped error for error chain inspection.
+func (e *Error) Unwrap() error {
+	return e.error
+}
+
+// Is allows errors.Is to identify this as a call.Error.
+func (e *Error) Is(target error) bool {
+	_, ok := target.(*Error)
+	return ok
 }

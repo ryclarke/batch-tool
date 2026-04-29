@@ -1,6 +1,8 @@
 package call
 
 import (
+	"errors"
+	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -230,4 +232,74 @@ func TestExecIncludesMetadataEnv(t *testing.T) {
 		"GIT_DEFAULT_BRANCH=main",
 		"GIT_PROJECT=test-project",
 	})
+}
+
+func TestError(t *testing.T) {
+	tests := []struct {
+		name     string
+		err      *Error
+		expected string
+	}{
+		{
+			name:     "Non-nil wrapped error",
+			err:      &Error{fmt.Errorf("test error")},
+			expected: "test error",
+		},
+		{
+			name:     "Nil wrapped error",
+			err:      &Error{nil},
+			expected: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := tt.err.Error()
+			if result != tt.expected {
+				t.Errorf("Error() returned %q, expected %q", result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestErrorUnwrap(t *testing.T) {
+	innerErr := fmt.Errorf("inner error")
+	execErr := &Error{innerErr}
+
+	if !errors.Is(execErr.Unwrap(), innerErr) {
+		t.Errorf("Unwrap() returned %v, expected %v", execErr.Unwrap(), innerErr)
+	}
+}
+
+func TestErrorIs(t *testing.T) {
+	tests := []struct {
+		name     string
+		err      error
+		expected bool
+	}{
+		{
+			name:     "Error returns true",
+			err:      &Error{fmt.Errorf("test error")},
+			expected: true,
+		},
+		{
+			name:     "Regular error returns false",
+			err:      fmt.Errorf("regular error"),
+			expected: false,
+		},
+		{
+			name:     "Nil error returns false",
+			err:      nil,
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := errors.Is(tt.err, &Error{})
+			if result != tt.expected {
+				t.Errorf("Error.Is(%v) = %v, expected %v", tt.err, result, tt.expected)
+			}
+		})
+	}
 }
