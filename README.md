@@ -198,3 +198,19 @@ batch-tool [command] --help
 ```
 
 If you are contributing to the project itself, see [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## 🤖 AI Use Disclosure
+
+This project uses AI assistance in a supervised, human-in-the-loop workflow.
+
+AI assistance has been used most heavily for:
+
+- documentation drafting and style iteration
+- early TUI output scaffolding and presentation experiments
+- expanding unit test cases and coverage scenarios
+
+AI is not the source of truth for behavior, correctness, or project structure. The maintainer is responsible for final design choices, code review, and acceptance.
+
+This is not a prompt-driven "vibe-coded" project. Changes are expected to pass normal engineering controls and quality expectations, and any prompt-based contributions are carefully vetted.
+
+Users should expect intentionally reviewed software, not unattended AI output.

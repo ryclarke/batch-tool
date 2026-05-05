@@ -5,7 +5,8 @@
 /*
 Package main is the entry point for the batch-tool application.
 
-It simply executes the root command defined in the cmd package, which handles all command-line parsing and execution logic.
+It simply executes the root command defined in the cmd package,
+which handles all command-line parsing and execution logic.
 */
 package main
 

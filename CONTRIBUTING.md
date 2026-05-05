@@ -53,6 +53,12 @@ make help      # list all available targets
 - Prefer same-package tests (`package foo`) and reuse helpers from `utils/testing`.
 - Add or update docs when behavior, flags, or configuration expectations change.
 
+## AI-Assisted Contributions
+
+AI-assisted work is allowed, but only with direct maintainer oversight.
+
+By submitting a change, you confirm that you reviewed and understood the final diff, validated behavior against expectations, and accept responsibility for correctness and safety.
+
 ## Pull Request Workflow
 
 Before opening a pull request:
