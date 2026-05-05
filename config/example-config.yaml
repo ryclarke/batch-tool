@@ -1,6 +1,6 @@
 git:
   provider: github      # also supports bitbucket (SaaS or private cloud)
-  host: github.com      # only SaaS Github is currently supported for this provider
+  host: github.com      # for GitHub Enterprise, set this to your instance hostname (e.g. github.example.com)
   project: ryclarke     # username or organization name (default project)
   projects:             # optional list of additional projects to include in catalog (default project is included implicitly)
     - other-org
@@ -13,18 +13,28 @@ repos:
   sort: true
   skip-archived: true   # if true, exclude archived repositories from selection (default: true)
   skip-unwanted: true   # if true, exclude repositories with any of the specified unwanted labels (default: true)
-  unwanted-labels:      # repos with any of these labels are considered unwanted (default: [deprecated, poc])
+  unwanted-labels:      # repos with any of these labels are considered unwanted
     - deprecated
     - poc
+
   aliases: # mapping of repository names to custom aliases
     utils:
       - batch-tool
       - another-repo
-  reviewers: # default reviewers for each repository
+
+  reviewers: # default individual reviewers per repository or label (use ~label to apply to all repos in that label)
     batch-tool:
       - ryclarke
     another-repo:
-      - ryclarke
+      - alice
+      - bob
+    ~utils: # applies to all repos in the "utils" label
+      - charlie
+
+  team-reviewers: # default team reviewers per repository or label
+    ~utils:
+      - platform-team
+
   cache:
     path:               # optional custom path for catalog cache (default: <git.directory>/<git.host>/.batch-tool-cache.json)
     ttl: 24h            # cache time-to-live

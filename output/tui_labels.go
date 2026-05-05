@@ -120,10 +120,12 @@ func newLabelsListModel(ctx context.Context, verbose bool) labelsListModel {
 	}
 }
 
+// Init implements tea.Model. The labels list model has no asynchronous work to start.
 func (m labelsListModel) Init() tea.Cmd {
 	return nil
 }
 
+// Update implements tea.Model and handles window resize, key, and mouse events.
 func (m labelsListModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 
@@ -155,7 +157,7 @@ func (m labelsListModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "p":
 			m.printOutput = true
 			return m, tea.Quit
-		case "q", "esc", "ctrl+c":
+		case "enter", "q", "esc", "ctrl+c":
 			return m, tea.Quit
 
 		default:
@@ -248,6 +250,7 @@ func (m labelsListModel) buildStyledRepos(b *strings.Builder, label labelWithRep
 	b.WriteString("\n")
 }
 
+// View implements tea.Model and renders the labels list frame.
 func (m labelsListModel) View() string {
 	if !m.ready {
 		return "Loading labels..."
@@ -346,10 +349,12 @@ func buildLabelWithRepos(ctx context.Context, labelNames []string) []labelWithRe
 	return labels
 }
 
+// Init implements tea.Model. The labels filter model has no asynchronous work to start.
 func (m labelsFilterModel) Init() tea.Cmd {
 	return nil
 }
 
+// Update implements tea.Model and handles window resize, key, and mouse events.
 func (m labelsFilterModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 
@@ -514,6 +519,7 @@ func (m labelsFilterModel) buildVerboseContent(ctx context.Context, set []labelW
 	}
 }
 
+// View implements tea.Model and renders the filtered set-theory labels frame.
 func (m labelsFilterModel) View() string {
 	if !m.ready {
 		return "Processing filters..."

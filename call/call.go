@@ -1,25 +1,3 @@
-/*
-Package call provides helpers for managing and executing asynchronous work
-
-	 across multiple repositories. Commands for this batch tool shall execute
-	 `Do(...)` with a Wrapper containing all of the tasks for that command.
-
-	 Example:
-	 	repos := []string{"repo1", "repo2", "repo3"}
-			fwrap := Wrap(Exec("git", "status"), Exec("ls"))
-			Do(repos, fwrap)
-
-		The above example code calls `git status` followed by `ls` on all three
-		provided repositories, executing asynchronously and printing the output
-		in order. Console output will block iteratively across the repository
-		list to ensure that the output isn't mixed, but the processing of each
-		repository's respective tasks is fully parallel in the background.
-
-		The `Exec` Func builder should be sufficient for most commands, but
-		custom Func instances can be defined for more complex scenarios. It
-		is also possible to define entire `Wrapper` instances if a specific use
-		case requires special handling distinct from the default behavior.
-*/
 package call
 
 import (
@@ -34,7 +12,7 @@ import (
 // within the context of a Func will result in a panic.
 type Func func(ctx context.Context, ch output.Channel) error
 
-// Wrap each provided Func into a new one that executes them order before terminating.
+// Wrap each provided Func into a new one that executes them in order before terminating.
 func Wrap(calls ...Func) Func {
 	return func(ctx context.Context, ch output.Channel) error {
 		// execute each Func, stopping if an error is encountered
@@ -62,4 +40,28 @@ func Exec(command string, arguments ...string) Func {
 
 		return cmd.Run()
 	}
+}
+
+// Error wraps runtime errors that occur during subprocess execution.
+type Error struct {
+	error
+}
+
+// Error implements the error interface.
+func (e *Error) Error() string {
+	if e.error != nil {
+		return e.error.Error()
+	}
+	return ""
+}
+
+// Unwrap returns the wrapped error for error chain inspection.
+func (e *Error) Unwrap() error {
+	return e.error
+}
+
+// Is allows errors.Is to identify this as a call.Error.
+func (e *Error) Is(target error) bool {
+	_, ok := target.(*Error)
+	return ok
 }

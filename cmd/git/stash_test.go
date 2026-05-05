@@ -94,8 +94,7 @@ func TestStashPushCleanWorktree(t *testing.T) {
 	// With a clean worktree, stash push should report "Nothing to stash" or succeed silently
 	if !bytes.Contains([]byte(output), []byte("Nothing to stash")) &&
 		!bytes.Contains([]byte(output), []byte("worktree is clean")) &&
-		!bytes.Contains([]byte(output), []byte("No local changes")) &&
-		err != nil {
+		!bytes.Contains([]byte(output), []byte("No local changes")) {
 		t.Errorf("Expected clean worktree message or success, got: %s, err: %v", output, err)
 	}
 }
@@ -142,10 +141,14 @@ func TestStashPopEmptyStash(t *testing.T) {
 	cmd.SetErr(&buf)
 	cmd.SetArgs([]string{"pop", "repo-1"})
 
-	// Pop without prior stash should succeed (no-op)
+	// Pop without prior stash now returns an error propagated by call.Do.
 	err := cmd.ExecuteContext(testCtx)
-	if err != nil {
-		t.Fatalf("Expected no error when popping without stashed state, got: %v", err)
+	if err == nil {
+		t.Fatal("Expected error when popping without stashed state")
+	}
+
+	if !bytes.Contains(buf.Bytes(), []byte("no stash found to pop")) {
+		t.Fatalf("Expected stash lookup failure in output, got: %s", buf.String())
 	}
 }
 
@@ -227,10 +230,8 @@ func TestLookupChanges(t *testing.T) {
 	reposPath := testhelper.SetupRepos(t, []string{"repo-1"})
 	testCtx := setupTestGitContext(t, reposPath)
 
-	// SetupRepos creates test.txt but doesn't commit it - commit it so repo is clean
+	// Repo is clean after SetupRepos
 	repoDir := filepath.Join(reposPath, "example.com", "test-project", "repo-1")
-	testhelper.ExecCommand(t, repoDir, "git", "add", "test.txt")
-	testhelper.ExecCommand(t, repoDir, "git", "commit", "-m", "Add test.txt")
 
 	// Now repo should be clean
 	hasChanges, err := lookupChanges(testCtx, "repo-1")
@@ -323,13 +324,6 @@ func TestValidateStash(t *testing.T) {
 func TestStashMultipleRepos(t *testing.T) {
 	reposPath := testhelper.SetupRepos(t, []string{"repo-1", "repo-2"})
 	testCtx := setupTestGitContext(t, reposPath)
-
-	// Commit the test.txt file that SetupRepos created to ensure repo has a commit history
-	for _, repoName := range []string{"repo-1", "repo-2"} {
-		repoDir := filepath.Join(reposPath, "example.com", "test-project", repoName)
-		testhelper.ExecCommand(t, repoDir, "git", "add", "test.txt")
-		testhelper.ExecCommand(t, repoDir, "git", "commit", "-m", "Add test.txt")
-	}
 
 	// Create changes in both repos
 	for _, repoName := range []string{"repo-1", "repo-2"} {

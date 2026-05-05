@@ -4,11 +4,6 @@
 
 version: 2
 
-before:
-  hooks:
-    - go mod tidy
-    - go mod vendor
-
 builds:
   - env:
       - CGO_ENABLED=0
@@ -30,10 +25,15 @@ archives:
         formats: [zip]
     name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
 
+checksum:
+  algorithm: sha256
+
 changelog:
   use: github-native
 
 release:
+  prerelease: auto
+  make_latest: "{{ if .Prerelease }}false{{ else }}true{{ end }}"
   footer: >-
 
     ---

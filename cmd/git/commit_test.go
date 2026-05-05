@@ -17,8 +17,8 @@ func TestAddCommitCmd(t *testing.T) {
 		t.Fatal("addCommitCmd() returned nil")
 	}
 
-	if cmd.Use != "commit {-m <message>|-a [-m <message>]} [--push] <repository>..." {
-		t.Errorf("Expected Use to be 'commit {-m <message>|-a [-m <message>]} [--push] <repository>...', got %s", cmd.Use)
+	if cmd.Use != "commit {-m <message>|--amend [-m <message>]} [--push] <repository>..." {
+		t.Errorf("Expected Use to be 'commit {-m <message>|--amend [-m <message>]} [--push] <repository>...', got %s", cmd.Use)
 	}
 
 	if cmd.Short == "" {
@@ -87,6 +87,28 @@ func TestCommitCmdPreRunE(t *testing.T) {
 	}
 }
 
+func TestCommitCmdPreRunEAmendPushSetsForce(t *testing.T) {
+	cmd := addCommitCmd()
+	ctx := loadFixture(t)
+	cmd.SetContext(ctx)
+
+	viper := config.Viper(ctx)
+	viper.Set(config.GitPushForce, false)
+	viper.Set(config.GitCommitPush, true)
+
+	if err := cmd.Flags().Set("amend", "true"); err != nil {
+		t.Fatalf("Failed setting amend flag: %v", err)
+	}
+
+	if err := cmd.PreRunE(cmd, []string{}); err != nil {
+		t.Fatalf("Expected no error when amend+push are set, got %v", err)
+	}
+
+	if !viper.GetBool(config.GitPushForce) {
+		t.Fatal("Expected GitPushForce to be true when both amend and push are true")
+	}
+}
+
 func TestCommitCommandRun(t *testing.T) {
 	reposPath := testhelper.SetupRepos(t, []string{"repo-1", "repo-2"}, true)
 
@@ -106,7 +128,12 @@ func TestCommitCommandRun(t *testing.T) {
 			expectedOutput: []string{
 				"repo-1",
 			},
-			setupFunc: func(_ *testing.T, _ string) {},
+			setupFunc: func(t *testing.T, repoPath string) {
+				testFile := filepath.Join(repoPath, "commit-test.txt")
+				if err := os.WriteFile(testFile, []byte("new content\n"), 0644); err != nil {
+					t.Fatalf("Failed to create test file: %v", err)
+				}
+			},
 		},
 		{
 			name:    "Amend commit",
@@ -219,8 +246,11 @@ func TestCommitCommandRunOnMainBranch(t *testing.T) {
 	cmd.SetErr(&buf)
 	cmd.SetArgs([]string{"--message", "Test commit", "repo-1"})
 
-	// Should output error because ValidateBranch prevents committing on main branch
-	_ = cmd.ExecuteContext(ctx)
+	// Should return an error because ValidateBranch prevents committing on main branch
+	err := cmd.ExecuteContext(ctx)
+	if err == nil {
+		t.Fatal("Expected error when trying to commit on main branch")
+	}
 
 	output := buf.String()
 	if !bytes.Contains([]byte(output), []byte("ERROR")) {
@@ -239,14 +269,23 @@ func TestCommitCommandRunWithNoPushFlag(t *testing.T) {
 	repoDir := filepath.Join(reposPath, "example.com", "test-project", "repo-1")
 	testhelper.ExecCommand(t, repoDir, "git", "checkout", "-b", "feature-branch")
 
+	// Create a change so a non-amend commit succeeds.
+	testFile := filepath.Join(repoDir, "commit-no-push.txt")
+	if err := os.WriteFile(testFile, []byte("commit without push\n"), 0644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
+
 	cmd := addCommitCmd()
 
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
-	cmd.SetArgs([]string{"--message", "Test commit", "--no-push", "repo-1"})
+	cmd.SetArgs([]string{"--message", "Test commit", "repo-1"})
 
-	_ = cmd.ExecuteContext(ctx)
+	err := cmd.ExecuteContext(ctx)
+	if err != nil {
+		t.Fatalf("Expected no error when committing on feature branch without push, got: %v", err)
+	}
 }
 
 func TestCommitCommandRunWithAmendAndMessage(t *testing.T) {
@@ -281,7 +320,10 @@ func TestCommitCommandRunWithAmendAndMessage(t *testing.T) {
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
-	cmd.SetArgs([]string{"--amend", "--message", "Amended commit", "--no-push", "repo-1"})
+	cmd.SetArgs([]string{"--amend", "--message", "Amended commit", "repo-1"})
 
-	_ = cmd.ExecuteContext(ctx)
+	err := cmd.ExecuteContext(ctx)
+	if err != nil {
+		t.Fatalf("Expected no error for amend with message on feature branch, got: %v", err)
+	}
 }

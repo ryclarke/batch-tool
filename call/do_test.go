@@ -10,6 +10,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/spf13/cobra"
+
 	"github.com/ryclarke/batch-tool/config"
 	"github.com/ryclarke/batch-tool/output"
 	testhelper "github.com/ryclarke/batch-tool/utils/testing"
@@ -526,4 +528,63 @@ func TestRunCallFuncCloning(t *testing.T) {
 	// Should see git clone output and error from failed clone
 	testhelper.AssertContains(t, output, []string{"Cloning into"})
 	testhelper.AssertContains(t, errOutput, []string{"ERROR:"})
+}
+
+// TestDoHandlerCancelPropagation verifies that an output handler invoking
+// config.Cancel(cmd.Context()) propagates cancellation to in-flight Funcs.
+// This guards against a regression where the TUI's quit key would only stop
+// the UI loop while leaving subprocesses running in the background.
+func TestDoHandlerCancelPropagation(t *testing.T) {
+	ctx := loadFixture(t)
+	testhelper.SetupDirs(t, ctx, []string{"repo1", "repo2"})
+
+	viper := config.Viper(ctx)
+	viper.Set(config.MaxConcurrency, 2)
+	viper.Set(config.ChannelBuffer, 10)
+	viper.Set(config.SortRepos, false)
+
+	started := make(chan struct{}, 2)
+	cancelled := atomic.Int32{}
+
+	// A Func that signals it has started, then waits for context cancellation.
+	// It returns ctx.Err() if cancelled and increments the cancelled counter so
+	// the test can assert that propagation actually reached the worker.
+	slowFunc := func(ctx context.Context, _ output.Channel) error {
+		started <- struct{}{}
+		select {
+		case <-ctx.Done():
+			cancelled.Add(1)
+			return ctx.Err()
+		case <-time.After(5 * time.Second):
+			return nil
+		}
+	}
+
+	// Handler that waits for both workers to start, then triggers cancel via
+	// the context value attached by call.Do (mirroring TUIHandler's quit path).
+	handler := func(cmd *cobra.Command, _ []output.Channel) {
+		<-started
+		<-started
+		config.Cancel(cmd.Context())()
+	}
+
+	var buf bytes.Buffer
+	cmd := fakeCmd(t, ctx, &buf)
+	cmd.SetErr(&buf)
+
+	done := make(chan struct{})
+	go func() {
+		Do(cmd, []string{"repo1", "repo2"}, slowFunc, handler)
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("Do did not return within 2s after handler triggered cancel; cancellation did not propagate")
+	}
+
+	if got := cancelled.Load(); got != 2 {
+		t.Errorf("expected both workers to observe cancellation, got %d/2", got)
+	}
 }

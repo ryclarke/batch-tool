@@ -1,4 +1,3 @@
-// Package scm provides source control management abstractions and provider interfaces.
 package scm
 
 // Repository represents a source code repository.

@@ -5,7 +5,7 @@ permissions:
 on:
   push:
     tags:
-      - 'v*'
+      - 'v*.*.*' # match all semver tags, e.g. v1.2.3 or v1.2.3-beta.1
 
 jobs:
   release:

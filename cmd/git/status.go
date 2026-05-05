@@ -28,8 +28,8 @@ This command fetches the status for each repository, displaying:
   batch-tool git status ~all`,
 		Args:              cobra.MinimumNArgs(1),
 		ValidArgsFunction: catalog.CompletionFunc(),
-		Run: func(cmd *cobra.Command, args []string) {
-			call.Do(cmd, args, Status)
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return call.Do(cmd, args, Status)
 		},
 	}
 

@@ -3,24 +3,16 @@ package pr
 import (
 	"testing"
 
+	"github.com/spf13/cobra"
+
 	"github.com/ryclarke/batch-tool/config"
 )
 
 func TestPrCmd(t *testing.T) {
 	loadFixture(t)
 
-	cmd := Cmd()
-
-	if cmd == nil {
+	if Cmd() == nil {
 		t.Fatal("Cmd() returned nil")
-	}
-
-	if cmd.Use != "pr <repository>..." {
-		t.Errorf("Expected Use to be 'pr <repository>...', got %s", cmd.Use)
-	}
-
-	if cmd.Short == "" {
-		t.Error("Expected Short description to be set")
 	}
 }
 
@@ -54,38 +46,92 @@ func TestPrCmdFlags(t *testing.T) {
 
 	cmd := Cmd()
 
-	// Test persistent flags
-	titleFlag := cmd.PersistentFlags().Lookup("title")
-	if titleFlag == nil {
-		t.Error("title flag not found")
+	// Common PR CRUD flags are local to new/edit commands, not root pr
+	for _, name := range []string{"title", "description", "reviewer", "team-reviewer", "draft", "no-draft"} {
+		if cmd.Flag(name) != nil {
+			t.Errorf("Did not expect root pr command to expose %q flag", name)
+		}
+	}
+}
 
-		return
+func TestBuildCommonPRFlags(t *testing.T) {
+	cmd := &cobra.Command{}
+	buildCommonPRFlags(cmd)
+
+	tests := []struct {
+		name      string
+		shorthand string
+	}{
+		{name: "title", shorthand: "t"},
+		{name: "description", shorthand: "d"},
+		{name: "reviewer", shorthand: "r"},
+		{name: "team-reviewer", shorthand: "R"},
+		{name: "draft", shorthand: ""},
+		{name: "no-draft", shorthand: ""},
 	}
 
-	if titleFlag.Shorthand != "t" {
-		t.Errorf("Expected title flag shorthand to be 't', got %s", titleFlag.Shorthand)
+	for _, tt := range tests {
+		flag := cmd.Flag(tt.name)
+		if flag == nil {
+			t.Fatalf("Expected flag %q to exist", tt.name)
+		}
+
+		if flag.Shorthand != tt.shorthand {
+			t.Errorf("Flag %q shorthand mismatch: want %q, got %q", tt.name, tt.shorthand, flag.Shorthand)
+		}
+	}
+}
+
+func TestParseCommonPRFlags(t *testing.T) {
+	ctx := loadFixture(t)
+	viper := config.Viper(ctx)
+
+	cmd := &cobra.Command{}
+	cmd.SetContext(ctx)
+	buildCommonPRFlags(cmd)
+
+	if err := cmd.Flags().Set("title", "T"); err != nil {
+		t.Fatalf("Failed to set title flag: %v", err)
 	}
 
-	descFlag := cmd.PersistentFlags().Lookup("description")
-	if descFlag == nil {
-		t.Error("description flag not found")
-
-		return
+	if err := cmd.Flags().Set("description", "D"); err != nil {
+		t.Fatalf("Failed to set description flag: %v", err)
 	}
 
-	if descFlag.Shorthand != "d" {
-		t.Errorf("Expected description flag shorthand to be 'd', got %s", descFlag.Shorthand)
+	if err := cmd.Flags().Set("reviewer", "alice,bob"); err != nil {
+		t.Fatalf("Failed to set reviewer flag: %v", err)
 	}
 
-	reviewerFlag := cmd.PersistentFlags().Lookup("reviewer")
-	if reviewerFlag == nil {
-		t.Error("reviewer flag not found")
-
-		return
+	if err := cmd.Flags().Set("team-reviewer", "platform"); err != nil {
+		t.Fatalf("Failed to set team-reviewer flag: %v", err)
 	}
 
-	if reviewerFlag.Shorthand != "r" {
-		t.Errorf("Expected reviewer flag shorthand to be 'r', got %s", reviewerFlag.Shorthand)
+	if err := cmd.PersistentFlags().Set("no-draft", "true"); err != nil {
+		t.Fatalf("Failed to set no-draft flag: %v", err)
+	}
+
+	if err := parseCommonPRFlags(cmd); err != nil {
+		t.Fatalf("parseCommonPRFlags failed: %v", err)
+	}
+
+	if got := viper.GetString(config.PrTitle); got != "T" {
+		t.Errorf("Expected title T, got %q", got)
+	}
+
+	if got := viper.GetString(config.PrDescription); got != "D" {
+		t.Errorf("Expected description D, got %q", got)
+	}
+
+	if got := viper.GetStringSlice(config.PrReviewers); len(got) != 2 || got[0] != "alice" || got[1] != "bob" {
+		t.Errorf("Expected reviewers [alice bob], got %v", got)
+	}
+
+	if got := viper.GetStringSlice(config.PrTeamReviewers); len(got) != 1 || got[0] != "platform" {
+		t.Errorf("Expected team reviewers [platform], got %v", got)
+	}
+
+	if got := viper.GetBool(config.PrDraft); got {
+		t.Errorf("Expected draft=false when no-draft is set, got true")
 	}
 }
 

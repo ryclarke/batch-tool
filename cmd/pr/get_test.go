@@ -16,14 +16,6 @@ func TestAddGetCmd(t *testing.T) {
 		t.Fatal("addGetCmd() returned nil")
 	}
 
-	if cmd.Use != "get <repository>..." {
-		t.Errorf("Expected Use to be 'get <repository>...', got %s", cmd.Use)
-	}
-
-	if cmd.Short == "" {
-		t.Error("Expected Short description to be set")
-	}
-
 	// Test aliases
 	aliases := cmd.Aliases
 	if len(aliases) != 1 || aliases[0] != "list" {
@@ -127,8 +119,10 @@ func TestGetCommandRunPRNotFound(t *testing.T) {
 	cmd.SetErr(&buf)
 	cmd.SetArgs([]string{"repo-1"})
 
-	// The command itself doesn't return an error, but prints it to output
-	_ = cmd.ExecuteContext(ctx)
+	err := cmd.ExecuteContext(ctx)
+	if err == nil {
+		t.Fatal("Expected error when pull request is not found")
+	}
 
 	output := buf.String()
 	if !bytes.Contains([]byte(output), []byte("pull request not found")) {

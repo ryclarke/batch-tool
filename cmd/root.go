@@ -1,9 +1,10 @@
-// Package cmd provides the command-line interface for batch-tool.
 package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"math"
 	"os"
 	"runtime"
 	"strings"
@@ -11,6 +12,7 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 
+	"github.com/ryclarke/batch-tool/call"
 	"github.com/ryclarke/batch-tool/catalog"
 	"github.com/ryclarke/batch-tool/cmd/exec"
 	"github.com/ryclarke/batch-tool/cmd/git"
@@ -49,8 +51,9 @@ const (
 // RootCmd configures the top-level root command along with all subcommands and flags
 func RootCmd() *cobra.Command {
 	rootCmd := &cobra.Command{
-		Use:   "batch-tool",
-		Short: "Batch tool for working across multiple git repositories",
+		Use:          "batch-tool",
+		Short:        "Batch tool for working across multiple git repositories",
+		SilenceUsage: true,
 		Long: `Batch tool for working across multiple git repositories
 
 This tool provides a collection of utility functions that facilitate work across
@@ -155,9 +158,20 @@ func Execute() {
 		catalog.Init(ctx, false)
 	})
 
-	if err := RootCmd().ExecuteContext(ctx); err != nil {
+	rootCmd := RootCmd()
+	if err := rootCmd.ExecuteContext(ctx); err != nil {
+		// Only print usage for setup or argument-parsing errors.
+		// Printing help for runtime errors would be redundant and confusing.
+		if !errors.Is(err, &call.Error{}) {
+			_ = rootCmd.UsageFunc()(rootCmd)
+
+			fmt.Println(err)
+			os.Exit(1)
+		}
+
+		// Runtime errors from call package
 		fmt.Println(err)
-		os.Exit(1)
+		os.Exit(2)
 	}
 }
 
@@ -175,7 +189,8 @@ func setTerminalWait(cmd *cobra.Command) error {
 
 		// Auto-detect environment type if no flags are explicitly set
 		// This prevents hanging in pipes, redirects, and CI/CD environments
-		if !term.IsTerminal(int(os.Stdout.Fd())) {
+		stdoutFd := os.Stdout.Fd()
+		if stdoutFd <= math.MaxInt && !term.IsTerminal(int(stdoutFd)) { //nolint:gosec // bounds checked above
 			viper.Set(config.WaitOnExit, false)
 		}
 	}
@@ -290,7 +305,7 @@ Cache Management:
 		},
 	}
 
-	cmd.Flags().BoolP(catalogFlushFlag, "f", false, "Force refresh of catalog cache")
+	cmd.Flags().BoolP(catalogFlushFlag, "f", false, "force refresh of catalog cache")
 
 	return cmd
 }

@@ -101,10 +101,12 @@ func newCatalogModel(ctx context.Context) catalogModel {
 	}
 }
 
+// Init implements tea.Model. The catalog model has no asynchronous work to start.
 func (m catalogModel) Init() tea.Cmd {
 	return nil
 }
 
+// Update implements tea.Model and handles window resize, key, and mouse events.
 func (m catalogModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 
@@ -247,6 +249,7 @@ func (m catalogModel) buildLabels(b *strings.Builder, labels []string, styles ca
 	b.WriteString(styles.wrap().Render("  ( " + strings.Join(labelStrs, ", ") + " )"))
 }
 
+// View implements tea.Model and renders the catalog frame.
 func (m catalogModel) View() string {
 	if !m.ready {
 		return "Loading catalog..."

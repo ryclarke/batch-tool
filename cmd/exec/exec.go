@@ -1,4 +1,3 @@
-// Package exec provides the shell command execution functionality for batch-tool.
 package exec
 
 import (
@@ -107,13 +106,11 @@ func runExecCommand(cmd *cobra.Command, args []string) error {
 	// Execute the command or file
 	if filePath != "" {
 		// Execute the file directly (supports both scripts and binaries)
-		call.Do(cmd, args, call.Exec(filePath, fileArgs...))
-	} else {
-		// Execute inline command via shell evaluation
-		call.Do(cmd, args, call.Exec("sh", "-c", command))
+		return call.Do(cmd, args, call.Exec(filePath, fileArgs...))
 	}
 
-	return nil
+	// Execute inline command via shell evaluation
+	return call.Do(cmd, args, call.Exec("sh", "-c", command))
 }
 
 // confirmExecution prompts the user for confirmation and returns true if confirmed

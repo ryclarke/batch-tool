@@ -483,13 +483,18 @@ func TestShellCmdWithFileFlag(t *testing.T) {
 		t.Fatalf("Failed to create test script file: %v", err)
 	}
 
+	testhelper.SetupDirs(t, ctx, []string{"repo1"})
+
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
 	cmd.SetIn(mockStdin("yes\n"))
 
 	cmd.SetArgs([]string{"-f", scriptPath, "repo1"})
-	_ = cmd.ExecuteContext(ctx)
+	err = cmd.ExecuteContext(ctx)
+	if err != nil {
+		t.Fatalf("Unexpected error executing file command: %v", err)
+	}
 
 	output := buf.String()
 	if strings.Contains(output, "Aborting.") {
@@ -606,11 +611,13 @@ func TestShellCmdForceWithFileFlag(t *testing.T) {
 	// Create a temporary script file
 	tmpDir := t.TempDir()
 	scriptPath := filepath.Join(tmpDir, "test-script.sh")
-	scriptContent := "echo 'Test script'"
-	err := os.WriteFile(scriptPath, []byte(scriptContent), 0644)
+	scriptContent := "#!/bin/sh\necho 'Test script'\n"
+	err := os.WriteFile(scriptPath, []byte(scriptContent), 0755)
 	if err != nil {
 		t.Fatalf("Failed to create test script file: %v", err)
 	}
+
+	testhelper.SetupDirs(t, ctx, []string{"repo1"})
 
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
@@ -618,7 +625,10 @@ func TestShellCmdForceWithFileFlag(t *testing.T) {
 
 	// Use -y flag (new shorthand for force) with -f flag
 	cmd.SetArgs([]string{"-y", "-f", scriptPath, "repo1"})
-	_ = cmd.ExecuteContext(ctx)
+	err = cmd.ExecuteContext(ctx)
+	if err != nil {
+		t.Fatalf("Unexpected error executing forced file command: %v", err)
+	}
 
 	output := buf.String()
 	// Should not prompt for confirmation with -y flag
@@ -739,13 +749,18 @@ func TestShellCmdWithBinaryExecutable(t *testing.T) {
 		t.Fatalf("Failed to create test binary: %v", err)
 	}
 
+	testhelper.SetupDirs(t, ctx, []string{"repo1"})
+
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
 	cmd.SetIn(mockStdin("y\n"))
 
 	cmd.SetArgs([]string{"-f", binaryPath, "repo1"})
-	_ = cmd.ExecuteContext(ctx)
+	err = cmd.ExecuteContext(ctx)
+	if err != nil {
+		t.Fatalf("Unexpected error executing binary file command: %v", err)
+	}
 
 	output := buf.String()
 	// Should show the binary path with 'file:' prefix in confirmation

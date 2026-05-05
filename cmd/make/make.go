@@ -1,4 +1,3 @@
-// Package make provides make target execution functionality for batch-tool.
 package make
 
 import (
@@ -55,8 +54,8 @@ Synchronous vs Concurrent:
 
 			return nil
 		},
-		Run: func(cmd *cobra.Command, repos []string) {
-			call.Do(cmd, repos, Make)
+		RunE: func(cmd *cobra.Command, repos []string) error {
+			return call.Do(cmd, repos, Make)
 		},
 	}
 

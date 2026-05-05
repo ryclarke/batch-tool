@@ -9,8 +9,8 @@ import (
 	"github.com/ryclarke/batch-tool/scm"
 )
 
-// applyReviewers applies the specified reviewers and team reviewers to the given pull request based on the provided options.
-func (g *Github) applyReviewers(repo string, pr *github.PullRequest, opts *scm.PROptions) (*github.PullRequest, error) {
+// applyAllReviewers applies the specified reviewers and team reviewers to the given pull request based on the provided options.
+func (g *Github) applyAllReviewers(repo string, pr *github.PullRequest, opts *scm.PROptions) (*github.PullRequest, error) {
 	if opts == nil {
 		opts = &scm.PROptions{}
 	}
@@ -18,34 +18,29 @@ func (g *Github) applyReviewers(repo string, pr *github.PullRequest, opts *scm.P
 	var err error
 
 	if len(opts.Reviewers) > 0 {
-		// If ResetReviewers is true, replace existing reviewers with the provided list (default behavior is to append)
-		if opts.ResetReviewers {
-			if pr, err = g.replaceReviewers(repo, pr.GetNumber(), opts.Reviewers); err != nil {
-				return nil, err
-			}
-		} else {
-			// GitHub's RequestReviewers API appends to existing reviewers
-			if pr, err = g.requestReviewers(repo, pr.GetNumber(), opts.Reviewers); err != nil {
-				return nil, err
-			}
+		if pr, err = g.applyReviewers(repo, pr, opts); err != nil {
+			return nil, err
 		}
 	}
 
 	if len(opts.TeamReviewers) > 0 {
-		// If ResetReviewers is true, replace existing team reviewers with the provided list (default behavior is to append)
-		if opts.ResetReviewers {
-			if pr, err = g.replaceTeamReviewers(repo, pr.GetNumber(), opts.TeamReviewers); err != nil {
-				return nil, err
-			}
-		} else {
-			// GitHub's RequestTeamReviewers API appends to existing team reviewers
-			if pr, err = g.requestTeamReviewers(repo, pr.GetNumber(), opts.TeamReviewers); err != nil {
-				return nil, err
-			}
+		if pr, err = g.applyTeamReviewers(repo, pr, opts); err != nil {
+			return nil, err
 		}
 	}
 
 	return pr, nil
+}
+
+// applyReviewers applies the specified individual reviewers to the given pull request.
+func (g *Github) applyReviewers(repo string, pr *github.PullRequest, opts *scm.PROptions) (*github.PullRequest, error) {
+	// If ResetReviewers is true, replace existing reviewers with the provided list (default behavior is to append)
+	if opts.ResetReviewers {
+		return g.replaceReviewers(repo, pr.GetNumber(), opts.Reviewers)
+	}
+
+	// GitHub's RequestReviewers API appends to existing reviewers
+	return g.requestReviewers(repo, pr.GetNumber(), opts.Reviewers)
 }
 
 // requestReviewers requests the specified reviewers for the given pull request.
@@ -157,6 +152,17 @@ func (g *Github) removeReviewers(repo string, prNumber int, reviewers []string) 
 	}
 
 	return nil
+}
+
+// applyTeamReviewers applies the specified team reviewers to the given pull request based on the provided options.
+func (g *Github) applyTeamReviewers(repo string, pr *github.PullRequest, opts *scm.PROptions) (*github.PullRequest, error) {
+	// If ResetReviewers is true, replace existing team reviewers with the provided list (default behavior is to append)
+	if opts.ResetReviewers {
+		return g.replaceTeamReviewers(repo, pr.GetNumber(), opts.TeamReviewers)
+	}
+
+	// GitHub's RequestTeamReviewers API appends to existing team reviewers
+	return g.requestTeamReviewers(repo, pr.GetNumber(), opts.TeamReviewers)
 }
 
 // requestTeamReviewers requests the specified team reviewers for the given pull request.

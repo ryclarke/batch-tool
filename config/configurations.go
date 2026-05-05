@@ -1,4 +1,3 @@
-// Package config provides configuration management for batch-tool.
 package config
 
 import (
@@ -39,13 +38,16 @@ const (
 	// CloneSSHURLTmpl is the SSH URL template with placeholders: User, Host, Project, Repo
 	CloneSSHURLTmpl = "ssh://%s@%s/%s/%s.git"
 
-	SortRepos        = "repos.sort"
-	RepoAliases      = "repos.aliases"
-	UnwantedLabels   = "repos.unwanted-labels"
-	SkipArchived     = "repos.skip-archived"
-	SkipUnwanted     = "repos.skip-unwanted"
-	SuperSetLabel    = "repos.catch-all"
-	DefaultReviewers = "repos.reviewers"
+	SortRepos      = "repos.sort"
+	RepoAliases    = "repos.aliases"
+	UnwantedLabels = "repos.unwanted-labels"
+	SkipArchived   = "repos.skip-archived"
+	SkipUnwanted   = "repos.skip-unwanted"
+	SuperSetLabel  = "repos.catch-all"
+
+	DefaultReviewers     = "repos.reviewers"
+	DefaultTeamReviewers = "repos.team-reviewers"
+
 	CatalogCachePath = "repos.cache.path"
 	CatalogCacheTTL  = "repos.cache.ttl"
 
@@ -75,6 +77,7 @@ const (
 	GitCommitMessage = "git.args.commit.message"
 	GitCommitAmend   = "git.args.commit.amend"
 	GitCommitPush    = "git.args.commit.push"
+	GitPushForce     = "git.args.push.force"
 	GitStashAllowAny = "git.args.stash.allow-any"
 
 	// pr
@@ -85,7 +88,6 @@ const (
 	PrReviewers      = "pr.args.reviewers"
 	PrTeamReviewers  = "pr.args.team-reviewers"
 	PrResetReviewers = "pr.args.reset-reviewers"
-	PrAllReviewers   = "pr.args.all-reviewers"
 	PrBaseBranch     = "pr.args.base-branch"
 	PrMergeCheck     = "pr.args.merge-check"
 	PrMergeMethod    = "pr.args.merge-method"
@@ -148,7 +150,7 @@ func setDefaults(v *viper.Viper) {
 
 	v.SetDefault(SkipArchived, true)
 	v.SetDefault(SkipUnwanted, true)
-	v.SetDefault(UnwantedLabels, []string{"deprecated", "poc"})
+	v.SetDefault(UnwantedLabels, []string{})
 	v.SetDefault(SuperSetLabel, "all")
 
 	v.SetDefault(CatalogCachePath, "") // empty means use default: gitdir/host/.batch-tool-cache.json
@@ -168,6 +170,7 @@ func setDefaults(v *viper.Viper) {
 
 	// default reviewers in the form `repo: [reviewers...]`
 	v.SetDefault(DefaultReviewers, map[string][]string{})
+	v.SetDefault(DefaultTeamReviewers, map[string][]string{})
 
 	// aliases in the form `alias: [repos...]`
 	v.SetDefault(RepoAliases, map[string][]string{})
@@ -193,13 +196,12 @@ func defaultGitdir() string {
 		if path, err := cmd.Output(); err == nil {
 			dir = strings.TrimSpace(string(path))
 		} else {
-			// If that fails, use the current working directory.
-			dir, err = os.Getwd()
-			if err != nil {
-				panic(fmt.Sprintf("Failed to determine current working directory: %v", err))
+			// As a last resort, fall back to using the current working directory.
+			if cwd, err := os.Getwd(); err == nil {
+				return cwd
 			}
 
-			return dir
+			return "."
 		}
 	}
 

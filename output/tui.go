@@ -27,12 +27,10 @@ func TUIHandler(cmd *cobra.Command, channels []Channel) {
 		return
 	}
 
-	// Create a cancellable context so Ctrl+C can properly cancel subprocesses
-	ctx, cancel := context.WithCancel(cmd.Context())
-	defer cancel()
-
-	// Update the command's context
-	cmd.SetContext(ctx)
+	// Use the cancel function attached by call.Do so that quitting the TUI propagates
+	// to all in-flight subprocesses (not just the local UI loop). This is critical for
+	// SIGKILL'ing long-running git commands when the user presses q/Esc/Ctrl+C.
+	cancel := config.Cancel(cmd.Context())
 
 	p := tea.NewProgram(
 		initialModel(cmd, channels, cancel),
@@ -167,6 +165,8 @@ func buildCommandString(cmd *cobra.Command) string {
 	return strings.Join(cmdParts, " ")
 }
 
+// Init implements tea.Model and starts background goroutines that pump
+// repository channels into the model's update loop.
 func (m *model) Init() tea.Cmd {
 	cmds := make([]tea.Cmd, 0, len(m.repos)*2+1)
 
@@ -210,6 +210,9 @@ func waitForError(index int, ch Channel) tea.Cmd {
 	}
 }
 
+// Update implements tea.Model and routes incoming messages (key presses,
+// mouse events, repo output/error/completion notifications, and ticks) to
+// the appropriate handler.
 func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 
@@ -272,8 +275,8 @@ func (m *model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 
 	switch msg.String() {
-	case "ctrl+c":
-		// Cancel context to propagate signal to subprocesses
+	case "ctrl+c", "q", "esc":
+		// Cancel any running subprocesses and quit.
 		if m.cancelFunc != nil {
 			m.cancelFunc()
 		}
@@ -289,8 +292,8 @@ func (m *model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		fallthrough
 
-	case "enter", "esc", "q":
-		// Only allow quit with 'enter', 'esc' or 'q' after all processing is complete
+	case "enter":
+		// Only allow quit with 'enter' after all processing is complete
 		if m.allDone {
 			m.quitting = true
 			return m, tea.Quit
@@ -533,6 +536,8 @@ func (m *model) formatRepoHeader(repo *repoStatus) string {
 	return m.styles.repoActive.Render(fmt.Sprintf(repoActiveFormat, repo.Name()))
 }
 
+// View implements tea.Model and renders the current TUI frame: command
+// header, scrollable repository output, progress bar, and footer help.
 func (m *model) View() string {
 	if !m.ready {
 		return "Initializing...\n"

@@ -36,7 +36,10 @@ func TestNativeHandler(t *testing.T) {
 	cmd := fakeCmd(t, ctx, &buf)
 	cmd.SetErr(&errBuf)
 
-	call.Do(cmd, []string{"repo1", "repo2"}, errorFunc, output.NativeHandler)
+	err := call.Do(cmd, []string{"repo1", "repo2"}, errorFunc, output.NativeHandler)
+	if err == nil {
+		t.Fatal("Expected Do to return an aggregated failure error")
+	}
 
 	output := buf.String()
 	errOutput := errBuf.String()

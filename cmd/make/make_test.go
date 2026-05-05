@@ -92,12 +92,12 @@ func TestMakeCmdPreRunE(t *testing.T) {
 	}
 }
 
-func TestMakeCmdRun(t *testing.T) {
+func TestMakeCmdRunE(t *testing.T) {
 	cmd := Cmd()
 
 	// Test Run function exists
-	if cmd.Run == nil {
-		t.Error("Expected Run function to be set")
+	if cmd.RunE == nil {
+		t.Error("Expected RunE function to be set")
 		return
 	}
 

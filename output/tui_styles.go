@@ -39,11 +39,9 @@ const (
 	progressText     = "Progress: %d/" + summaryText
 	progressTextFail = "Progress: %d/" + summaryTextFail
 
-	//"Progress: %d/%d repositories (%d failed) | Elapsed: %s"
-
 	noReposText = "No repositories matched by provided filter, nothing to do."
-	footerText  = "scroll: ↑/↓ | paging: PgUp/PgDn/Home/End"
-	footerDone  = "✓ All done! " + footerText + " | print output: p | quit: Enter/Esc or q"
+	footerText  = "scroll: ↑/↓ | paging: PgUp/PgDn/Home/End | cancel: q/Esc/Ctrl+C"
+	footerDone  = "✓ All done! " + "scroll: ↑/↓ | paging: PgUp/PgDn/Home/End" + " | print output: p | quit: Enter/Esc or q"
 	footerVim   = "\n\t(also supports Vim keybinds)"
 	tuiFailText = "Error running TUI: %v\nUsing fallback output handler...\n"
 

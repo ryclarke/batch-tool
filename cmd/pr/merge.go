@@ -61,10 +61,10 @@ Post-Merge:
 
 			return viper.BindPFlag(config.PrMergeMethod, cmd.Flags().Lookup(methodFlag))
 		},
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			buildPROptions(cmd)
 
-			call.Do(cmd, args, Merge)
+			return call.Do(cmd, args, Merge)
 		},
 	}
 

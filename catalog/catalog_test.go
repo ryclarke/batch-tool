@@ -2033,3 +2033,60 @@ func TestArchivedRepos(t *testing.T) {
 		t.Errorf("Expected archived set to contain b and c, got %v", got.ToSlice())
 	}
 }
+
+func TestGetLabelsForRepo(t *testing.T) {
+	Labels = map[string]mapset.Set[string]{
+		"backend":  mapset.NewSet("repo-a", "repo-b"),
+		"frontend": mapset.NewSet("repo-b", "repo-c"),
+		"all":      mapset.NewSet("repo-a", "repo-b", "repo-c"),
+	}
+
+	tests := []struct {
+		name    string
+		repo    string
+		wantLen int
+		wantHas []string
+		wantNot []string
+	}{
+		{
+			name:    "repo in one label",
+			repo:    "repo-a",
+			wantLen: 2,
+			wantHas: []string{"backend", "all"},
+			wantNot: []string{"frontend"},
+		},
+		{
+			name:    "repo in multiple labels",
+			repo:    "repo-b",
+			wantLen: 3,
+			wantHas: []string{"backend", "frontend", "all"},
+		},
+		{
+			name:    "repo not in any label",
+			repo:    "repo-z",
+			wantLen: 0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := mapset.NewSet(GetLabelsForRepo(tt.repo)...)
+
+			if got.Cardinality() != tt.wantLen {
+				t.Errorf("GetLabelsForRepo(%q) returned %d labels, want %d: %v", tt.repo, got.Cardinality(), tt.wantLen, got.ToSlice())
+			}
+
+			for _, label := range tt.wantHas {
+				if !got.Contains(label) {
+					t.Errorf("GetLabelsForRepo(%q) missing expected label %q", tt.repo, label)
+				}
+			}
+
+			for _, label := range tt.wantNot {
+				if got.Contains(label) {
+					t.Errorf("GetLabelsForRepo(%q) unexpectedly contains label %q", tt.repo, label)
+				}
+			}
+		})
+	}
+}

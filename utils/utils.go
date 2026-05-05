@@ -1,4 +1,3 @@
-// Package utils provides utility functions and helpers for batch-tool.
 package utils
 
 import (
