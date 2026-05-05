@@ -1,25 +1,3 @@
-/*
-Package call provides helpers for managing and executing asynchronous work
-
-	 across multiple repositories. Commands for this batch tool shall execute
-	 `Do(...)` with a Wrapper containing all of the tasks for that command.
-
-	 Example:
-	 	repos := []string{"repo1", "repo2", "repo3"}
-			fwrap := Wrap(Exec("git", "status"), Exec("ls"))
-			Do(repos, fwrap)
-
-		The above example code calls `git status` followed by `ls` on all three
-		provided repositories, executing asynchronously and printing the output
-		in order. Console output will block iteratively across the repository
-		list to ensure that the output isn't mixed, but the processing of each
-		repository's respective tasks is fully parallel in the background.
-
-		The `Exec` Func builder should be sufficient for most commands, but
-		custom Func instances can be defined for more complex scenarios. It
-		is also possible to define entire `Wrapper` instances if a specific use
-		case requires special handling distinct from the default behavior.
-*/
 package call
 
 import (

@@ -1,4 +1,3 @@
-// Package git provides git operations commands for batch-tool.
 package git
 
 import (

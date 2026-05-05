@@ -1,4 +1,3 @@
-// Package cmd provides the command-line interface for batch-tool.
 package cmd
 
 import (

@@ -1,4 +1,3 @@
-// Package catalog provides repository catalog management for caching and querying repository metadata.
 package catalog
 
 import (

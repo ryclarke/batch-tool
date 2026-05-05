@@ -1,4 +1,3 @@
-// Package config provides configuration management for batch-tool.
 package config
 
 import (

@@ -1,4 +1,3 @@
-// Package fake provides examples and tests for the fake SCM provider.
 package fake
 
 import (

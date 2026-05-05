@@ -1,4 +1,3 @@
-// Package github provides GitHub SCM integration for batch-tool.
 package github
 
 import (

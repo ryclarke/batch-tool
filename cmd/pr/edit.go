@@ -1,4 +1,3 @@
-// Package pr provides pull request management commands for batch-tool.
 package pr
 
 import (

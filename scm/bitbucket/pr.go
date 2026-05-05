@@ -1,4 +1,3 @@
-// Package bitbucket provides Bitbucket SCM integration for batch-tool.
 package bitbucket
 
 import (

@@ -1,4 +1,3 @@
-// Package output provides output handling and formatting for batch operations.
 package output
 
 import (
