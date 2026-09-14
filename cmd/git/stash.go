@@ -20,7 +20,21 @@ const (
 	stashedKey         = "repos.x.stashed"
 
 	stashAllowAnyFlag = "allow-any"
+	stashScopeFlag    = "scope"
 )
+
+// Stash scopes controlling which files `git stash push` captures.
+const (
+	// StashTracked stashes only tracked files.
+	StashTracked = "tracked"
+	// StashUntracked also stashes untracked files, like `git stash push -u`.
+	StashUntracked = "untracked"
+	// StashAll additionally stashes ignored files, like `git stash push -a`.
+	StashAll = "all"
+)
+
+// AvailableStashScopes lists the valid values for the --scope flag.
+var AvailableStashScopes = []string{StashTracked, StashUntracked, StashAll}
 
 func addStashCmd() *cobra.Command {
 	stashCmd := &cobra.Command{
@@ -70,7 +84,7 @@ and stashes created by other tools are left untouched for safety.`,
 func addStashPushCmd() *cobra.Command {
 	// stashPushCmd represents the stash push command
 	stashPushCmd := &cobra.Command{
-		Use:   "push <repository>...",
+		Use:   "push [--scope <scope>] <repository>...",
 		Short: "Stash uncommitted changes with a timestamped message",
 		Long: `Save uncommitted changes to the stash stack with a timestamped message.
 
@@ -78,18 +92,36 @@ This command runs 'git stash push' in each specified repository, creating
 a stash entry with a message formatted as 'batch-tool YYYY-MM-DDTHH:MM:SSZ'.
 
 If the worktree is clean (no uncommitted changes), it reports success
-without error.`,
+without error.
+
+Stash Scopes (--scope):
+  all        Include untracked and ignored files (default)
+  untracked  Include untracked files but not ignored files
+  tracked    Stash tracked files only
+
+The default can be set with git.stash.scope in your config file. It also
+applies to the stashes taken by 'git update --stash' and 'git branch'.`,
 		Example: `  # Stash changes in specific repositories
   batch-tool git stash push repo1 repo2
 
   # Stash all backend services before update
-  batch-tool git stash push ~backend`,
+  batch-tool git stash push ~backend
+
+  # Leave ignored files (build artifacts, .env) untouched
+  batch-tool git stash push --scope untracked ~backend`,
 		Args:              cobra.MinimumNArgs(1),
 		ValidArgsFunction: catalog.CompletionFunc(),
+		PreRunE: func(cmd *cobra.Command, _ []string) error {
+			config.Viper(cmd.Context()).BindPFlag(config.GitStashScope, cmd.Flags().Lookup(stashScopeFlag))
+
+			return utils.ValidateEnumConfig(cmd, config.GitStashScope, AvailableStashScopes)
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return call.Do(cmd, args, StashPush)
 		},
 	}
+
+	stashPushCmd.Flags().String(stashScopeFlag, StashAll, "which files to stash: \"tracked\", \"untracked\", or \"all\"")
 
 	return stashPushCmd
 }
@@ -149,7 +181,20 @@ func StashPush(ctx context.Context, ch output.Channel) error {
 
 	// Create timestamped stash message
 	message := fmt.Sprintf("%s %s", stashMessagePrefix, time.Now().Format(time.RFC3339))
-	if err = call.Exec("git", "stash", "push", "-a", "-m", message)(ctx, ch); err != nil {
+
+	stashArgs := []string{"stash", "push"}
+	switch config.Viper(ctx).GetString(config.GitStashScope) {
+	case StashAll:
+		stashArgs = append(stashArgs, "-a")
+	case StashUntracked:
+		stashArgs = append(stashArgs, "-u")
+	case StashTracked:
+		// tracked files only
+	}
+
+	stashArgs = append(stashArgs, "-m", message)
+
+	if err = call.Exec("git", stashArgs...)(ctx, ch); err != nil {
 		return err
 	}
 

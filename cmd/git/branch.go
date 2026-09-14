@@ -13,20 +13,24 @@ import (
 )
 
 const (
-	branchFlag  = "branch"
-	discardFlag = "discard"
+	branchFlag = "branch"
+
+	resetFlag   = "reset"
+	noResetFlag = "no-" + resetFlag
 )
 
 func addBranchCmd() *cobra.Command {
 	// branchCmd represents the branch command
 	branchCmd := &cobra.Command{
-		Use:     "branch -b <branch-name> [--discard] <repository>...",
+		Use:     "branch -b <branch-name> [--discard] [--no-reset] <repository>...",
 		Aliases: []string{"checkout"},
 		Short:   "Checkout a new branch across repositories",
 		Long: `Create and checkout a new branch across multiple repositories.
 
 This command runs 'git checkout -B <branch>' in each specified repository,
-which creates the branch if it doesn't exist, or resets it if it does.
+which creates the branch if it doesn't exist, or resets it if it does. Pass
+--no-reset (or set git.branch.reset to false) to use 'git checkout -b'
+instead, which fails rather than discarding an existing branch.
 
 Before creating the branch, the command automatically:
   1. Stashes uncommitted changes (unless --discard is used)
@@ -36,13 +40,20 @@ Before creating the branch, the command automatically:
 
 This ensures all new branches start from a consistent, up-to-date baseline.`,
 		Example: `  # Create a feature branch across repositories
-  batch-tool git branch -b feature/add-auth repo1 repo2`,
+  batch-tool git branch -b feature/add-auth repo1 repo2
+
+  # Fail instead of resetting branches that already exist
+  batch-tool git branch -b feature/add-auth --no-reset repo1 repo2`,
 		Args:              cobra.MinimumNArgs(1),
 		ValidArgsFunction: catalog.CompletionFunc(),
 		PreRunE: func(cmd *cobra.Command, _ []string) error {
 			viper := config.Viper(cmd.Context())
 
 			viper.BindPFlag(config.Branch, cmd.Flags().Lookup(branchFlag))
+
+			if err := utils.BindBoolFlags(cmd, config.GitBranchReset, resetFlag, noResetFlag); err != nil {
+				return err
+			}
 
 			return utils.ValidateRequiredConfig(cmd.Context(), config.Branch)
 		},
@@ -62,13 +73,20 @@ This ensures all new branches start from a consistent, up-to-date baseline.`,
 
 	branchCmd.Flags().StringP(branchFlag, "b", "", "branch name (required)")
 	branchCmd.Flags().Bool(discardFlag, false, "discard uncommitted changes instead of stashing them")
+	utils.BuildBoolFlags(branchCmd, resetFlag, "", noResetFlag, "", "reset the branch if it already exists")
 
 	return branchCmd
 }
 
-// Branch checks out a new branch in the given repository.
+// Branch checks out a new branch in the given repository. Existing branches are
+// reset unless git.branch.reset is disabled, in which case the checkout fails instead.
 func Branch(ctx context.Context, ch output.Channel) error {
-	branch := config.Viper(ctx).GetString(config.Branch)
+	viper := config.Viper(ctx)
 
-	return call.Exec("git", "checkout", "-B", branch)(ctx, ch)
+	create := "-b"
+	if viper.GetBool(config.GitBranchReset) {
+		create = "-B"
+	}
+
+	return call.Exec("git", "checkout", create, viper.GetString(config.Branch))(ctx, ch)
 }

@@ -4,10 +4,12 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/spf13/cobra"
 
+	"github.com/ryclarke/batch-tool/config"
 	testhelper "github.com/ryclarke/batch-tool/utils/testing"
 )
 
@@ -354,5 +356,101 @@ func TestStashMultipleRepos(t *testing.T) {
 		if _, err := os.Stat(testFile); !os.IsNotExist(err) {
 			t.Errorf("Expected test file in %s to be stashed", repoName)
 		}
+	}
+}
+
+// TestStashScopeModes verifies that each scope controls whether untracked and
+// ignored files are swept into the stash.
+func TestStashScopeModes(t *testing.T) {
+	tests := []struct {
+		name           string
+		scope          string
+		stashUntracked bool
+		stashIgnored   bool
+	}{
+		{name: "tracked leaves untracked and ignored in place", scope: StashTracked},
+		{name: "untracked takes untracked but not ignored", scope: StashUntracked, stashUntracked: true},
+		{name: "all takes untracked and ignored", scope: StashAll, stashUntracked: true, stashIgnored: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			reposPath := testhelper.SetupRepos(t, []string{"repo-1"})
+			testCtx := setupTestGitContext(t, reposPath)
+
+			repoDir := filepath.Join(reposPath, "example.com", "test-project", "repo-1")
+
+			// Ignore build/ so we have an ignored file to test against
+			if err := os.WriteFile(filepath.Join(repoDir, ".gitignore"), []byte("ignored.txt\n"), 0644); err != nil {
+				t.Fatalf("Failed to create gitignore: %v", err)
+			}
+			testhelper.ExecCommand(t, repoDir, "git", "add", ".gitignore")
+			testhelper.ExecCommand(t, repoDir, "git", "commit", "-m", "Add gitignore")
+
+			// Tracked modification, always stashed
+			if err := os.WriteFile(filepath.Join(repoDir, "test.txt"), []byte("modified\n"), 0644); err != nil {
+				t.Fatalf("Failed to modify tracked file: %v", err)
+			}
+
+			untracked := filepath.Join(repoDir, "untracked.txt")
+			if err := os.WriteFile(untracked, []byte("untracked\n"), 0644); err != nil {
+				t.Fatalf("Failed to create untracked file: %v", err)
+			}
+
+			ignored := filepath.Join(repoDir, "ignored.txt")
+			if err := os.WriteFile(ignored, []byte("ignored\n"), 0644); err != nil {
+				t.Fatalf("Failed to create ignored file: %v", err)
+			}
+
+			cmd := addStashCmd()
+
+			var buf bytes.Buffer
+			cmd.SetOut(&buf)
+			cmd.SetErr(&buf)
+			cmd.SetArgs([]string{"push", "--scope", tt.scope, "repo-1"})
+
+			if err := cmd.ExecuteContext(testCtx); err != nil {
+				t.Fatalf("Command execution failed: %v\n%s", err, buf.String())
+			}
+
+			// The tracked modification is stashed in every scope
+			content, err := os.ReadFile(filepath.Join(repoDir, "test.txt"))
+			if err != nil {
+				t.Fatalf("Failed reading tracked file: %v", err)
+			}
+
+			if string(content) != "test content\n" {
+				t.Errorf("Expected tracked modification to be stashed, got %q", content)
+			}
+
+			if _, err := os.Stat(untracked); os.IsNotExist(err) != tt.stashUntracked {
+				t.Errorf("Expected untracked file stashed=%v", tt.stashUntracked)
+			}
+
+			if _, err := os.Stat(ignored); os.IsNotExist(err) != tt.stashIgnored {
+				t.Errorf("Expected ignored file stashed=%v", tt.stashIgnored)
+			}
+		})
+	}
+}
+
+func TestStashScopeInvalid(t *testing.T) {
+	reposPath := testhelper.SetupRepos(t, []string{"repo-1"})
+	testCtx := setupTestGitContext(t, reposPath)
+
+	cmd := addStashCmd()
+
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+	cmd.SetArgs([]string{"push", "--scope", "everything", "repo-1"})
+
+	err := cmd.ExecuteContext(testCtx)
+	if err == nil {
+		t.Fatal("Expected error for an invalid --scope value")
+	}
+
+	if !strings.Contains(err.Error(), config.GitStashScope) {
+		t.Errorf("Expected error to reference %s, got: %v", config.GitStashScope, err)
 	}
 }

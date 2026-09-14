@@ -31,9 +31,22 @@ const (
 	GitProjects        = "git.projects"
 	GitProvider        = "git.provider"
 	GitDirectory       = "git.directory"
+	GitRemote          = "git.remote"
 	DefaultBranch      = "git.default-branch"
-	StashUpdates       = "git.stash-updates"
 	DefaultMergeMethod = "git.default-merge-method"
+
+	// Persistent per-subcommand git behavior, grouped as git.<command>.<option>.
+	GitCommitStage = "git.commit.stage"
+	GitCommitPush  = "git.commit.push"
+
+	GitUpdateDiscard      = "git.update.discard"
+	GitUpdatePullStrategy = "git.update.pull-strategy"
+	GitUpdateCleanIgnored = "git.update.clean-ignored"
+	GitUpdateSubmodules   = "git.update.submodules"
+
+	GitStashScope = "git.stash.scope"
+
+	GitBranchReset = "git.branch.reset"
 
 	// CloneSSHURLTmpl is the SSH URL template with placeholders: User, Host, Project, Repo
 	CloneSSHURLTmpl = "ssh://%s@%s/%s/%s.git"
@@ -76,7 +89,6 @@ const (
 	// git
 	GitCommitMessage = "git.args.commit.message"
 	GitCommitAmend   = "git.args.commit.amend"
-	GitCommitPush    = "git.args.commit.push"
 	GitPushForce     = "git.args.push.force"
 	GitStashAllowAny = "git.args.stash.allow-any"
 
@@ -133,7 +145,26 @@ func Init(ctx context.Context) context.Context {
 		fmt.Fprintf(os.Stderr, "Using config file: %v\n\n", v.ConfigFileUsed())
 	}
 
+	warnRemovedKeys(v)
+
 	return SetViper(ctx, v)
+}
+
+// removedKeys maps configuration keys that are no longer read to a migration hint.
+// Values set under the old names are ignored, so warn rather than fail silently.
+// The hint is spelled out per key because a replacement key name is not always
+// enough: git.stash-updates inverted into git.update.discard, so carrying the old
+// boolean over verbatim would select the opposite behavior.
+var removedKeys = map[string]string{
+	"git.stash-updates": "stashing is now the default; set " + GitUpdateDiscard + " to discard uncommitted changes instead",
+}
+
+func warnRemovedKeys(v *viper.Viper) {
+	for old, hint := range removedKeys {
+		if v.IsSet(old) {
+			fmt.Fprintf(os.Stderr, "WARNING: %q is no longer supported and is being ignored - %s\n\n", old, hint)
+		}
+	}
 }
 
 func setDefaults(v *viper.Viper) {
@@ -143,10 +174,23 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault(GitHost, "github.com")
 	v.SetDefault(GitProvider, "github")
 	v.SetDefault(GitProjects, []string{})
+	v.SetDefault(GitRemote, "origin")
 	v.SetDefault(DefaultBranch, "main")
-	v.SetDefault(StashUpdates, false)
 	v.SetDefault(SortRepos, true)
 	v.SetDefault(DefaultMergeMethod, "squash") // "merge", "squash", or "rebase" (only supported by GitHub provider for now)
+
+	// Per-subcommand git behavior. Defaults preserve the behavior these options replaced.
+	v.SetDefault(GitCommitStage, "all")
+	v.SetDefault(GitCommitPush, false)
+
+	v.SetDefault(GitUpdateDiscard, false)
+	v.SetDefault(GitUpdatePullStrategy, "default")
+	v.SetDefault(GitUpdateCleanIgnored, false)
+	v.SetDefault(GitUpdateSubmodules, true)
+
+	v.SetDefault(GitStashScope, "all")
+
+	v.SetDefault(GitBranchReset, true)
 
 	v.SetDefault(SkipArchived, true)
 	v.SetDefault(SkipUnwanted, true)

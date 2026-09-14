@@ -7,7 +7,23 @@ git:
     - another-team
   directory: ./tmp      # directory where repositories are cloned, defaults to $GOPATH/src if set, else the current working directory
   default-branch: main  # fallback if no default branch is configured for a repository
-  stash-updates: false  # if true, automatically stash uncommitted changes before updating branches (can be overridden with --stash or --no-stash)
+  remote: origin        # remote used by `git push` and `git commit --push`
+
+  commit:
+    stage: all          # changes to stage before committing: "all" (includes untracked), "tracked", or "none" (can be overridden with --stage)
+    push: false         # if true, automatically push after committing (can be overridden with --push or --no-push)
+
+  update:
+    discard: false      # if true, discard uncommitted changes when updating instead of stashing and restoring them (can be overridden with --discard or --stash)
+    pull-strategy: default # how to reconcile diverged history: "default", "ff-only", "rebase", or "merge" (can be overridden with --pull-strategy)
+    clean-ignored: false   # if true, also delete ignored files when discarding uncommitted changes
+    submodules: true       # if true, re-initialize submodules after discarding uncommitted changes
+
+  stash:
+    scope: all          # which files to stash: "all" (includes ignored), "untracked", or "tracked" (can be overridden with --scope)
+
+  branch:
+    reset: true         # if true, reset branches that already exist instead of failing (can be overridden with --reset or --no-reset)
 
 repos:
   sort: true

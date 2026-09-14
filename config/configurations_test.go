@@ -2,12 +2,109 @@ package config_test
 
 import (
 	"context"
+	"strings"
 	"testing"
 
+	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
 	"github.com/ryclarke/batch-tool/config"
 )
+
+// TestGitUpdateDiscardPrecedence covers the grouped git.update.discard key, which
+// is nested two levels deep in the config file, and confirms an explicit flag still
+// wins over a config file value.
+func TestGitUpdateDiscardPrecedence(t *testing.T) {
+	tests := []struct {
+		name     string
+		yaml     string
+		setFlag  bool
+		expected bool
+	}{
+		{
+			name:     "unset falls back to the default",
+			yaml:     "git: {}\n",
+			expected: false,
+		},
+		{
+			name:     "nested config key is honored",
+			yaml:     "git:\n  update:\n    discard: true\n",
+			expected: true,
+		},
+		{
+			name:     "explicit flag overrides the config key",
+			yaml:     "git:\n  update:\n    discard: true\n",
+			setFlag:  true,
+			expected: false,
+		},
+		{
+			name:     "the removed git.stash-updates key is ignored",
+			yaml:     "git:\n  stash-updates: false\n",
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			v := config.New()
+
+			v.SetConfigType("yaml")
+			if err := v.ReadConfig(strings.NewReader(tt.yaml)); err != nil {
+				t.Fatalf("Failed reading test config: %v", err)
+			}
+
+			flags := pflag.NewFlagSet("test", pflag.ContinueOnError)
+			flags.Bool("discard", false, "")
+
+			if tt.setFlag {
+				if err := flags.Set("discard", "false"); err != nil {
+					t.Fatalf("Failed setting discard flag: %v", err)
+				}
+			}
+
+			if err := v.BindPFlag(config.GitUpdateDiscard, flags.Lookup("discard")); err != nil {
+				t.Fatalf("Failed binding discard flag: %v", err)
+			}
+
+			if got := v.GetBool(config.GitUpdateDiscard); got != tt.expected {
+				t.Errorf("Expected %s to be %v, got %v", config.GitUpdateDiscard, tt.expected, got)
+			}
+		})
+	}
+}
+
+// TestGroupedGitDefaults verifies the per-subcommand config groups all resolve to
+// the behavior they replaced.
+func TestGroupedGitDefaults(t *testing.T) {
+	v := config.New()
+
+	strs := map[string]string{
+		config.GitRemote:             "origin",
+		config.GitCommitStage:        "all",
+		config.GitUpdatePullStrategy: "default",
+		config.GitStashScope:         "all",
+	}
+
+	for key, expected := range strs {
+		if got := v.GetString(key); got != expected {
+			t.Errorf("Expected %s to default to %q, got %q", key, expected, got)
+		}
+	}
+
+	bools := map[string]bool{
+		config.GitCommitPush:         false,
+		config.GitUpdateDiscard:      false,
+		config.GitUpdateCleanIgnored: false,
+		config.GitUpdateSubmodules:   true,
+		config.GitBranchReset:        true,
+	}
+
+	for key, expected := range bools {
+		if got := v.GetBool(key); got != expected {
+			t.Errorf("Expected %s to default to %v, got %v", key, expected, got)
+		}
+	}
+}
 
 func TestSetViperAndViper(t *testing.T) {
 	v := viper.New()
