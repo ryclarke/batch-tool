@@ -33,12 +33,32 @@ func ParseRepo(ctx context.Context, repo string) (host, project, name string) {
 	}
 
 	if len(parts) > 2 {
-		host = strings.Join(parts[:len(parts)-3], "/")
+		host = strings.Join(parts[:len(parts)-2], "/")
 	} else {
 		host = viper.GetString(config.GitHost)
 	}
 
 	return
+}
+
+// DisplayRepo returns the user-facing form of a canonical repository name, trimming the
+// default project prefix so that only repositories outside of it remain qualified.
+func DisplayRepo(ctx context.Context, repo string) string {
+	defaultProject := config.Viper(ctx).GetString(config.GitProject)
+	if defaultProject == "" {
+		return repo
+	}
+
+	return strings.TrimPrefix(repo, defaultProject+"/")
+}
+
+// SplitRepo returns the project and bare repository name for the given identifier.
+// The special repo argument "." resolves to the current directory basename, which is
+// then resolved against the catalog to determine its project.
+func SplitRepo(ctx context.Context, repo string) (project, name string) {
+	_, project, name = ParseRepo(ctx, ResolveRepoName(repo))
+
+	return project, name
 }
 
 // RepoPath returns the full repository path for the given name

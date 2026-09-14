@@ -106,6 +106,33 @@ func TestGetCommandRun(t *testing.T) {
 	}
 }
 
+// TestGetCommandRunQualifiedRepoArg verifies that a project-qualified repository argument
+// reaches the SCM provider as a bare repository name, with the project applied separately.
+func TestGetCommandRunQualifiedRepoArg(t *testing.T) {
+	reposPath := testhelper.SetupRepos(t, []string{"repo-1"}, true)
+	testCtx, testProvider := setupTestContext(t, reposPath)
+
+	// Seed the PR under the bare repository name, as a real provider would store it
+	if _, err := testProvider.OpenPullRequest("repo-1", "feature-branch", &scm.PROptions{Title: "Qualified Title"}); err != nil {
+		t.Fatalf("Failed to create test PR: %v", err)
+	}
+
+	cmd := addGetCmd()
+
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+	cmd.SetArgs([]string{"test-project/repo-1"})
+
+	if err := cmd.ExecuteContext(testCtx); err != nil {
+		t.Fatalf("Command execution failed: %v\noutput: %s", err, buf.String())
+	}
+
+	if output := buf.String(); !bytes.Contains([]byte(output), []byte("Qualified Title")) {
+		t.Errorf("Expected output to contain the seeded PR title, got: %s", output)
+	}
+}
+
 func TestGetCommandRunPRNotFound(t *testing.T) {
 	reposPath := testhelper.SetupRepos(t, []string{"repo-1"}, true)
 	ctx, _ := setupTestContext(t, reposPath)

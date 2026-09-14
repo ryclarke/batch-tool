@@ -10,7 +10,7 @@ on:
     branches: [ "main" ]
 
 env:
-  LINTER_VERSION: "v2.11"
+  LINTER_VERSION: "v2.13.2"
 
 jobs:
   lint:

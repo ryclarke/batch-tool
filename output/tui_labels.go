@@ -71,6 +71,16 @@ type labelsListModel struct {
 	waitOnExit  bool
 }
 
+// displayRepos converts canonical repository names into their user-facing display form.
+func displayRepos(ctx context.Context, repos []string) []string {
+	display := make([]string, len(repos))
+	for i, repo := range repos {
+		display[i] = utils.DisplayRepo(ctx, repo)
+	}
+
+	return display
+}
+
 type labelWithRepos struct {
 	name       string
 	repos      []string
@@ -238,10 +248,12 @@ func (m labelsListModel) buildStyledRepos(b *strings.Builder, label labelWithRep
 	// Style each repo individually based on whether it's unwanted
 	styledRepos := make([]string, len(label.repos))
 	for j, repo := range label.repos {
+		name := utils.DisplayRepo(m.ctx, repo)
+
 		if unwantedRepos.Contains(repo) || label.isUnwanted {
-			styledRepos[j] = styles.unwanted.Render(repo)
+			styledRepos[j] = styles.unwanted.Render(name)
 		} else {
-			styledRepos[j] = styles.repo.Render(repo)
+			styledRepos[j] = styles.repo.Render(name)
 		}
 	}
 
@@ -469,12 +481,12 @@ func (m labelsFilterModel) buildContent(ctx context.Context) string {
 	case 1:
 		b.WriteString(styles.forced.Render("1 repository"))
 		b.WriteString(": ")
-		b.WriteString(styles.wrap(styles.repo).Render(m.repos[0]))
+		b.WriteString(styles.wrap(styles.repo).Render(utils.DisplayRepo(ctx, m.repos[0])))
 		b.WriteString("\n")
 	default:
 		b.WriteString(styles.forced.Render(fmt.Sprintf("%d repositories", n)))
 		b.WriteString(":\n")
-		b.WriteString(styles.wrap(styles.repo).Render(strings.Join(m.repos, ", ")))
+		b.WriteString(styles.wrap(styles.repo).Render(strings.Join(displayRepos(ctx, m.repos), ", ")))
 		b.WriteString("\n")
 	}
 
@@ -513,7 +525,7 @@ func (m labelsFilterModel) buildVerboseContent(ctx context.Context, set []labelW
 		if label.empty {
 			b.WriteString(repoStyle.Render(styles.count.Render(emptyLabelText)))
 		} else {
-			b.WriteString(repoStyle.Render(strings.Join(label.repos, ", ")))
+			b.WriteString(repoStyle.Render(strings.Join(displayRepos(ctx, label.repos), ", ")))
 		}
 		b.WriteString("\n")
 	}

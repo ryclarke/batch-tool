@@ -114,6 +114,12 @@ batch-tool pr get .
 
 Quote selectors that contain `!`, `+`, or `~` so your shell does not expand them first.
 
+### Project Resolution
+
+Repositories are tracked internally as `project/name`. When you supply an explicit project prefix it is used as given, without consulting the catalog. A bare name is resolved against the catalog, preferring `git.project` and then each entry of `git.projects` in the order you configured them. A name that is unknown to the catalog falls back to `git.project`.
+
+Output trims the `git.project` prefix, so repositories in your default project display as bare names and everything else stays qualified.
+
 ## Core Workflows
 
 ### Git Operations
@@ -224,11 +230,11 @@ git:
 
 ### Aliases and Unwanted Labels
 
-Use `repos.aliases` to define local groupings that behave like labels. Use `repos.unwanted-labels` together with `repos.skip-unwanted` to keep deprecated or experimental repositories out of broad operations unless you explicitly force them in.
+Use `repos.aliases` to define local groupings that behave like labels. Alias members may be given as bare or `project/name` values, in any mix; each is resolved through the catalog when the alias is loaded. Use `repos.unwanted-labels` together with `repos.skip-unwanted` to keep deprecated or experimental repositories out of broad operations unless you explicitly force them in.
 
 ### Default Reviewers
 
-Use `repos.reviewers` or `repos.team_reviewers` to preconfigure the reviewers you usually request for a given repository or label.
+Use `repos.reviewers` or `repos.team_reviewers` to preconfigure the reviewers you usually request for a given repository or label. Repository keys may be either bare or `project/name`, and label keys use the `~label` form.
 
 ## Troubleshooting
 

@@ -9,14 +9,17 @@ import (
 
 	"github.com/ryclarke/batch-tool/catalog"
 	"github.com/ryclarke/batch-tool/config"
+	"github.com/ryclarke/batch-tool/utils"
 )
 
 // NativeHandler is a simple output Handler that batches and prints output from each repository's channels in sequence.
 // It is straightforward and compatible with all terminal environments, but lacks interactivity and modern UI features.
 func NativeHandler(cmd *cobra.Command, channels []Channel) {
+	ctx := cmd.Context()
+
 	for _, ch := range channels {
 		// print header with repository name
-		fmt.Fprintf(cmd.OutOrStdout(), "\n------ %s ------\n", ch.Name())
+		fmt.Fprintf(cmd.OutOrStdout(), "\n------ %s ------\n", utils.DisplayRepo(ctx, ch.Name()))
 
 		// Read bytes and drite directly to output
 		for data := range ch.Out() {
@@ -48,7 +51,7 @@ func NativeCatalog(cmd *cobra.Command) {
 	for _, name := range repoNames {
 		repo := catalog.Catalog[name]
 
-		fmt.Fprintf(cmd.OutOrStdout(), "## %s\n", name)
+		fmt.Fprintf(cmd.OutOrStdout(), "## %s\n", utils.DisplayRepo(ctx, name))
 
 		if repo.Description != "" {
 			fmt.Fprintf(cmd.OutOrStdout(), "   %s\n", repo.Description)
@@ -84,7 +87,7 @@ func NativeLabels(cmd *cobra.Command, verbose bool, filters ...string) {
 	ctx := cmd.Context()
 	if len(filters) > 0 {
 		labelGroup, repos := catalog.ParseLabels(ctx, filters...)
-		printSet(cmd, verbose, labelGroup, repos)
+		printSet(cmd, verbose, labelGroup, displayRepos(ctx, repos))
 	} else {
 		fmt.Fprintln(cmd.OutOrStdout(), "Available labels:")
 		printLabels(cmd)
@@ -116,7 +119,7 @@ func printLabels(cmd *cobra.Command, labels ...string) {
 				sort.Strings(repos)
 			}
 
-			fmt.Fprintf(cmd.OutOrStdout(), "  ~ %s ~\n%s\n", label, strings.Join(repos, ", "))
+			fmt.Fprintf(cmd.OutOrStdout(), "  ~ %s ~\n%s\n", label, strings.Join(displayRepos(ctx, repos), ", "))
 		} else {
 			fmt.Fprintf(cmd.OutOrStdout(), "  ~ %s ~ (empty label)\n", label)
 		}
