@@ -88,13 +88,8 @@ linters:
       # Make exceptions for core batch-tool functionality that inherently involves security-sensitive operations:
       #   gosec G204: arbitrary subprocess execution is intrinsic to batch-tool's purpose
       #   gosec G304: file inclusion via variable is required for user-provided config paths
-      #   gosec G704: bitbucket SCM client.Do executes user-configured SCM API URLs by design.
       - path: utils/cmd\.go
         text: "G204|G304"
-        linters:
-          - gosec
-      - path: scm/bitbucket/provider\.go
-        text: "G704"
         linters:
           - gosec
 

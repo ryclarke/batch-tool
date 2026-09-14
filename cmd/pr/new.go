@@ -3,6 +3,7 @@ package pr
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/spf13/cobra"
@@ -12,7 +13,6 @@ import (
 	"github.com/ryclarke/batch-tool/cmd/git"
 	"github.com/ryclarke/batch-tool/config"
 	"github.com/ryclarke/batch-tool/output"
-	"github.com/ryclarke/batch-tool/scm"
 	"github.com/ryclarke/batch-tool/utils"
 )
 
@@ -68,12 +68,7 @@ Branch Validation:
 
 // New creates a new pull request for the given repository.
 func New(ctx context.Context, ch output.Channel) error {
-	viper := config.Viper(ctx)
-	repoName := utils.ResolveRepoName(ch.Name())
-
-	// Get project from repository metadata in catalog, fall back to default
-	project := catalog.GetProjectForRepo(ctx, repoName)
-	provider := scm.Get(ctx, viper.GetString(config.GitProvider), project)
+	provider, repoName, qualified := repoContext(ctx, ch.Name())
 
 	branch, err := utils.LookupBranch(ctx, ch.Name())
 	if err != nil {
@@ -81,14 +76,14 @@ func New(ctx context.Context, ch output.Channel) error {
 	}
 
 	// load PR options from config
-	opts := prOptions(ctx, repoName, false)
+	opts := prOptions(ctx, qualified, false)
 	if err := provider.CheckCapabilities(&opts); err != nil {
 		return err
 	}
 
 	// get reviewers from config if not set via flags
-	opts.Reviewers = lookupReviewers(ctx, repoName)
-	opts.TeamReviewers = lookupTeamReviewers(ctx, repoName)
+	opts.Reviewers = lookupReviewers(ctx, qualified)
+	opts.TeamReviewers = lookupTeamReviewers(ctx, qualified)
 
 	pr, err := provider.OpenPullRequest(repoName, branch, &opts)
 	if err != nil {
@@ -103,7 +98,7 @@ func New(ctx context.Context, ch output.Channel) error {
 // lookupReviewers returns the list of individual reviewers for the given repository.
 // It merges reviewers configured by repo name with those configured for any labels
 // the repository belongs to (keyed by the label token, e.g. "~backend").
-func lookupReviewers(ctx context.Context, name string) []string {
+func lookupReviewers(ctx context.Context, qualified string) []string {
 	viper := config.Viper(ctx)
 
 	// Use the provided list of reviewers
@@ -111,22 +106,13 @@ func lookupReviewers(ctx context.Context, name string) []string {
 		return revs
 	}
 
-	reviewerMap := viper.GetStringMapStringSlice(config.DefaultReviewers)
-	tokenLabel := viper.GetString(config.TokenLabel)
-
-	// Collect reviewers for this repo by name, then by any labels it belongs to
-	revs := mapset.NewSet(reviewerMap[name]...)
-	for _, label := range catalog.GetLabelsForRepo(name) {
-		revs.Append(reviewerMap[tokenLabel+label]...)
-	}
-
-	return revs.ToSlice()
+	return lookupConfiguredReviewers(ctx, config.DefaultReviewers, qualified)
 }
 
 // lookupTeamReviewers returns the list of team reviewers for the given repository.
 // It merges team reviewers configured by repo name with those configured for any labels
 // the repository belongs to (keyed by the label token, e.g. "~backend").
-func lookupTeamReviewers(ctx context.Context, name string) []string {
+func lookupTeamReviewers(ctx context.Context, qualified string) []string {
 	viper := config.Viper(ctx)
 
 	// Use the provided list of team reviewers
@@ -134,13 +120,28 @@ func lookupTeamReviewers(ctx context.Context, name string) []string {
 		return revs
 	}
 
-	teamReviewerMap := viper.GetStringMapStringSlice(config.DefaultTeamReviewers)
+	return lookupConfiguredReviewers(ctx, config.DefaultTeamReviewers, qualified)
+}
+
+// lookupConfiguredReviewers collects reviewers from the given config key for a repository.
+// Repository entries may be keyed by either the project-qualified or bare name, and label
+// entries are keyed by the label token (e.g. "~backend").
+func lookupConfiguredReviewers(ctx context.Context, key, qualified string) []string {
+	viper := config.Viper(ctx)
+
+	reviewerMap := viper.GetStringMapStringSlice(key)
 	tokenLabel := viper.GetString(config.TokenLabel)
 
-	// Collect team reviewers for this repo by name, then by any labels it belongs to
-	revs := mapset.NewSet(teamReviewerMap[name]...)
-	for _, label := range catalog.GetLabelsForRepo(name) {
-		revs.Append(teamReviewerMap[tokenLabel+label]...)
+	revs := mapset.NewSet(reviewerMap[qualified]...)
+
+	// Accept bare repository names for backwards compatibility with unqualified configs
+	if _, bare, found := strings.Cut(qualified, "/"); found {
+		revs.Append(reviewerMap[bare]...)
+	}
+
+	// Merge in reviewers configured for any labels the repository belongs to
+	for _, label := range catalog.GetLabelsForRepo(qualified) {
+		revs.Append(reviewerMap[tokenLabel+label]...)
 	}
 
 	return revs.ToSlice()

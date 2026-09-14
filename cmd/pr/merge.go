@@ -10,7 +10,6 @@ import (
 	"github.com/ryclarke/batch-tool/catalog"
 	"github.com/ryclarke/batch-tool/config"
 	"github.com/ryclarke/batch-tool/output"
-	"github.com/ryclarke/batch-tool/scm"
 	"github.com/ryclarke/batch-tool/utils"
 )
 
@@ -78,19 +77,14 @@ Post-Merge:
 
 // Merge merges the pull request for the given repository.
 func Merge(ctx context.Context, ch output.Channel) error {
-	viper := config.Viper(ctx)
-	repoName := utils.ResolveRepoName(ch.Name())
-
-	// Get project from repository metadata in catalog, fall back to default
-	project := catalog.GetProjectForRepo(ctx, repoName)
-	provider := scm.Get(ctx, viper.GetString(config.GitProvider), project)
+	provider, repoName, qualified := repoContext(ctx, ch.Name())
 
 	branch, err := utils.LookupBranch(ctx, ch.Name())
 	if err != nil {
 		return err
 	}
 
-	opts := prOptions(ctx, repoName, true)
+	opts := prOptions(ctx, qualified, true)
 	if err := provider.CheckCapabilities(&opts); err != nil {
 		return err
 	}

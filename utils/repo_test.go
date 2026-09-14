@@ -42,12 +42,14 @@ func TestParseRepo(t *testing.T) {
 		{
 			name:        "full host/project/repo format",
 			repo:        "example.com/custom-project/my-repo",
+			wantHost:    "example.com",
 			wantProject: "custom-project",
 			wantName:    "my-repo",
 		},
 		{
 			name:        "with leading/trailing slashes",
 			repo:        "/custom-project/my-repo/",
+			wantHost:    "github.com",
 			wantProject: "custom-project",
 			wantName:    "my-repo",
 		},
@@ -163,6 +165,83 @@ func TestResolveRepoName(t *testing.T) {
 			if got != tt.want {
 				t.Errorf("ResolveRepoName() = %v, want %v", got, tt.want)
 			}
+		})
+	}
+}
+
+func TestSplitRepo(t *testing.T) {
+	ctx := loadFixture(t)
+	viper := config.Viper(ctx)
+
+	viper.Set(config.GitProject, "default-project")
+
+	tests := []struct {
+		name        string
+		repo        string
+		wantProject string
+		wantName    string
+	}{
+		{
+			name:        "qualified name splits into its parts",
+			repo:        "other-org/my-repo",
+			wantProject: "other-org",
+			wantName:    "my-repo",
+		},
+		{
+			name:        "bare name falls back to the default project",
+			repo:        "my-repo",
+			wantProject: "default-project",
+			wantName:    "my-repo",
+		},
+		{
+			name:        "host-qualified name drops the host",
+			repo:        "example.com/other-org/my-repo",
+			wantProject: "other-org",
+			wantName:    "my-repo",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			project, name := utils.SplitRepo(ctx, tt.repo)
+
+			testhelper.AssertEqual(t, project, tt.wantProject)
+			testhelper.AssertEqual(t, name, tt.wantName)
+		})
+	}
+}
+
+func TestDisplayRepo(t *testing.T) {
+	ctx := loadFixture(t)
+	viper := config.Viper(ctx)
+
+	viper.Set(config.GitProject, "default-project")
+
+	tests := []struct {
+		name string
+		repo string
+		want string
+	}{
+		{
+			name: "default project prefix is trimmed",
+			repo: "default-project/my-repo",
+			want: "my-repo",
+		},
+		{
+			name: "other projects stay qualified",
+			repo: "other-org/my-repo",
+			want: "other-org/my-repo",
+		},
+		{
+			name: "current directory selector is left alone",
+			repo: ".",
+			want: ".",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			testhelper.AssertEqual(t, utils.DisplayRepo(ctx, tt.repo), tt.want)
 		})
 	}
 }

@@ -76,6 +76,18 @@ Branch Validation:
 	return prCmd
 }
 
+// repoContext resolves the SCM provider and identifiers for the given repository argument.
+// The provider is scoped to the repository's project and expects the bare repository name,
+// while catalog and config lookups use the project-qualified name.
+func repoContext(ctx context.Context, repo string) (provider scm.Provider, name, qualified string) {
+	viper := config.Viper(ctx)
+
+	project, name := utils.SplitRepo(ctx, repo)
+	provider = scm.Get(ctx, viper.GetString(config.GitProvider), project)
+
+	return provider, name, project + "/" + name
+}
+
 func prOptions(ctx context.Context, name string, merge bool) scm.PROptions {
 	viper := config.Viper(ctx)
 

@@ -91,7 +91,7 @@ func TestSCMIntegrationWithUtils(t *testing.T) {
 			{
 				name:        "full URL format",
 				input:       "custom.host.com/custom-project/repo-3",
-				wantHost:    "",
+				wantHost:    "custom.host.com",
 				wantProject: "custom-project",
 				wantName:    "repo-3",
 			},

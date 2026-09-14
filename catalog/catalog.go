@@ -39,12 +39,18 @@ func Init(ctx context.Context, flush bool) {
 		fmt.Fprintf(os.Stderr, "ERROR: Could not load repository metadata: %v\n", err)
 	}
 
-	// Add locally-configured aliases to the defined labels
+	// Add locally-configured aliases to the defined labels. Alias members may be given in
+	// either bare or project-qualified form, so resolve each one to its canonical name.
 	for name, repos := range viper.GetStringMapStringSlice(config.RepoAliases) {
+		resolved := make([]string, 0, len(repos))
+		for _, repo := range repos {
+			resolved = append(resolved, ResolveName(ctx, repo))
+		}
+
 		if _, ok := Labels[name]; !ok {
-			Labels[name] = mapset.NewSet(repos...)
+			Labels[name] = mapset.NewSet(resolved...)
 		} else {
-			Labels[name].Append(repos...)
+			Labels[name].Append(resolved...)
 		}
 	}
 
@@ -56,36 +62,82 @@ func Init(ctx context.Context, flush bool) {
 	}
 }
 
-// GetRepository retrieves a repository from the catalog by name.
-// It attempts to find the repository using different lookup strategies:
-// 1. Direct lookup (if repo contains project/name)
-// 2. Lookup with default project prefix
-// 3. Search through all catalog entries for matching name
-func GetRepository(ctx context.Context, repoName string) (*scm.Repository, bool) {
+// projectOrder returns the configured projects in precedence order: the default
+// project first, followed by each additional project in order of inclusion.
+func projectOrder(ctx context.Context) []string {
 	viper := config.Viper(ctx)
 
-	// Try direct lookup first (project/name format)
-	if repo, exists := Catalog[repoName]; exists {
-		return &repo, true
+	additional := viper.GetStringSlice(config.GitProjects)
+	projects := make([]string, 0, len(additional)+1)
+
+	seen := mapset.NewSet[string]()
+
+	for _, project := range append([]string{viper.GetString(config.GitProject)}, additional...) {
+		if project == "" || !seen.Add(project) {
+			continue
+		}
+
+		projects = append(projects, project)
 	}
 
-	// Try with default project prefix
-	defaultProject := viper.GetString(config.GitProject)
-	if defaultProject != "" {
-		qualifiedName := defaultProject + "/" + repoName
-		if repo, exists := Catalog[qualifiedName]; exists {
-			return &repo, true
+	return projects
+}
+
+// ResolveName returns the canonical project-qualified name for the given repository selector.
+// Names which already carry a project prefix are normalized and returned as-is, deferring to
+// the provided project without consulting the catalog. Bare names are matched against the
+// catalog, with collisions resolved in favor of the default project first and then each
+// additional configured project in order of inclusion. Names which are unknown to the catalog
+// fall back to the default project so they can still be cloned and processed.
+func ResolveName(ctx context.Context, name string) string {
+	name = strings.Trim(strings.TrimSpace(name), "/")
+	if name == "" || name == "." {
+		return name
+	}
+
+	// An explicit project prefix always wins - use the last two path segments verbatim.
+	if parts := strings.Split(name, "/"); len(parts) > 1 {
+		return parts[len(parts)-2] + "/" + parts[len(parts)-1]
+	}
+
+	projects := projectOrder(ctx)
+
+	// Prefer a catalog match from a configured project, in precedence order
+	for _, project := range projects {
+		if _, exists := Catalog[project+"/"+name]; exists {
+			return project + "/" + name
 		}
 	}
 
-	// Search through all catalog entries for a name match (in any project)
+	// Otherwise accept a match from any project tracked in the catalog. Iteration order over
+	// the catalog is undefined, so pick the lowest-sorting key to keep resolution stable.
+	var match string
 	for key, repo := range Catalog {
-		if repo.Name == repoName || strings.HasSuffix(key, "/"+repoName) {
-			return &repo, true
+		if repo.Name == name && (match == "" || key < match) {
+			match = key
 		}
 	}
 
-	return nil, false
+	if match != "" {
+		return match
+	}
+
+	if len(projects) > 0 {
+		return projects[0] + "/" + name
+	}
+
+	return name
+}
+
+// GetRepository retrieves a repository from the catalog by name. Bare names are resolved
+// to their canonical project-qualified form before lookup.
+func GetRepository(ctx context.Context, repoName string) (*scm.Repository, bool) {
+	repo, exists := Catalog[ResolveName(ctx, repoName)]
+	if !exists {
+		return nil, false
+	}
+
+	return &repo, true
 }
 
 // GetProjectForRepo returns the project for a given repository name.
@@ -180,8 +232,8 @@ func addFilterToSet(ctx context.Context, filter string, set mapset.Set[string]) 
 			fmt.Fprintf(os.Stderr, "WARNING: Label '%s' not recognized\n", filterName)
 		}
 	} else {
-		// if it's a repo filter, add the repo name directly to the set
-		set.Add(filterName)
+		// if it's a repo filter, add the canonical repo name to the set
+		set.Add(ResolveName(ctx, filterName))
 	}
 }
 
@@ -282,14 +334,8 @@ func saveCatalogCache(ctx context.Context) error {
 func fetchRepositoryData(ctx context.Context) error {
 	viper := config.Viper(ctx)
 
-	// Build set of all projects to fetch
-	projects := mapset.NewSet(viper.GetStringSlice(config.GitProjects)...)
-	if defaultProject := viper.GetString(config.GitProject); defaultProject != "" {
-		projects.Add(defaultProject)
-	}
-
-	// Fetch repositories from all projects
-	for project := range projects.Iter() {
+	// Fetch repositories from all configured projects, in precedence order
+	for _, project := range projectOrder(ctx) {
 		provider := scm.Get(ctx, viper.GetString(config.GitProvider), project)
 
 		repos, err := provider.ListRepositories()

@@ -64,7 +64,10 @@ Repository Selection:
 
   Repository Names:
     Repositories are tracked with project/name paths (e.g. myproject/repo1).
-    The project prefix can be omitted if it matches the configured default project.
+    An explicit project prefix is always used as given.
+    A bare name is resolved against the catalog, preferring the configured default
+    project and then each additional project in the order it is configured.
+    Names unknown to the catalog fall back to the default project.
     Examples: repo1 repo2 myproject/repo3
 
   Labels/Aliases (~ prefix):

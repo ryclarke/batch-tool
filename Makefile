@@ -13,14 +13,13 @@ help:
 	@echo "  lint         Run golangci-lint"
 	@echo "  lint-fix     Run golangci-lint with auto-fix"
 	@echo "  clean        Remove build artifacts"
-	@echo "  veryclean    Remove all generated files including vendor dependencies"
 
 .PHONY: deps
 deps:
 	@echo "Installing required tools..."
 	go install gotest.tools/gotestsum@latest
 	go install github.com/goreleaser/goreleaser/v2@latest
-	go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.11
+	go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.13.2
 
 .PHONY: install
 install: ${GOPATH}/bin/batch-tool
@@ -46,11 +45,11 @@ release: .goreleaser
 	goreleaser release --clean
 
 .PHONY: test
-test: vendor .gotestsum
+test: .gotestsum
 	@gotestsum -- -race ./...
 
 .PHONY: cover
-cover: vendor .gotestsum
+cover: .gotestsum
 	@gotestsum -- -race -coverprofile=coverage.out ./...
 
 .PHONY: lint
@@ -61,17 +60,9 @@ lint: .golangci-lint
 lint-fix: .golangci-lint
 	@golangci-lint run --fix
 
-.PHONY: vendor
-vendor:
-	@go mod tidy && go mod vendor
-
 .PHONY: clean
 clean:
 	@rm -rf dist/
-
-.PHONY: veryclean
-veryclean: clean
-	@rm -rf vendor/
 
 .PHONY: .gotestsum
 .gotestsum:
