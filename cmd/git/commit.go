@@ -62,7 +62,8 @@ Safety Features:
 
 	commitCmd.Flags().StringP(messageFlag, "m", "", "commit message (required for new commits)")
 	commitCmd.Flags().BoolP(amendFlag, "a", false, "amend the latest existing commit")
-	commitCmd.Flags().BoolP(pushFlag, "p", false, "push the commit to the remote repository")
+	// No shorthand: -p is claimed by the global --print flag.
+	commitCmd.Flags().Bool(pushFlag, false, "push the commit to the remote repository")
 
 	return commitCmd
 }
