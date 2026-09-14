@@ -11,10 +11,10 @@ import (
 	"github.com/ryclarke/batch-tool/config"
 )
 
-// TestGitUpdateStashPrecedence covers the grouped git.update.stash key, which is
-// nested two levels deep in the config file, and confirms an explicit flag still
+// TestGitUpdateDiscardPrecedence covers the grouped git.update.discard key, which
+// is nested two levels deep in the config file, and confirms an explicit flag still
 // wins over a config file value.
-func TestGitUpdateStashPrecedence(t *testing.T) {
+func TestGitUpdateDiscardPrecedence(t *testing.T) {
 	tests := []struct {
 		name     string
 		yaml     string
@@ -28,18 +28,18 @@ func TestGitUpdateStashPrecedence(t *testing.T) {
 		},
 		{
 			name:     "nested config key is honored",
-			yaml:     "git:\n  update:\n    stash: true\n",
+			yaml:     "git:\n  update:\n    discard: true\n",
 			expected: true,
 		},
 		{
 			name:     "explicit flag overrides the config key",
-			yaml:     "git:\n  update:\n    stash: true\n",
+			yaml:     "git:\n  update:\n    discard: true\n",
 			setFlag:  true,
 			expected: false,
 		},
 		{
 			name:     "the removed git.stash-updates key is ignored",
-			yaml:     "git:\n  stash-updates: true\n",
+			yaml:     "git:\n  stash-updates: false\n",
 			expected: false,
 		},
 	}
@@ -54,20 +54,20 @@ func TestGitUpdateStashPrecedence(t *testing.T) {
 			}
 
 			flags := pflag.NewFlagSet("test", pflag.ContinueOnError)
-			flags.Bool("stash", false, "")
+			flags.Bool("discard", false, "")
 
 			if tt.setFlag {
-				if err := flags.Set("stash", "false"); err != nil {
-					t.Fatalf("Failed setting stash flag: %v", err)
+				if err := flags.Set("discard", "false"); err != nil {
+					t.Fatalf("Failed setting discard flag: %v", err)
 				}
 			}
 
-			if err := v.BindPFlag(config.GitUpdateStash, flags.Lookup("stash")); err != nil {
-				t.Fatalf("Failed binding stash flag: %v", err)
+			if err := v.BindPFlag(config.GitUpdateDiscard, flags.Lookup("discard")); err != nil {
+				t.Fatalf("Failed binding discard flag: %v", err)
 			}
 
-			if got := v.GetBool(config.GitUpdateStash); got != tt.expected {
-				t.Errorf("Expected %s to be %v, got %v", config.GitUpdateStash, tt.expected, got)
+			if got := v.GetBool(config.GitUpdateDiscard); got != tt.expected {
+				t.Errorf("Expected %s to be %v, got %v", config.GitUpdateDiscard, tt.expected, got)
 			}
 		})
 	}
@@ -93,7 +93,7 @@ func TestGroupedGitDefaults(t *testing.T) {
 
 	bools := map[string]bool{
 		config.GitCommitPush:         false,
-		config.GitUpdateStash:        false,
+		config.GitUpdateDiscard:      false,
 		config.GitUpdateCleanIgnored: false,
 		config.GitUpdateSubmodules:   true,
 		config.GitBranchReset:        true,

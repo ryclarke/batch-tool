@@ -14,7 +14,7 @@ git:
     push: false         # if true, automatically push after committing (can be overridden with --push or --no-push)
 
   update:
-    stash: false        # if true, automatically stash uncommitted changes before updating branches (can be overridden with --stash or --no-stash)
+    discard: false      # if true, discard uncommitted changes when updating instead of stashing and restoring them (can be overridden with --discard or --stash)
     pull-strategy: default # how to reconcile diverged history: "default", "ff-only", "rebase", or "merge" (can be overridden with --pull-strategy)
     clean-ignored: false   # if true, also delete ignored files when discarding uncommitted changes
     submodules: true       # if true, re-initialize submodules after discarding uncommitted changes

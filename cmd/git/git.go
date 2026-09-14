@@ -13,6 +13,14 @@ import (
 	"github.com/ryclarke/batch-tool/utils"
 )
 
+// Flag names shared by the subcommands that have to decide what to do with
+// uncommitted changes before they move the worktree. Both `branch` and `update`
+// stash and restore by default, so --discard is the opt-in destructive form.
+const (
+	discardFlag = "discard"
+	stashFlag   = "stash"
+)
+
 // Cmd configures the root git command along with all subcommands and flags
 func Cmd() *cobra.Command {
 	gitCmd := &cobra.Command{

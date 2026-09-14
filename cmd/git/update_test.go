@@ -18,7 +18,7 @@ func TestAddUpdateCmd(t *testing.T) {
 		t.Fatal("addUpdateCmd() returned nil")
 	}
 
-	expectedUse := "update [--stash] [--pull-strategy <strategy>] <repository>..."
+	expectedUse := "update [--discard] [--pull-strategy <strategy>] <repository>..."
 	if cmd.Use != expectedUse {
 		t.Errorf("Expected Use to be %q, got %s", expectedUse, cmd.Use)
 	}
@@ -146,7 +146,7 @@ func TestCleanFunction(t *testing.T) {
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
-	cmd.SetArgs([]string{"repo-1"})
+	cmd.SetArgs([]string{"--discard", "repo-1"})
 
 	err := cmd.ExecuteContext(testCtx)
 	if err != nil {
@@ -202,13 +202,45 @@ func TestUpdateWithStashFlag(t *testing.T) {
 	}
 }
 
-func TestUpdateWithNoStashFlag(t *testing.T) {
+// TestUpdateStashByDefault verifies that plain `git update`, with no flags and no
+// config, preserves uncommitted work rather than discarding it.
+func TestUpdateStashByDefault(t *testing.T) {
 	reposPath := testhelper.SetupRepos(t, []string{"repo-1"})
 	testCtx := setupTestGitContext(t, reposPath)
 
-	// Set update stash to true in config
-	viper := config.Viper(testCtx)
-	viper.Set(config.GitUpdateStash, true)
+	// Create uncommitted changes
+	repoDir := filepath.Join(reposPath, "example.com", "test-project", "repo-1")
+	testFile := filepath.Join(repoDir, "default-stashed.txt")
+	testContent := []byte("preserved by default")
+	if err := os.WriteFile(testFile, testContent, 0644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
+	testhelper.ExecCommand(t, repoDir, "git", "add", "default-stashed.txt")
+
+	cmd := addUpdateCmd()
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+	cmd.SetArgs([]string{"repo-1"})
+
+	if err := cmd.ExecuteContext(testCtx); err != nil {
+		t.Fatalf("Command execution failed: %v", err)
+	}
+
+	content, err := os.ReadFile(testFile)
+	if err != nil {
+		t.Fatalf("Expected file to survive a default update: %v", err)
+	}
+	if !bytes.Equal(content, testContent) {
+		t.Errorf("Expected restored content to match original, got %s", string(content))
+	}
+}
+
+// TestUpdateWithDiscardFlag verifies that --discard opts into destroying local
+// changes, overriding the stash-by-default behavior.
+func TestUpdateWithDiscardFlag(t *testing.T) {
+	reposPath := testhelper.SetupRepos(t, []string{"repo-1"})
+	testCtx := setupTestGitContext(t, reposPath)
 
 	// Create uncommitted changes
 	repoDir := filepath.Join(reposPath, "example.com", "test-project", "repo-1")
@@ -222,7 +254,7 @@ func TestUpdateWithNoStashFlag(t *testing.T) {
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
-	cmd.SetArgs([]string{"--no-stash", "repo-1"})
+	cmd.SetArgs([]string{"--discard", "repo-1"})
 
 	err := cmd.ExecuteContext(testCtx)
 	if err != nil {
@@ -235,18 +267,50 @@ func TestUpdateWithNoStashFlag(t *testing.T) {
 	}
 }
 
-func TestUpdateWithConfigStash(t *testing.T) {
+// TestUpdateWithConfigDiscard verifies git.update.discard opts into the clean path
+// without needing the flag.
+func TestUpdateWithConfigDiscard(t *testing.T) {
 	reposPath := testhelper.SetupRepos(t, []string{"repo-1"})
 	testCtx := setupTestGitContext(t, reposPath)
 
-	// Set update stash to true in config
-	viper := config.Viper(testCtx)
-	viper.Set(config.GitUpdateStash, true)
+	config.Viper(testCtx).Set(config.GitUpdateDiscard, true)
+
+	// Create uncommitted changes
+	repoDir := filepath.Join(reposPath, "example.com", "test-project", "repo-1")
+	testFile := filepath.Join(repoDir, "config-discarded.txt")
+	if err := os.WriteFile(testFile, []byte("discarded by config"), 0644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
+	testhelper.ExecCommand(t, repoDir, "git", "add", "config-discarded.txt")
+
+	cmd := addUpdateCmd()
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+	cmd.SetArgs([]string{"repo-1"})
+
+	if err := cmd.ExecuteContext(testCtx); err != nil {
+		t.Fatalf("Command execution failed: %v", err)
+	}
+
+	if _, err := os.Stat(testFile); !os.IsNotExist(err) {
+		t.Error("Expected file to be cleaned when git.update.discard is set")
+	}
+}
+
+// TestUpdateStashFlagOverridesConfigDiscard verifies --stash is still available as
+// the inverse of --discard, so a config that opts into discarding can be overridden
+// per invocation.
+func TestUpdateStashFlagOverridesConfigDiscard(t *testing.T) {
+	reposPath := testhelper.SetupRepos(t, []string{"repo-1"})
+	testCtx := setupTestGitContext(t, reposPath)
+
+	config.Viper(testCtx).Set(config.GitUpdateDiscard, true)
 
 	// Create uncommitted changes
 	repoDir := filepath.Join(reposPath, "example.com", "test-project", "repo-1")
 	testFile := filepath.Join(repoDir, "config-stashed.txt")
-	testContent := []byte("stashed by config")
+	testContent := []byte("rescued by --stash")
 	if err := os.WriteFile(testFile, testContent, 0644); err != nil {
 		t.Fatalf("Failed to create test file: %v", err)
 	}
@@ -256,14 +320,14 @@ func TestUpdateWithConfigStash(t *testing.T) {
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
-	cmd.SetArgs([]string{"repo-1"})
+	cmd.SetArgs([]string{"--stash", "repo-1"})
 
 	err := cmd.ExecuteContext(testCtx)
 	if err != nil {
 		t.Fatalf("Command execution failed: %v", err)
 	}
 
-	// Verify file is restored (stashed and popped due to config)
+	// Verify file is restored (stashed and popped despite the config)
 	if _, err := os.Stat(testFile); os.IsNotExist(err) {
 		t.Error("Expected file to be restored after stash pop")
 	}
@@ -274,6 +338,23 @@ func TestUpdateWithConfigStash(t *testing.T) {
 	}
 	if !bytes.Equal(content, testContent) {
 		t.Errorf("Expected restored content to match original")
+	}
+}
+
+// TestUpdateDiscardAndStashMutuallyExclusive verifies the flag pair rejects being
+// given both ways at once rather than silently picking one.
+func TestUpdateDiscardAndStashMutuallyExclusive(t *testing.T) {
+	reposPath := testhelper.SetupRepos(t, []string{"repo-1"})
+	testCtx := setupTestGitContext(t, reposPath)
+
+	cmd := addUpdateCmd()
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+	cmd.SetArgs([]string{"--discard", "--stash", "repo-1"})
+
+	if err := cmd.ExecuteContext(testCtx); err == nil {
+		t.Fatal("Expected error when both --discard and --stash are set")
 	}
 }
 
@@ -339,7 +420,7 @@ func TestCleanWithoutSubmodules(t *testing.T) {
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
-	cmd.SetArgs([]string{"--no-stash", "repo-1"})
+	cmd.SetArgs([]string{"--discard", "repo-1"})
 
 	if err := cmd.ExecuteContext(testCtx); err != nil {
 		t.Fatalf("Command execution failed: %v\n%s", err, buf.String())
@@ -386,7 +467,7 @@ func TestCleanIgnoredFiles(t *testing.T) {
 			var buf bytes.Buffer
 			cmd.SetOut(&buf)
 			cmd.SetErr(&buf)
-			cmd.SetArgs([]string{"--no-stash", "repo-1"})
+			cmd.SetArgs([]string{"--discard", "repo-1"})
 
 			if err := cmd.ExecuteContext(testCtx); err != nil {
 				t.Fatalf("Command execution failed: %v\n%s", err, buf.String())

@@ -39,7 +39,7 @@ const (
 	GitCommitStage = "git.commit.stage"
 	GitCommitPush  = "git.commit.push"
 
-	GitUpdateStash        = "git.update.stash"
+	GitUpdateDiscard      = "git.update.discard"
 	GitUpdatePullStrategy = "git.update.pull-strategy"
 	GitUpdateCleanIgnored = "git.update.clean-ignored"
 	GitUpdateSubmodules   = "git.update.submodules"
@@ -150,18 +150,19 @@ func Init(ctx context.Context) context.Context {
 	return SetViper(ctx, v)
 }
 
-// removedKeys maps configuration keys that are no longer read to their replacement.
-// Values set under the old names are ignored, so warn rather than fail silently:
-// git.stash-updates in particular used to protect uncommitted work, and dropping
-// it changes `git update` from stashing changes to discarding them.
+// removedKeys maps configuration keys that are no longer read to a migration hint.
+// Values set under the old names are ignored, so warn rather than fail silently.
+// The hint is spelled out per key because a replacement key name is not always
+// enough: git.stash-updates inverted into git.update.discard, so carrying the old
+// boolean over verbatim would select the opposite behavior.
 var removedKeys = map[string]string{
-	"git.stash-updates": GitUpdateStash,
+	"git.stash-updates": "stashing is now the default; set " + GitUpdateDiscard + " to discard uncommitted changes instead",
 }
 
 func warnRemovedKeys(v *viper.Viper) {
-	for old, replacement := range removedKeys {
+	for old, hint := range removedKeys {
 		if v.IsSet(old) {
-			fmt.Fprintf(os.Stderr, "WARNING: %q is no longer supported and is being ignored - use %q instead\n\n", old, replacement)
+			fmt.Fprintf(os.Stderr, "WARNING: %q is no longer supported and is being ignored - %s\n\n", old, hint)
 		}
 	}
 }
@@ -182,7 +183,7 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault(GitCommitStage, "all")
 	v.SetDefault(GitCommitPush, false)
 
-	v.SetDefault(GitUpdateStash, false)
+	v.SetDefault(GitUpdateDiscard, false)
 	v.SetDefault(GitUpdatePullStrategy, "default")
 	v.SetDefault(GitUpdateCleanIgnored, false)
 	v.SetDefault(GitUpdateSubmodules, true)

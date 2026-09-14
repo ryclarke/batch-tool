@@ -13,8 +13,7 @@ import (
 )
 
 const (
-	branchFlag  = "branch"
-	discardFlag = "discard"
+	branchFlag = "branch"
 
 	resetFlag   = "reset"
 	noResetFlag = "no-" + resetFlag

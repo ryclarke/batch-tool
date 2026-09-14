@@ -13,9 +13,6 @@ import (
 )
 
 const (
-	stashFlag   = "stash"
-	noStashFlag = "no-" + stashFlag
-
 	pullStrategyFlag = "pull-strategy"
 )
 
@@ -37,21 +34,24 @@ var AvailablePullStrategies = []string{PullDefault, PullFFOnly, PullRebase, Pull
 func addUpdateCmd() *cobra.Command {
 	// updateCmd represents the update command
 	updateCmd := &cobra.Command{
-		Use:   "update [--stash] [--pull-strategy <strategy>] <repository>...",
+		Use:   "update [--discard] [--pull-strategy <strategy>] <repository>...",
 		Short: "Update primary branch across repositories",
 		Long: `Update the primary/default branch to the latest from remote.
 
 This command performs the following operations for each repository:
-  1. Checkout the default branch (main, master, develop, etc.)
-  2. Pull the latest changes from the remote
-
-With the --stash flag enabled (or git.update.stash set in config), it will also:
   1. Stash uncommitted changes before updating (if any)
-  2. Restore stashed changes after updating
+  2. Checkout the default branch (main, master, develop, etc.)
+  3. Pull the latest changes from the remote
+  4. Restore stashed changes after updating
 
-WARNING: Without stash enabled, any uncommitted changes (staged or unstaged)
-will be destroyed during the update process. Use --stash or set git.update.stash
-in your config to preserve your work.
+Uncommitted changes are stashed and restored by default, so updating is
+non-destructive. Pass --discard (or set git.update.discard in config) to reset
+the worktree instead.
+
+WARNING: --discard destroys any uncommitted changes, staged or unstaged. The
+discard path can be tuned with two further config keys: git.update.clean-ignored
+also removes ignored files, and git.update.submodules controls whether
+submodules are re-initialized.
 
 Pull Strategies (--pull-strategy):
   default  Use each repository's own pull configuration (default)
@@ -59,20 +59,19 @@ Pull Strategies (--pull-strategy):
   rebase   Rebase local commits onto the upstream branch
   merge    Always merge when histories have diverged
 
-The discard path can be tuned with two config keys: git.update.clean-ignored
-also removes ignored files, and git.update.submodules controls whether
-submodules are re-initialized.
-
 The default branch name is determined from the repository catalog
 configuration, which typically reads it from the git repository's
 HEAD reference or uses a configured default.`,
-		Example: `  # Update specific repositories
+		Example: `  # Update specific repositories, stashing and restoring local changes
   batch-tool git update repo1 repo2
 
   # Update all repositories
   batch-tool git update ~all
 
-  # Update with automatic stash/restore of uncommitted changes
+  # Throw away uncommitted changes instead of stashing them
+  batch-tool git update --discard repo1 repo2
+
+  # Force stashing even when git.update.discard is set in config
   batch-tool git update --stash repo1 repo2
 
   # Refuse to update when a merge would be required
@@ -86,19 +85,20 @@ HEAD reference or uses a configured default.`,
 				return err
 			}
 
-			return utils.BindBoolFlags(cmd, config.GitUpdateStash, stashFlag, noStashFlag)
+			return utils.BindBoolFlags(cmd, config.GitUpdateDiscard, discardFlag, stashFlag)
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if config.Viper(cmd.Context()).GetBool(config.GitUpdateStash) {
-				return call.Do(cmd, args, call.Wrap(StashPush, Update, StashPop))
+			if config.Viper(cmd.Context()).GetBool(config.GitUpdateDiscard) {
+				return call.Do(cmd, args, call.Wrap(Clean, Update))
 			}
 
-			return call.Do(cmd, args, call.Wrap(Clean, Update))
+			return call.Do(cmd, args, call.Wrap(StashPush, Update, StashPop))
 		},
 	}
 
-	// Default false to match git.update.stash, so --help does not advertise the wrong default.
-	utils.BuildBoolFlagsDefault(updateCmd, stashFlag, "", noStashFlag, "", false, "Automatically stash and restore uncommitted changes during update")
+	// --stash is the inverse of --discard, so it can force stashing even when
+	// git.update.discard is set in config.
+	utils.BuildBoolFlagsDefault(updateCmd, discardFlag, "", stashFlag, "", false, "Discard uncommitted changes during update instead of stashing them")
 	updateCmd.Flags().String(pullStrategyFlag, PullDefault, "how to reconcile diverged history: \"default\", \"ff-only\", \"rebase\", or \"merge\"")
 
 	return updateCmd
