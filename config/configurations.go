@@ -35,9 +35,6 @@ const (
 	DefaultBranch      = "git.default-branch"
 	DefaultMergeMethod = "git.default-merge-method"
 
-	// LegacyStashUpdates is the pre-grouping name for GitUpdateStash, honored by MigrateLegacyKeys.
-	LegacyStashUpdates = "git.stash-updates"
-
 	// Persistent per-subcommand git behavior, grouped as git.<command>.<option>.
 	GitCommitStage = "git.commit.stage"
 	GitCommitPush  = "git.commit.push"
@@ -148,17 +145,24 @@ func Init(ctx context.Context) context.Context {
 		fmt.Fprintf(os.Stderr, "Using config file: %v\n\n", v.ConfigFileUsed())
 	}
 
-	MigrateLegacyKeys(v)
+	warnRemovedKeys(v)
 
 	return SetViper(ctx, v)
 }
 
-// MigrateLegacyKeys carries renamed configuration keys over to their current names.
-// It must run after the config file is read, and it seeds defaults rather than
-// overrides so that an explicit flag still takes precedence over a legacy config value.
-func MigrateLegacyKeys(v *viper.Viper) {
-	if v.IsSet(LegacyStashUpdates) {
-		v.SetDefault(GitUpdateStash, v.GetBool(LegacyStashUpdates))
+// removedKeys maps configuration keys that are no longer read to their replacement.
+// Values set under the old names are ignored, so warn rather than fail silently:
+// git.stash-updates in particular used to protect uncommitted work, and dropping
+// it changes `git update` from stashing changes to discarding them.
+var removedKeys = map[string]string{
+	"git.stash-updates": GitUpdateStash,
+}
+
+func warnRemovedKeys(v *viper.Viper) {
+	for old, replacement := range removedKeys {
+		if v.IsSet(old) {
+			fmt.Fprintf(os.Stderr, "WARNING: %q is no longer supported and is being ignored - use %q instead\n\n", old, replacement)
+		}
 	}
 }
 

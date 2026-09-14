@@ -220,7 +220,7 @@ git:
 
 `git.stash.scope` is grouped under `stash` rather than `update` because it applies to every stash Batch Tool takes, including the ones created by `git update --stash` and `git branch`.
 
-`git.stash-updates` was renamed to `git.update.stash`. The old key still works, but prefer the new name.
+`git.stash-updates` was renamed to `git.update.stash`. The old key is no longer read; if it is still present in your config file, `batch-tool` prints a warning and ignores it. Rename it, since leaving it set means `git update` discards uncommitted changes instead of stashing them.
 
 ### Aliases and Unwanted Labels
 

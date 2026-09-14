@@ -11,10 +11,10 @@ import (
 	"github.com/ryclarke/batch-tool/config"
 )
 
-// TestMigrateLegacyKeys covers the git.stash-updates -> git.update.stash rename.
-// The legacy key must seed a default rather than an override, so that an explicit
-// flag still wins over a stale config file value.
-func TestMigrateLegacyKeys(t *testing.T) {
+// TestGitUpdateStashPrecedence covers the grouped git.update.stash key, which is
+// nested two levels deep in the config file, and confirms an explicit flag still
+// wins over a config file value.
+func TestGitUpdateStashPrecedence(t *testing.T) {
 	tests := []struct {
 		name     string
 		yaml     string
@@ -22,29 +22,24 @@ func TestMigrateLegacyKeys(t *testing.T) {
 		expected bool
 	}{
 		{
-			name:     "legacy key is honored",
-			yaml:     "git:\n  stash-updates: true\n",
-			expected: true,
+			name:     "unset falls back to the default",
+			yaml:     "git: {}\n",
+			expected: false,
 		},
 		{
-			name:     "current key is honored",
+			name:     "nested config key is honored",
 			yaml:     "git:\n  update:\n    stash: true\n",
 			expected: true,
 		},
 		{
-			name:     "current key wins over legacy key",
-			yaml:     "git:\n  stash-updates: false\n  update:\n    stash: true\n",
-			expected: true,
-		},
-		{
-			name:     "explicit flag overrides legacy key",
-			yaml:     "git:\n  stash-updates: true\n",
+			name:     "explicit flag overrides the config key",
+			yaml:     "git:\n  update:\n    stash: true\n",
 			setFlag:  true,
 			expected: false,
 		},
 		{
-			name:     "neither key set falls back to the default",
-			yaml:     "git: {}\n",
+			name:     "the removed git.stash-updates key is ignored",
+			yaml:     "git:\n  stash-updates: true\n",
 			expected: false,
 		},
 	}
@@ -58,10 +53,8 @@ func TestMigrateLegacyKeys(t *testing.T) {
 				t.Fatalf("Failed reading test config: %v", err)
 			}
 
-			config.MigrateLegacyKeys(v)
-
 			flags := pflag.NewFlagSet("test", pflag.ContinueOnError)
-			flags.Bool("stash", true, "")
+			flags.Bool("stash", false, "")
 
 			if tt.setFlag {
 				if err := flags.Set("stash", "false"); err != nil {
@@ -77,6 +70,39 @@ func TestMigrateLegacyKeys(t *testing.T) {
 				t.Errorf("Expected %s to be %v, got %v", config.GitUpdateStash, tt.expected, got)
 			}
 		})
+	}
+}
+
+// TestGroupedGitDefaults verifies the per-subcommand config groups all resolve to
+// the behavior they replaced.
+func TestGroupedGitDefaults(t *testing.T) {
+	v := config.New()
+
+	strs := map[string]string{
+		config.GitRemote:             "origin",
+		config.GitCommitStage:        "all",
+		config.GitUpdatePullStrategy: "default",
+		config.GitStashScope:         "all",
+	}
+
+	for key, expected := range strs {
+		if got := v.GetString(key); got != expected {
+			t.Errorf("Expected %s to default to %q, got %q", key, expected, got)
+		}
+	}
+
+	bools := map[string]bool{
+		config.GitCommitPush:         false,
+		config.GitUpdateStash:        false,
+		config.GitUpdateCleanIgnored: false,
+		config.GitUpdateSubmodules:   true,
+		config.GitBranchReset:        true,
+	}
+
+	for key, expected := range bools {
+		if got := v.GetBool(key); got != expected {
+			t.Errorf("Expected %s to default to %v, got %v", key, expected, got)
+		}
 	}
 }
 
