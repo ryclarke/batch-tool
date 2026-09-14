@@ -26,10 +26,13 @@ func setupTestContext(t *testing.T, reposPath string) (context.Context, *fake.Fa
 	// Use a unique provider name for each test to avoid state sharing
 	providerName := "fake-test-" + t.Name()
 
+	// Provide a credential through the environment variable named by auth.env so
+	// tests don't depend on whatever is set in the ambient environment.
+	t.Setenv("AUTH_TOKEN", "fake-token")
+
 	// Configure viper for testing
 	viper.Set(config.GitProvider, providerName)
 	viper.Set(config.GitProject, "test-project")
-	viper.Set(config.AuthToken, "fake-token")
 	viper.Set(config.GitDirectory, reposPath)
 	viper.Set(config.GitHost, "example.com")
 	viper.Set(config.Branch, "feature-branch")

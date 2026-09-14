@@ -64,8 +64,21 @@ const (
 	CatalogCachePath = "repos.cache.path"
 	CatalogCacheTTL  = "repos.cache.ttl"
 
-	Branch    = "branch"
+	Branch = "branch"
+
+	// AuthToken is the legacy single-token setting, retained as a deprecated
+	// fallback for configuration files which predate the auth.* settings.
 	AuthToken = "auth-token"
+
+	AuthProvider = "auth.provider"
+	AuthEnv      = "auth.env"
+	AuthCommand  = "auth.command"
+	AuthAccount  = "auth.account"
+	AuthOwners   = "auth.owners"
+
+	// DefaultAuthEnv is the environment variable consulted for a credential when
+	// auth.env is not configured.
+	DefaultAuthEnv = "AUTH_TOKEN"
 
 	TokenLabel  = "repos.tokens.label"
 	TokenSkip   = "repos.tokens.skip"
@@ -221,6 +234,15 @@ func setDefaults(v *viper.Viper) {
 
 	// default git directory is $GOPATH/src if GOPATH is set, or current working directory otherwise
 	v.SetDefault(GitDirectory, defaultGitdir())
+
+	// credential resolution defaults - auth.env names the environment variable holding
+	// the token, it never holds the token itself. Per-owner overrides live in auth.owners
+	// keyed by project/organization name.
+	v.SetDefault(AuthProvider, "auto")
+	v.SetDefault(AuthEnv, DefaultAuthEnv)
+	v.SetDefault(AuthCommand, []string{})
+	v.SetDefault(AuthAccount, "")
+	v.SetDefault(AuthOwners, map[string]any{})
 
 	// defaults for token identifiers
 	v.SetDefault(TokenLabel, "~")

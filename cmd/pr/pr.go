@@ -7,6 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/ryclarke/batch-tool/auth"
 	"github.com/ryclarke/batch-tool/catalog"
 	"github.com/ryclarke/batch-tool/config"
 	"github.com/ryclarke/batch-tool/scm"
@@ -62,7 +63,13 @@ Branch Validation:
 				}
 			}
 
-			return utils.ValidateRequiredConfig(cmd.Context(), config.AuthToken)
+			// Preflight the default project's credentials so a misconfigured setup
+			// fails before any repository work begins. Per-project credentials are
+			// resolved individually when each provider is constructed.
+			ctx := cmd.Context()
+			viper := config.Viper(ctx)
+
+			return auth.Validate(ctx, viper.GetString(config.GitHost), viper.GetString(config.GitProject))
 		},
 	}
 

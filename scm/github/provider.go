@@ -12,6 +12,7 @@ import (
 	"github.com/google/go-github/v74/github"
 	"golang.org/x/sync/semaphore"
 
+	"github.com/ryclarke/batch-tool/auth"
 	"github.com/ryclarke/batch-tool/config"
 	"github.com/ryclarke/batch-tool/scm"
 )
@@ -47,9 +48,14 @@ func init() {
 // New creates a new GitHub provider instance.
 func New(ctx context.Context, project string) scm.Provider {
 	viper := config.Viper(ctx)
-	client := github.NewClient(http.DefaultClient).WithAuthToken(viper.GetString(config.AuthToken))
+	host := cleanHostname(viper.GetString(config.GitHost))
 
-	if host := cleanHostname(viper.GetString(config.GitHost)); host != githubSaaSHost && host != "" {
+	// Credentials are resolved per project so that each configured organization can
+	// authenticate with a different account.
+	token, authErr := auth.Token(ctx, host, project)
+	client := github.NewClient(http.DefaultClient).WithAuthToken(token)
+
+	if host != githubSaaSHost && host != "" {
 		var err error
 
 		if client, err = client.WithEnterpriseURLs(
@@ -64,6 +70,7 @@ func New(ctx context.Context, project string) scm.Provider {
 		client:  client,
 		project: project,
 		ctx:     ctx,
+		authErr: authErr,
 	}
 }
 
@@ -72,9 +79,15 @@ type Github struct {
 	client  *github.Client
 	project string
 	ctx     context.Context
+
+	// authErr records a credential resolution failure from New, which cannot
+	// return an error through the scm.ProviderFactory signature.
+	authErr error
 }
 
 // CheckCapabilities validates that the provided PR options are supported by GitHub.
+// The check is local to the static capability set and issues no request, so it
+// requires no credential.
 func (g *Github) CheckCapabilities(opts *scm.PROptions) error {
 	return scm.ValidatePROptions(caps, opts)
 }

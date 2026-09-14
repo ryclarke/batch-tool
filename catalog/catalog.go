@@ -62,6 +62,12 @@ func Init(ctx context.Context, flush bool) {
 	}
 }
 
+// ProjectOrder returns the configured projects in precedence order: the default
+// project first, followed by each additional project in order of inclusion.
+func ProjectOrder(ctx context.Context) []string {
+	return projectOrder(ctx)
+}
+
 // projectOrder returns the configured projects in precedence order: the default
 // project first, followed by each additional project in order of inclusion.
 func projectOrder(ctx context.Context) []string {

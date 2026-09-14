@@ -8,6 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/ryclarke/batch-tool/auth"
 	"github.com/ryclarke/batch-tool/config"
 	"github.com/ryclarke/batch-tool/utils"
 )
@@ -17,6 +18,15 @@ import (
 // to the config directory (e.g., "../config", "../../config").
 func LoadFixture(t *testing.T, configPath string) context.Context {
 	t.Helper()
+
+	// Credentials are cached for the lifetime of the process, so clear them alongside
+	// the fresh viper instance to keep tests independent of resolution order.
+	auth.Reset()
+
+	// Provide a deterministic credential so tests neither depend on nor inherit
+	// whatever is set in the ambient environment. t.Setenv restores the previous
+	// value when the test completes.
+	t.Setenv(config.DefaultAuthEnv, "test-token")
 
 	viper := config.New()
 	ctx := config.SetViper(context.Background(), viper)

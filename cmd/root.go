@@ -8,10 +8,12 @@ import (
 	"os"
 	"runtime"
 	"strings"
+	"text/tabwriter"
 
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 
+	"github.com/ryclarke/batch-tool/auth"
 	"github.com/ryclarke/batch-tool/call"
 	"github.com/ryclarke/batch-tool/catalog"
 	"github.com/ryclarke/batch-tool/cmd/exec"
@@ -131,6 +133,7 @@ Shell Note:
 
 	// Add all subcommands to the root
 	rootCmd.AddCommand(
+		authCmd(),
 		catalogCmd(),
 		labelsCmd(),
 		exec.Cmd(),
@@ -261,6 +264,141 @@ Verbose Mode:
 	labelsCmd.Flags().BoolP("verbose", "v", false, "expand labels referenced in the given filter")
 
 	return labelsCmd
+}
+
+// authCmd configures the auth command along with all subcommands and flags
+func authCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "auth",
+		Short: "Inspect SCM credential configuration",
+		Long: `Inspect the credentials configured for each project.
+
+Credentials are resolved per project, so each configured organization can
+authenticate with a different account.`,
+		Args: cobra.NoArgs,
+	}
+
+	cmd.AddCommand(authStatusCmd())
+
+	return cmd
+}
+
+// authStatusCmd configures the auth status subcommand
+func authStatusCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "status",
+		Short: "Report which credential each project resolves to",
+		Long: `Report the credential backend and source configured for each project.
+
+Every configured project is listed along with the backend which supplies its
+credential and whether that credential could be resolved. This is the quickest
+way to confirm a multi-organization setup before running commands that make
+changes.
+
+Projects:
+  The report covers the default project, each additional project from
+  git.projects, and every project with an explicit auth.owners entry.
+
+Verification:
+  Resolution is local only - no API requests are made, so a listed credential
+  is known to exist but is not known to be valid or to carry the necessary
+  access. The command exits non-zero if any project fails to resolve, which
+  makes it usable as a CI preflight.
+
+Credential Safety:
+  Credentials are never printed. The -v/--verbose flag adds a truncated
+  one-way digest of each credential, which is enough to confirm that two
+  projects resolved to different credentials without revealing either.`,
+		Example: `  # Report credential status for all configured projects
+  batch-tool auth status
+
+  # Include a digest to compare credentials across projects
+  batch-tool auth status -v`,
+		Args: cobra.NoArgs,
+		// Unresolved credentials are a reported result, not invalid usage, so the
+		// error is printed once by the root handler rather than by cobra.
+		SilenceErrors: true,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			verbose, err := cmd.Flags().GetBool("verbose")
+			if err != nil {
+				return err
+			}
+
+			ctx := cmd.Context()
+			viper := config.Viper(ctx)
+
+			// Cover every project the tool might operate on, plus any project
+			// configured with credentials but not currently selected.
+			owners := auth.Sorted(append(catalog.ProjectOrder(ctx), auth.Owners(ctx)...)...)
+			if len(owners) == 0 {
+				return fmt.Errorf("no projects configured - set %s", config.GitProject)
+			}
+
+			return printAuthStatus(cmd, auth.DescribeAll(ctx, viper.GetString(config.GitHost), owners...), verbose)
+		},
+	}
+
+	cmd.Flags().BoolP("verbose", "v", false, "include a truncated digest of each credential")
+
+	return cmd
+}
+
+// printAuthStatus renders credential statuses as a plain text table and reports
+// whether every project resolved successfully.
+func printAuthStatus(cmd *cobra.Command, statuses []auth.Status, verbose bool) error {
+	out := cmd.OutOrStdout()
+
+	writer := tabwriter.NewWriter(out, 0, 0, 3, ' ', 0)
+
+	header := "PROJECT\tBACKEND\tSOURCE\tSTATUS"
+	if verbose {
+		header += "\tDIGEST"
+	}
+
+	fmt.Fprintln(writer, header)
+
+	var failed int
+
+	for _, status := range statuses {
+		state := "ok"
+
+		switch {
+		case !status.OK():
+			state = "FAILED"
+			failed++
+		case status.Unauthenticated:
+			state = "none required"
+		}
+
+		row := fmt.Sprintf("%s\t%s\t%s\t%s", status.Owner, status.Provider, status.Source, state)
+		if verbose {
+			digest := status.Fingerprint
+			if digest == "" {
+				digest = "-"
+			}
+
+			row += "\t" + digest
+		}
+
+		fmt.Fprintln(writer, row)
+	}
+
+	if err := writer.Flush(); err != nil {
+		return err
+	}
+
+	// Print the reason for each failure below the table so the rows stay aligned.
+	for _, status := range statuses {
+		if !status.OK() {
+			fmt.Fprintf(out, "\n%s: %v\n", status.Owner, status.Err)
+		}
+	}
+
+	if failed > 0 {
+		return call.NewError(fmt.Errorf("%d of %d projects could not resolve a credential", failed, len(statuses)))
+	}
+
+	return nil
 }
 
 // catalogCmd configures the catalog command

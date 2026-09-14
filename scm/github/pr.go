@@ -11,6 +11,10 @@ import (
 
 // GetPullRequest retrieves a pull request by repository name and source branch.
 func (g *Github) GetPullRequest(repo, branch string) (*scm.PullRequest, error) {
+	if g.authErr != nil {
+		return nil, g.authErr
+	}
+
 	resp, err := g.getPullRequest(repo, branch)
 	if err != nil {
 		return nil, err
@@ -21,6 +25,10 @@ func (g *Github) GetPullRequest(repo, branch string) (*scm.PullRequest, error) {
 
 // OpenPullRequest opens a new pull request in the specified repository.
 func (g *Github) OpenPullRequest(repo, branch string, opts *scm.PROptions) (*scm.PullRequest, error) {
+	if g.authErr != nil {
+		return nil, g.authErr
+	}
+
 	if opts == nil {
 		opts = &scm.PROptions{} // default options
 	}
@@ -62,6 +70,10 @@ func (g *Github) OpenPullRequest(repo, branch string, opts *scm.PROptions) (*scm
 
 // UpdatePullRequest updates an existing pull request.
 func (g *Github) UpdatePullRequest(repo, branch string, opts *scm.PROptions) (*scm.PullRequest, error) {
+	if g.authErr != nil {
+		return nil, g.authErr
+	}
+
 	pr, err := g.getPullRequest(repo, branch)
 	if err != nil {
 		return nil, err
@@ -88,6 +100,10 @@ func (g *Github) UpdatePullRequest(repo, branch string, opts *scm.PROptions) (*s
 
 // MergePullRequest merges an existing pull request
 func (g *Github) MergePullRequest(repo, branch string, opts *scm.PRMergeOptions) (*scm.PullRequest, error) {
+	if g.authErr != nil {
+		return nil, g.authErr
+	}
+
 	if opts == nil {
 		opts = &scm.PRMergeOptions{} // default options
 	}

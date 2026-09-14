@@ -77,16 +77,123 @@ The only field you must set to get started is `git.project`.
 
 ### 2. Configure Authentication
 
-Repository discovery and pull request operations require an API token.
+Repository discovery and pull request operations require a credential. Credentials
+are resolved **per project**, so each organization can authenticate with a
+different account.
+
+The quickest way to get started is to export a token:
 
 - GitHub: create a [personal access token](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens)
 - Bitbucket: create an [API token](https://support.atlassian.com/bitbucket-cloud/docs/using-api-tokens/)
 
-Prefer setting the token through `AUTH_TOKEN` in your environment.
+```bash
+export AUTH_TOKEN=your-token
+```
+
+If you use GitHub and already have the [GitHub CLI](https://cli.github.com)
+installed and authenticated, that works with no configuration at all. `gh` is
+never required, and is only consulted when `git.provider` is `github`.
+
+#### Credential Backends
+
+Set `auth.provider` to choose how credentials are read. No configuration field
+ever holds a credential itself: each one names an environment variable, a
+command, or a `gh` account to read it from.
+
+| Backend | Reads the credential from |
+| --- | --- |
+| `auto` (default) | `AUTH_TOKEN`, then `GH_TOKEN`/`GITHUB_TOKEN`, then the `gh` CLI |
+| `env` | the environment variable named by `auth.env` |
+| `gh` | `gh auth token`, optionally for the account named by `auth.account` |
+| `command` | the standard output of the command in `auth.command` |
+| `none` | nothing - requests are made unauthenticated |
+
+#### Multiple Organizations
+
+Add an `auth.owners` entry to give a project its own credential. Each entry
+overrides only the fields it sets, falling back to the top-level `auth` settings
+for the rest.
+
+```yaml
+git:
+  provider: github
+  project: your-username
+  projects:
+    - your-work-org
+
+auth:
+  provider: auto
+
+  owners:
+    your-username:
+      provider: gh
+      account: your-personal-github-login
+    your-work-org:
+      provider: gh
+      account: your-work-github-login
+    partner-org:
+      provider: env
+      env: PARTNER_ORG_TOKEN
+    some-public-org:
+      provider: none
+```
+
+To use two GitHub accounts this way, log into both and let `auth.account` select
+between them. Batch Tool never changes which account is active.
+
+```bash
+gh auth login   # repeat for each account
+gh auth status  # lists the account names to use for auth.account
+```
+
+The `command` backend reads a credential from any external tool, such as a
+password manager. The command is given as a list and is executed directly, never
+through a shell:
+
+```yaml
+auth:
+  provider: command
+  command: ["op", "read", "op://Private/GitHub/token"]
+```
+
+#### Continuous Integration
+
+Inside GitHub Actions the default `auto` backend picks up the standard
+`GITHUB_TOKEN` with no configuration:
+
+```yaml
+- run: batch-tool pr get '~all'
+  env:
+    GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+```
+
+Environment variables are always preferred over the `gh` CLI, so CI runs stay
+deterministic and never spawn a subprocess.
+
+#### Verifying Your Setup
+
+`batch-tool auth status` reports which credential each project resolves to. It
+makes no API requests and never prints a credential. Add `-v` to include a
+truncated one-way digest, which is enough to confirm that two projects resolved
+to different credentials:
+
+```console
+$ batch-tool auth status -v
+PROJECT        BACKEND   SOURCE                     STATUS          DIGEST
+partner-org    env       $PARTNER_ORG_TOKEN         ok              sha256:1b77ca52
+public-org     none      unauthenticated            none required   -
+your-username  gh        gh (user: personal-login)  ok              sha256:4f2a1c9b
+your-work-org  gh        gh (user: work-login)      ok              sha256:8e0d33a1
+```
+
+The command exits non-zero if any project fails to resolve, so it also works as
+a CI preflight. Note that a resolved credential is known to exist but is not
+known to be valid or to carry the necessary access.
 
 ### 3. Try a Safe Read-Only Command
 
 ```bash
+batch-tool auth status
 batch-tool git status repo1 repo2
 batch-tool labels '~app'
 batch-tool catalog
@@ -238,7 +345,7 @@ Use `repos.reviewers` or `repos.team_reviewers` to preconfigure the reviewers yo
 
 ## Troubleshooting
 
-- Authentication errors: verify `AUTH_TOKEN` and your provider configuration
+- Authentication errors: run `batch-tool auth status` to see which credential each project resolves to
 - Repository not found: confirm the repository name, default project, and cached catalog data
 - Unexpected matches: run `batch-tool labels <selectors...>` to inspect how your filters resolve
 - Interactive hangs in automation: use `--style native` or `--no-wait`
