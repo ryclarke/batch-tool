@@ -8,9 +8,7 @@ import (
 
 	"github.com/ryclarke/batch-tool/call"
 	"github.com/ryclarke/batch-tool/catalog"
-	"github.com/ryclarke/batch-tool/config"
 	"github.com/ryclarke/batch-tool/output"
-	"github.com/ryclarke/batch-tool/scm"
 	"github.com/ryclarke/batch-tool/utils"
 )
 
@@ -45,17 +43,12 @@ Branch Requirement:
 
 // Get retrieves and displays the pull request information for the given repository.
 func Get(ctx context.Context, ch output.Channel) error {
-	viper := config.Viper(ctx)
-
 	branch, err := utils.LookupBranch(ctx, ch.Name())
 	if err != nil {
 		return fmt.Errorf("failed to lookup branch for %s: %w", ch.Name(), err)
 	}
-	repoName := utils.ResolveRepoName(ch.Name())
 
-	// Get project from repository metadata in catalog, fall back to default
-	project := catalog.GetProjectForRepo(ctx, repoName)
-	provider := scm.Get(ctx, viper.GetString(config.GitProvider), project)
+	provider, repoName, _ := repoContext(ctx, ch.Name())
 
 	pr, err := provider.GetPullRequest(repoName, branch)
 	if err != nil {

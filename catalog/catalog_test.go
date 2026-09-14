@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
+	"sort"
 	"testing"
 	"time"
 
@@ -1160,6 +1162,152 @@ func TestInitWithFakeProvider(t *testing.T) {
 	}
 }
 
+// TestResolveName tests project inference and collision precedence for bare repository names
+func TestResolveName(t *testing.T) {
+	ctx := loadFixture(t)
+	resetCatalogState(t)
+
+	viper := config.Viper(ctx)
+	viper.Set(config.GitProject, "default-project")
+	viper.Set(config.GitProjects, []string{"project-a", "project-b"})
+
+	// "collide" exists in every project, "shared" exists only in the additional projects,
+	// and "stray" belongs to a project which is not configured at all.
+	Catalog = map[string]scm.Repository{
+		"default-project/collide": {Name: "collide", Project: "default-project"},
+		"project-a/collide":       {Name: "collide", Project: "project-a"},
+		"project-b/collide":       {Name: "collide", Project: "project-b"},
+		"project-a/shared":        {Name: "shared", Project: "project-a"},
+		"project-b/shared":        {Name: "shared", Project: "project-b"},
+		"project-b/only-b":        {Name: "only-b", Project: "project-b"},
+		"unlisted-project/stray":  {Name: "stray", Project: "unlisted-project"},
+	}
+
+	tests := []struct {
+		name     string
+		repoName string
+		want     string
+	}{
+		{
+			name:     "collision prefers the default project",
+			repoName: "collide",
+			want:     "default-project/collide",
+		},
+		{
+			name:     "collision outside the default project follows configured order",
+			repoName: "shared",
+			want:     "project-a/shared",
+		},
+		{
+			name:     "unique name resolves to its own project",
+			repoName: "only-b",
+			want:     "project-b/only-b",
+		},
+		{
+			name:     "explicit prefix bypasses inference",
+			repoName: "project-b/collide",
+			want:     "project-b/collide",
+		},
+		{
+			name:     "explicit prefix wins even for an unknown project",
+			repoName: "somewhere-else/collide",
+			want:     "somewhere-else/collide",
+		},
+		{
+			name:     "catalog entry outside the configured projects still resolves",
+			repoName: "stray",
+			want:     "unlisted-project/stray",
+		},
+		{
+			name:     "unknown name falls back to the default project",
+			repoName: "nonexistent",
+			want:     "default-project/nonexistent",
+		},
+		{
+			name:     "surrounding slashes and spaces are trimmed",
+			repoName: " /project-a/shared/ ",
+			want:     "project-a/shared",
+		},
+		{
+			name:     "host-qualified name keeps only the project and repo",
+			repoName: "example.com/project-b/collide",
+			want:     "project-b/collide",
+		},
+		{
+			name:     "current directory selector is left alone",
+			repoName: ".",
+			want:     ".",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := ResolveName(ctx, tt.repoName); got != tt.want {
+				t.Errorf("ResolveName(%q) = %q, want %q", tt.repoName, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestRepositoryListCanonicalizesFilters verifies that bare and qualified selectors refer to the
+// same repository, so that exclusions and forced inclusions apply to label-expanded repos.
+func TestRepositoryListCanonicalizesFilters(t *testing.T) {
+	ctx := loadFixture(t)
+	resetCatalogState(t)
+
+	viper := config.Viper(ctx)
+	viper.Set(config.GitProject, "default-project")
+	viper.Set(config.SuperSetLabel, "all")
+	viper.Set(config.SkipUnwanted, false)
+	viper.Set(config.SkipArchived, false)
+
+	Catalog = map[string]scm.Repository{
+		"default-project/repo-1": {Name: "repo-1", Project: "default-project"},
+		"default-project/repo-2": {Name: "repo-2", Project: "default-project"},
+		"other-org/repo-3":       {Name: "repo-3", Project: "other-org"},
+	}
+
+	Init(ctx, false)
+
+	tests := []struct {
+		name    string
+		filters []string
+		want    []string
+	}{
+		{
+			name:    "bare exclusion applies to label-expanded repos",
+			filters: []string{"~all", "!repo-1"},
+			want:    []string{"default-project/repo-2", "other-org/repo-3"},
+		},
+		{
+			name:    "qualified exclusion applies to label-expanded repos",
+			filters: []string{"~all", "!other-org/repo-3"},
+			want:    []string{"default-project/repo-1", "default-project/repo-2"},
+		},
+		{
+			name:    "bare and qualified selectors collapse to one repo",
+			filters: []string{"repo-1", "default-project/repo-1"},
+			want:    []string{"default-project/repo-1"},
+		},
+		{
+			name:    "bare selector resolves a non-default project",
+			filters: []string{"repo-3"},
+			want:    []string{"other-org/repo-3"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := RepositoryList(ctx, tt.filters...).ToSlice()
+			sort.Strings(got)
+
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("RepositoryList(%v) = %v, want %v", tt.filters, got, tt.want)
+			}
+		})
+	}
+}
+
 // TestGetRepository tests the GetRepository function with different lookup strategies
 func TestGetRepository(t *testing.T) {
 	ctx := loadFixture(t)
@@ -1486,23 +1634,23 @@ func TestInitWithRepoAliases(t *testing.T) {
 	viper.Set(config.GitProject, "test-project")
 	viper.Set(config.SuperSetLabel, "~all")
 
-	// Setup repo aliases
+	// Setup repo aliases, mixing bare and project-qualified members
 	viper.Set(config.RepoAliases, map[string]interface{}{
-		"~backend":  []string{"api-server", "worker"},
+		"~backend":  []string{"api-server", "test-project/worker"},
 		"~frontend": []string{"web-app"},
 	})
 
 	// Setup test catalog
 	Catalog = map[string]scm.Repository{
-		"api-server": {Name: "api-server", Project: "test-project"},
-		"worker":     {Name: "worker", Project: "test-project"},
-		"web-app":    {Name: "web-app", Project: "test-project"},
+		"test-project/api-server": {Name: "api-server", Project: "test-project"},
+		"test-project/worker":     {Name: "worker", Project: "test-project"},
+		"test-project/web-app":    {Name: "web-app", Project: "test-project"},
 	}
 
 	// Call Init to process aliases
 	Init(ctx, false)
 
-	// Verify aliases were added to labels
+	// Verify aliases were added to labels, resolved to their canonical names
 	backendLabel, exists := Labels["~backend"]
 	if !exists {
 		t.Fatal("Expected ~backend label to exist")
@@ -1510,8 +1658,8 @@ func TestInitWithRepoAliases(t *testing.T) {
 	if backendLabel.Cardinality() != 2 {
 		t.Errorf("Expected ~backend to have 2 repos, got %d", backendLabel.Cardinality())
 	}
-	if !backendLabel.Contains("api-server") || !backendLabel.Contains("worker") {
-		t.Error("Expected ~backend to contain api-server and worker")
+	if !backendLabel.Contains("test-project/api-server") || !backendLabel.Contains("test-project/worker") {
+		t.Errorf("Expected ~backend to contain both repos as canonical names, got %v", backendLabel.ToSlice())
 	}
 
 	frontendLabel, exists := Labels["~frontend"]
@@ -1521,8 +1669,8 @@ func TestInitWithRepoAliases(t *testing.T) {
 	if frontendLabel.Cardinality() != 1 {
 		t.Errorf("Expected ~frontend to have 1 repo, got %d", frontendLabel.Cardinality())
 	}
-	if !frontendLabel.Contains("web-app") {
-		t.Error("Expected ~frontend to contain web-app")
+	if !frontendLabel.Contains("test-project/web-app") {
+		t.Errorf("Expected ~frontend to contain test-project/web-app, got %v", frontendLabel.ToSlice())
 	}
 
 	// Verify superset label was created
@@ -1546,13 +1694,13 @@ func TestInitWithExistingAliasLabel(t *testing.T) {
 
 	// Setup test catalog with existing labels
 	Catalog = map[string]scm.Repository{
-		"repo-1": {Name: "repo-1", Project: "test-project", Labels: []string{"backend"}},
-		"repo-2": {Name: "repo-2", Project: "test-project", Labels: []string{"backend"}},
-		"repo-3": {Name: "repo-3", Project: "test-project"},
+		"test-project/repo-1": {Name: "repo-1", Project: "test-project", Labels: []string{"backend"}},
+		"test-project/repo-2": {Name: "repo-2", Project: "test-project", Labels: []string{"backend"}},
+		"test-project/repo-3": {Name: "repo-3", Project: "test-project"},
 	}
 
 	// Pre-populate a label
-	Labels["backend"] = mapset.NewSet("repo-1", "repo-2")
+	Labels["backend"] = mapset.NewSet("test-project/repo-1", "test-project/repo-2")
 
 	// Setup alias that appends to existing label
 	viper.Set(config.RepoAliases, map[string]interface{}{
@@ -1566,8 +1714,8 @@ func TestInitWithExistingAliasLabel(t *testing.T) {
 	if backendLabel.Cardinality() != 3 {
 		t.Errorf("Expected backend to have 3 repos, got %d", backendLabel.Cardinality())
 	}
-	if !backendLabel.Contains("repo-1") || !backendLabel.Contains("repo-2") || !backendLabel.Contains("repo-3") {
-		t.Error("Expected backend to contain all three repos")
+	if !backendLabel.Contains("test-project/repo-1") || !backendLabel.Contains("test-project/repo-2") || !backendLabel.Contains("test-project/repo-3") {
+		t.Errorf("Expected backend to contain all three repos, got %v", backendLabel.ToSlice())
 	}
 }
 

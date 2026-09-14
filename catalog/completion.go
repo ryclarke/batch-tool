@@ -61,8 +61,9 @@ func addLabelCompletion(ctx context.Context, set mapset.Set[cobra.Completion], l
 }
 
 func addRepoCompletion(ctx context.Context, set mapset.Set[cobra.Completion], repo, toComplete string) {
-	// suggest repository names matching the partial input
+	// suggest repository names matching the partial input, trimming the default project
+	// prefix so the suggestion matches the shorthand form users typically type
 	if strings.Contains(repo, utils.CleanFilter(ctx, toComplete)) {
-		set.Add(repo)
+		set.Add(utils.DisplayRepo(ctx, repo))
 	}
 }

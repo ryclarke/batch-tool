@@ -34,14 +34,17 @@ func Cmd(ctx context.Context, repo, command string, arguments ...string) (*exec.
 func Env(ctx context.Context, repo string) ([]string, error) {
 	viper := config.Viper(ctx)
 	branch, _ := LookupBranch(ctx, repo)
-	repoName := ResolveRepoName(repo)
+
+	// Split the repository into its bare name and owning project, so that both are
+	// exported individually rather than leaking the project-qualified name.
+	project, repoName := SplitRepo(ctx, repo)
 
 	// Start with the inherited environment and add repo-specific metadata
 	env := os.Environ()
 	env = append(env, fmt.Sprintf("REPO_NAME=%s", repoName))
 	env = append(env, fmt.Sprintf("GIT_BRANCH=%s", branch))
-	env = append(env, fmt.Sprintf("GIT_DEFAULT_BRANCH=%s", CatalogBranchLookup(ctx, repoName)))
-	env = append(env, fmt.Sprintf("GIT_PROJECT=%s", CatalogProjectLookup(ctx, repoName)))
+	env = append(env, fmt.Sprintf("GIT_DEFAULT_BRANCH=%s", CatalogBranchLookup(ctx, project+"/"+repoName)))
+	env = append(env, fmt.Sprintf("GIT_PROJECT=%s", project))
 
 	// Add user-specified environment variables
 	envArgs := viper.GetStringSlice(config.CmdEnv)

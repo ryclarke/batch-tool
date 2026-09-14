@@ -13,6 +13,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/ryclarke/batch-tool/config"
+	"github.com/ryclarke/batch-tool/utils"
 )
 
 // List of flag names which should be included in the command display for context.
@@ -87,6 +88,9 @@ type model struct {
 type repoStatus struct {
 	Channel
 
+	// displayName is the user-facing form of the channel name, with the default project trimmed
+	displayName string
+
 	output     []byte
 	errors     []error
 	completed  bool
@@ -94,6 +98,15 @@ type repoStatus struct {
 	active     bool
 	outputDone bool
 	errorsDone bool
+}
+
+// Display returns the repository name as it should be shown to the user.
+func (r *repoStatus) Display() string {
+	if r.displayName == "" {
+		return r.Name()
+	}
+
+	return r.displayName
 }
 
 type repoOutputMsg struct {
@@ -118,7 +131,8 @@ func initialModel(cmd *cobra.Command, channels []Channel, cancel context.CancelF
 	repoStatuses := make([]*repoStatus, len(channels))
 	for i, ch := range channels {
 		repoStatuses[i] = &repoStatus{
-			Channel: ch,
+			Channel:     ch,
+			displayName: utils.DisplayRepo(cmd.Context(), ch.Name()),
 		}
 	}
 
@@ -521,19 +535,19 @@ func (m *model) formatRepoSection(repo *repoStatus) string {
 func (m *model) formatRepoHeader(repo *repoStatus) string {
 	if repo.completed {
 		if repo.failed {
-			return m.styles.repoError.Render(fmt.Sprintf(repoErrorFormat, repo.Name()))
+			return m.styles.repoError.Render(fmt.Sprintf(repoErrorFormat, repo.Display()))
 		}
 
-		return m.styles.repoSuccess.Render(fmt.Sprintf(repoSuccessFormat, repo.Name()))
+		return m.styles.repoSuccess.Render(fmt.Sprintf(repoSuccessFormat, repo.Display()))
 	}
 
 	if !repo.active {
 		// Waiting for concurrency slot to start
-		return m.styles.repoWaiting.Render(fmt.Sprintf(repoWaitingFormat, repo.Name()))
+		return m.styles.repoWaiting.Render(fmt.Sprintf(repoWaitingFormat, repo.Display()))
 	}
 
 	// Active and running
-	return m.styles.repoActive.Render(fmt.Sprintf(repoActiveFormat, repo.Name()))
+	return m.styles.repoActive.Render(fmt.Sprintf(repoActiveFormat, repo.Display()))
 }
 
 // View implements tea.Model and renders the current TUI frame: command

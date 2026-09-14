@@ -13,6 +13,7 @@ import (
 
 	"github.com/ryclarke/batch-tool/catalog"
 	"github.com/ryclarke/batch-tool/config"
+	"github.com/ryclarke/batch-tool/utils"
 )
 
 // TUICatalog displays the repository catalog using a TUI for an interactive experience.
@@ -179,7 +180,7 @@ func (m catalogModel) buildContent() string {
 			labelStyle = styles.archivedRepo
 		}
 
-		b.WriteString(nameStyle.Render(strings.TrimPrefix(repo.name, repo.project+"/")))
+		b.WriteString(nameStyle.Render(utils.DisplayRepo(m.ctx, repo.name)))
 		if repo.isArchived {
 			b.WriteString(" ")
 			b.WriteString(styles.archivedRepo.Render("(archived)"))

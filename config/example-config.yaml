@@ -1,8 +1,8 @@
 git:
   provider: github      # also supports bitbucket (SaaS or private cloud)
   host: github.com      # for GitHub Enterprise, set this to your instance hostname (e.g. github.example.com)
-  project: ryclarke     # username or organization name (default project)
-  projects:             # optional list of additional projects to include in catalog (default project is included implicitly)
+  project: ryclarke     # username or organization name (default project); bare repo names resolve here first
+  projects:             # optional list of additional projects to include in catalog, tried in order after the default project
     - other-org
     - another-team
   directory: ./tmp      # directory where repositories are cloned, defaults to $GOPATH/src if set, else the current working directory
@@ -17,15 +17,18 @@ repos:
     - deprecated
     - poc
 
-  aliases: # mapping of repository names to custom aliases
+  # mapping of repository names to custom aliases - members may be bare or project-qualified
+  aliases:
     utils:
       - batch-tool
-      - another-repo
+      - other-org/another-repo
 
-  reviewers: # default individual reviewers per repository or label (use ~label to apply to all repos in that label)
+  # default individual reviewers per repository or label. repository keys may be bare or
+  # project-qualified, and ~label keys apply to all repos carrying that label
+  reviewers:
     batch-tool:
       - ryclarke
-    another-repo:
+    other-org/another-repo:
       - alice
       - bob
     ~utils: # applies to all repos in the "utils" label
