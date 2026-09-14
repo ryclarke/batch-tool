@@ -2,6 +2,7 @@ package git
 
 import (
 	"bytes"
+	"path/filepath"
 	"testing"
 
 	"github.com/ryclarke/batch-tool/config"
@@ -15,8 +16,9 @@ func TestAddBranchCmd(t *testing.T) {
 		t.Fatal("addBranchCmd() returned nil")
 	}
 
-	if cmd.Use != "branch -b <branch-name> [--discard] <repository>..." {
-		t.Errorf("Expected Use to be 'branch -b <branch-name> [--discard] <repository>...', got %s", cmd.Use)
+	expectedUse := "branch -b <branch-name> [--discard] [--no-reset] <repository>..."
+	if cmd.Use != expectedUse {
+		t.Errorf("Expected Use to be %q, got %s", expectedUse, cmd.Use)
 	}
 
 	// Test aliases
@@ -176,5 +178,48 @@ func TestBranchCommandWithSpecialCharacters(t *testing.T) {
 
 	if !bytes.Contains([]byte(output), []byte("repo-1")) {
 		t.Errorf("Expected output to contain 'repo-1', got: %s", output)
+	}
+}
+
+// TestBranchResetExistingBranch verifies that --no-reset switches `git checkout -B`
+// to `-b`, which refuses to clobber a branch that already exists.
+func TestBranchResetExistingBranch(t *testing.T) {
+	tests := []struct {
+		name      string
+		args      []string
+		expectErr bool
+	}{
+		{name: "default resets an existing branch", args: nil},
+		{name: "no-reset refuses to clobber", args: []string{"--no-reset"}, expectErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			reposPath := testhelper.SetupRepos(t, []string{"repo-1"})
+			testCtx := setupTestGitContext(t, reposPath)
+
+			const branchName = "feature/already-exists"
+
+			// Create the branch ahead of time, then return to main
+			repoDir := filepath.Join(reposPath, "example.com", "test-project", "repo-1")
+			testhelper.ExecCommand(t, repoDir, "git", "branch", branchName)
+
+			cmd := addBranchCmd()
+
+			var buf bytes.Buffer
+			cmd.SetOut(&buf)
+			cmd.SetErr(&buf)
+			cmd.SetArgs(append(append([]string{}, tt.args...), "--branch", branchName, "--discard", "repo-1"))
+
+			err := cmd.ExecuteContext(testCtx)
+
+			if tt.expectErr && err == nil {
+				t.Fatalf("Expected error when the branch already exists, got none\n%s", buf.String())
+			}
+
+			if !tt.expectErr && err != nil {
+				t.Fatalf("Expected no error, got: %v\n%s", err, buf.String())
+			}
+		})
 	}
 }

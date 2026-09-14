@@ -3,7 +3,11 @@ package git
 import (
 	"bytes"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"slices"
+	"sort"
+	"strings"
 	"testing"
 
 	"github.com/ryclarke/batch-tool/config"
@@ -17,8 +21,9 @@ func TestAddCommitCmd(t *testing.T) {
 		t.Fatal("addCommitCmd() returned nil")
 	}
 
-	if cmd.Use != "commit {-m <message>|--amend [-m <message>]} [--push] <repository>..." {
-		t.Errorf("Expected Use to be 'commit {-m <message>|--amend [-m <message>]} [--push] <repository>...', got %s", cmd.Use)
+	expectedUse := "commit {-m <message>|--amend [-m <message>]} [-s <mode>] [--push] <repository>..."
+	if cmd.Use != expectedUse {
+		t.Errorf("Expected Use to be %q, got %s", expectedUse, cmd.Use)
 	}
 
 	if cmd.Short == "" {
@@ -35,8 +40,9 @@ func TestCommitCmdFlags(t *testing.T) {
 		t.Fatal("amend flag not found")
 	}
 
-	if amendFlag.Shorthand != "a" {
-		t.Errorf("Expected amend flag shorthand to be 'a', got %s", amendFlag.Shorthand)
+	// git reads -a as --all, so --amend must not claim that shorthand
+	if amendFlag.Shorthand != "" {
+		t.Errorf("Expected amend flag to have no shorthand, got %s", amendFlag.Shorthand)
 	}
 
 	// Test message flag
@@ -47,6 +53,37 @@ func TestCommitCmdFlags(t *testing.T) {
 
 	if messageFlag.Shorthand != "m" {
 		t.Errorf("Expected message flag shorthand to be 'm', got %s", messageFlag.Shorthand)
+	}
+
+	// Test stage flag
+	stageFlag := cmd.Flags().Lookup("stage")
+	if stageFlag == nil {
+		t.Fatal("stage flag not found")
+	}
+
+	if stageFlag.Shorthand != "s" {
+		t.Errorf("Expected stage flag shorthand to be 's', got %s", stageFlag.Shorthand)
+	}
+
+	if stageFlag.DefValue != StageAll {
+		t.Errorf("Expected stage flag default to be %q, got %s", StageAll, stageFlag.DefValue)
+	}
+
+	// Test push flag pair. These are registered as persistent flags by
+	// BuildBoolFlagsDefault, which Flags() only exposes once cobra merges them.
+	local := cmd.LocalFlags()
+
+	pushFlag := local.Lookup("push")
+	if pushFlag == nil {
+		t.Fatal("push flag not found")
+	}
+
+	if pushFlag.DefValue != "false" {
+		t.Errorf("Expected push flag to default to false, got %s", pushFlag.DefValue)
+	}
+
+	if local.Lookup("no-push") == nil {
+		t.Error("no-push flag not found")
 	}
 }
 
@@ -325,5 +362,169 @@ func TestCommitCommandRunWithAmendAndMessage(t *testing.T) {
 	err := cmd.ExecuteContext(ctx)
 	if err != nil {
 		t.Fatalf("Expected no error for amend with message on feature branch, got: %v", err)
+	}
+}
+
+// gitOutput runs a git command in dir and returns its trimmed stdout.
+func gitOutput(t *testing.T, dir string, args ...string) string {
+	t.Helper()
+
+	cmd := exec.CommandContext(t.Context(), "git", args...)
+	cmd.Dir = dir
+
+	out, err := cmd.Output()
+	if err != nil {
+		t.Fatalf("git %v failed: %v", args, err)
+	}
+
+	return strings.TrimSpace(string(out))
+}
+
+// TestCommitStageModes verifies that each staging mode commits exactly the expected
+// files. The fixture is built so all three modes produce a different result:
+// staged.txt is already in the index, test.txt is a tracked but unstaged
+// modification, and untracked.txt has never been added.
+func TestCommitStageModes(t *testing.T) {
+	tests := []struct {
+		name     string
+		mode     string
+		expected []string
+	}{
+		{
+			name:     "none commits only the index",
+			mode:     StageNone,
+			expected: []string{"staged.txt"},
+		},
+		{
+			name:     "tracked adds unstaged modifications",
+			mode:     StageTracked,
+			expected: []string{"staged.txt", "test.txt"},
+		},
+		{
+			name:     "all adds untracked files too",
+			mode:     StageAll,
+			expected: []string{"staged.txt", "test.txt", "untracked.txt"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			reposPath := testhelper.SetupRepos(t, []string{"repo-1"}, true)
+			ctx := setupTestGitContext(t, reposPath)
+
+			repoDir := filepath.Join(reposPath, "example.com", "test-project", "repo-1")
+
+			// Already in the index
+			if err := os.WriteFile(filepath.Join(repoDir, "staged.txt"), []byte("staged\n"), 0644); err != nil {
+				t.Fatalf("Failed to create staged file: %v", err)
+			}
+			testhelper.ExecCommand(t, repoDir, "git", "add", "staged.txt")
+
+			// Tracked (committed by SetupRepos) but modified without staging
+			if err := os.WriteFile(filepath.Join(repoDir, "test.txt"), []byte("modified\n"), 0644); err != nil {
+				t.Fatalf("Failed to modify tracked file: %v", err)
+			}
+
+			// Never added
+			if err := os.WriteFile(filepath.Join(repoDir, "untracked.txt"), []byte("untracked\n"), 0644); err != nil {
+				t.Fatalf("Failed to create untracked file: %v", err)
+			}
+
+			cmd := addCommitCmd()
+
+			var buf bytes.Buffer
+			cmd.SetOut(&buf)
+			cmd.SetErr(&buf)
+			cmd.SetArgs([]string{"--stage", tt.mode, "--message", "Stage mode test", "repo-1"})
+
+			if err := cmd.ExecuteContext(ctx); err != nil {
+				t.Fatalf("Command execution failed: %v\n%s", err, buf.String())
+			}
+
+			committed := gitOutput(t, repoDir, "show", "--pretty=format:", "--name-only", "HEAD")
+
+			var actual []string
+			for _, line := range strings.Split(committed, "\n") {
+				if line = strings.TrimSpace(line); line != "" {
+					actual = append(actual, line)
+				}
+			}
+
+			sort.Strings(actual)
+
+			if !slices.Equal(actual, tt.expected) {
+				t.Errorf("Expected commit to contain %v, got %v", tt.expected, actual)
+			}
+		})
+	}
+}
+
+func TestCommitStageInvalidMode(t *testing.T) {
+	reposPath := testhelper.SetupRepos(t, []string{"repo-1"}, true)
+	ctx := setupTestGitContext(t, reposPath)
+
+	cmd := addCommitCmd()
+
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+	cmd.SetArgs([]string{"--stage", "everything", "--message", "Test", "repo-1"})
+
+	err := cmd.ExecuteContext(ctx)
+	if err == nil {
+		t.Fatal("Expected error for an invalid --stage value")
+	}
+
+	if !strings.Contains(err.Error(), config.GitCommitStage) {
+		t.Errorf("Expected error to reference %s, got: %v", config.GitCommitStage, err)
+	}
+}
+
+// TestCommitPushFlagPair verifies that --push and --no-push both resolve through
+// the shared config key, and that they cannot be combined.
+func TestCommitPushFlagPair(t *testing.T) {
+	tests := []struct {
+		name     string
+		args     []string
+		expected bool
+	}{
+		{name: "default is no push", args: nil, expected: false},
+		{name: "explicit push", args: []string{"--push"}, expected: true},
+		{name: "explicit no-push", args: []string{"--no-push"}, expected: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := loadFixture(t)
+			cmd := addCommitCmd()
+			cmd.SetContext(ctx)
+
+			// Parse flags without running, so the PreRunE bindings are exercised in isolation.
+			if err := cmd.ParseFlags(append([]string{"--message", "Test"}, tt.args...)); err != nil {
+				t.Fatalf("Failed parsing flags: %v", err)
+			}
+
+			if err := cmd.PreRunE(cmd, []string{"repo-1"}); err != nil {
+				t.Fatalf("PreRunE failed: %v", err)
+			}
+
+			if got := config.Viper(ctx).GetBool(config.GitCommitPush); got != tt.expected {
+				t.Errorf("Expected %s to be %v, got %v", config.GitCommitPush, tt.expected, got)
+			}
+		})
+	}
+}
+
+func TestCommitPushFlagsMutuallyExclusive(t *testing.T) {
+	ctx := loadFixture(t)
+	cmd := addCommitCmd()
+
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+	cmd.SetArgs([]string{"--push", "--no-push", "--message", "Test", "repo-1"})
+
+	if err := cmd.ExecuteContext(ctx); err == nil {
+		t.Fatal("Expected error when both --push and --no-push are set")
 	}
 }

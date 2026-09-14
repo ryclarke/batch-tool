@@ -31,9 +31,25 @@ const (
 	GitProjects        = "git.projects"
 	GitProvider        = "git.provider"
 	GitDirectory       = "git.directory"
+	GitRemote          = "git.remote"
 	DefaultBranch      = "git.default-branch"
-	StashUpdates       = "git.stash-updates"
 	DefaultMergeMethod = "git.default-merge-method"
+
+	// LegacyStashUpdates is the pre-grouping name for GitUpdateStash, honored by MigrateLegacyKeys.
+	LegacyStashUpdates = "git.stash-updates"
+
+	// Persistent per-subcommand git behavior, grouped as git.<command>.<option>.
+	GitCommitStage = "git.commit.stage"
+	GitCommitPush  = "git.commit.push"
+
+	GitUpdateStash        = "git.update.stash"
+	GitUpdatePullStrategy = "git.update.pull-strategy"
+	GitUpdateCleanIgnored = "git.update.clean-ignored"
+	GitUpdateSubmodules   = "git.update.submodules"
+
+	GitStashScope = "git.stash.scope"
+
+	GitBranchReset = "git.branch.reset"
 
 	// CloneSSHURLTmpl is the SSH URL template with placeholders: User, Host, Project, Repo
 	CloneSSHURLTmpl = "ssh://%s@%s/%s/%s.git"
@@ -76,7 +92,6 @@ const (
 	// git
 	GitCommitMessage = "git.args.commit.message"
 	GitCommitAmend   = "git.args.commit.amend"
-	GitCommitPush    = "git.args.commit.push"
 	GitPushForce     = "git.args.push.force"
 	GitStashAllowAny = "git.args.stash.allow-any"
 
@@ -133,7 +148,18 @@ func Init(ctx context.Context) context.Context {
 		fmt.Fprintf(os.Stderr, "Using config file: %v\n\n", v.ConfigFileUsed())
 	}
 
+	MigrateLegacyKeys(v)
+
 	return SetViper(ctx, v)
+}
+
+// MigrateLegacyKeys carries renamed configuration keys over to their current names.
+// It must run after the config file is read, and it seeds defaults rather than
+// overrides so that an explicit flag still takes precedence over a legacy config value.
+func MigrateLegacyKeys(v *viper.Viper) {
+	if v.IsSet(LegacyStashUpdates) {
+		v.SetDefault(GitUpdateStash, v.GetBool(LegacyStashUpdates))
+	}
 }
 
 func setDefaults(v *viper.Viper) {
@@ -143,10 +169,23 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault(GitHost, "github.com")
 	v.SetDefault(GitProvider, "github")
 	v.SetDefault(GitProjects, []string{})
+	v.SetDefault(GitRemote, "origin")
 	v.SetDefault(DefaultBranch, "main")
-	v.SetDefault(StashUpdates, false)
 	v.SetDefault(SortRepos, true)
 	v.SetDefault(DefaultMergeMethod, "squash") // "merge", "squash", or "rebase" (only supported by GitHub provider for now)
+
+	// Per-subcommand git behavior. Defaults preserve the behavior these options replaced.
+	v.SetDefault(GitCommitStage, "all")
+	v.SetDefault(GitCommitPush, false)
+
+	v.SetDefault(GitUpdateStash, false)
+	v.SetDefault(GitUpdatePullStrategy, "default")
+	v.SetDefault(GitUpdateCleanIgnored, false)
+	v.SetDefault(GitUpdateSubmodules, true)
+
+	v.SetDefault(GitStashScope, "all")
+
+	v.SetDefault(GitBranchReset, true)
 
 	v.SetDefault(SkipArchived, true)
 	v.SetDefault(SkipUnwanted, true)

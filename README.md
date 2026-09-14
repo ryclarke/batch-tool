@@ -127,7 +127,25 @@ batch-tool git push '~platform'
 batch-tool git update '~all'
 ```
 
-`git update` can optionally stash and restore local changes if `git.stash-updates` is enabled or you pass `--stash`.
+#### Choosing What Gets Committed
+
+By default `git commit` stages everything, including untracked files. Use `-s`/`--stage` to narrow that:
+
+- `all` (default): stage every change, including untracked files
+- `tracked`: stage modifications and deletions to tracked files only, like `git commit -a`
+- `none`: commit only what you already staged yourself
+
+```bash
+batch-tool git commit -s tracked -m "Tweak config" '~platform'
+```
+
+`git commit` does not push. Pass `--push` when you want it to, or set `git.commit.push` to make that the default.
+
+#### Updating and Stashing
+
+`git update` can stash and restore local changes if `git.update.stash` is enabled or you pass `--stash`. Without it, uncommitted changes are discarded. Use `--pull-strategy` to control how diverged history is reconciled (`default`, `ff-only`, `rebase`, or `merge`).
+
+`git stash push` captures untracked and ignored files by default. Use `--scope untracked` to leave ignored files such as build artifacts and `.env` in place, or `--scope tracked` to stash tracked files only.
 
 ### Pull Request Operations
 
@@ -174,6 +192,35 @@ Useful global flags:
 ### Repository Directory
 
 Repositories are cloned beneath `git.directory` using the provider host, project, and repository name. If you do not set `git.directory`, Batch Tool defaults to `$GOPATH/src` when `GOPATH` is available and otherwise falls back to the current working directory.
+
+### Git Command Defaults
+
+Each `git` subcommand reads its persistent defaults from a matching config group, so you can set the behavior you want once instead of repeating flags. Every key below defaults to the behavior Batch Tool had before it became configurable.
+
+```yaml
+git:
+  remote: origin # remote used by 'git push' and 'git commit --push'
+
+  commit:
+    stage: all # "all", "tracked", or "none"
+    push: false # push automatically after committing
+
+  update:
+    stash: false # stash and restore local changes instead of discarding them
+    pull-strategy: default # "default", "ff-only", "rebase", or "merge"
+    clean-ignored: false # also delete ignored files when discarding changes
+    submodules: true # re-initialize submodules after discarding changes
+
+  stash:
+    scope: all # "all", "untracked", or "tracked"
+
+  branch:
+    reset: true # reset branches that already exist instead of failing
+```
+
+`git.stash.scope` is grouped under `stash` rather than `update` because it applies to every stash Batch Tool takes, including the ones created by `git update --stash` and `git branch`.
+
+`git.stash-updates` was renamed to `git.update.stash`. The old key still works, but prefer the new name.
 
 ### Aliases and Unwanted Labels
 

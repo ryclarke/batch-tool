@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/ryclarke/batch-tool/config"
@@ -17,8 +18,9 @@ func TestAddUpdateCmd(t *testing.T) {
 		t.Fatal("addUpdateCmd() returned nil")
 	}
 
-	if cmd.Use != "update <repository>..." {
-		t.Errorf("Expected Use to be 'update <repository>...', got %s", cmd.Use)
+	expectedUse := "update [--stash] [--pull-strategy <strategy>] <repository>..."
+	if cmd.Use != expectedUse {
+		t.Errorf("Expected Use to be %q, got %s", expectedUse, cmd.Use)
 	}
 
 	if cmd.Short == "" {
@@ -204,9 +206,9 @@ func TestUpdateWithNoStashFlag(t *testing.T) {
 	reposPath := testhelper.SetupRepos(t, []string{"repo-1"})
 	testCtx := setupTestGitContext(t, reposPath)
 
-	// Set stash-updates to true in config
+	// Set update stash to true in config
 	viper := config.Viper(testCtx)
-	viper.Set(config.StashUpdates, true)
+	viper.Set(config.GitUpdateStash, true)
 
 	// Create uncommitted changes
 	repoDir := filepath.Join(reposPath, "example.com", "test-project", "repo-1")
@@ -237,9 +239,9 @@ func TestUpdateWithConfigStash(t *testing.T) {
 	reposPath := testhelper.SetupRepos(t, []string{"repo-1"})
 	testCtx := setupTestGitContext(t, reposPath)
 
-	// Set stash-updates to true in config
+	// Set update stash to true in config
 	viper := config.Viper(testCtx)
-	viper.Set(config.StashUpdates, true)
+	viper.Set(config.GitUpdateStash, true)
 
 	// Create uncommitted changes
 	repoDir := filepath.Join(reposPath, "example.com", "test-project", "repo-1")
@@ -272,5 +274,127 @@ func TestUpdateWithConfigStash(t *testing.T) {
 	}
 	if !bytes.Equal(content, testContent) {
 		t.Errorf("Expected restored content to match original")
+	}
+}
+
+func TestUpdatePullStrategyInvalid(t *testing.T) {
+	reposPath := testhelper.SetupRepos(t, []string{"repo-1"})
+	testCtx := setupTestGitContext(t, reposPath)
+
+	cmd := addUpdateCmd()
+
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+	cmd.SetArgs([]string{"--pull-strategy", "yolo", "repo-1"})
+
+	err := cmd.ExecuteContext(testCtx)
+	if err == nil {
+		t.Fatal("Expected error for an invalid --pull-strategy value")
+	}
+
+	if !strings.Contains(err.Error(), config.GitUpdatePullStrategy) {
+		t.Errorf("Expected error to reference %s, got: %v", config.GitUpdatePullStrategy, err)
+	}
+}
+
+func TestUpdatePullStrategyBinding(t *testing.T) {
+	for _, strategy := range AvailablePullStrategies {
+		t.Run(strategy, func(t *testing.T) {
+			ctx := loadFixture(t)
+			cmd := addUpdateCmd()
+			cmd.SetContext(ctx)
+
+			if err := cmd.ParseFlags([]string{"--pull-strategy", strategy}); err != nil {
+				t.Fatalf("Failed parsing flags: %v", err)
+			}
+
+			if err := cmd.PreRunE(cmd, []string{"repo-1"}); err != nil {
+				t.Fatalf("PreRunE failed: %v", err)
+			}
+
+			if got := config.Viper(ctx).GetString(config.GitUpdatePullStrategy); got != strategy {
+				t.Errorf("Expected %s to be %q, got %q", config.GitUpdatePullStrategy, strategy, got)
+			}
+		})
+	}
+}
+
+// TestCleanWithoutSubmodules verifies that disabling git.update.submodules skips the
+// submodule steps while still discarding local changes.
+func TestCleanWithoutSubmodules(t *testing.T) {
+	reposPath := testhelper.SetupRepos(t, []string{"repo-1"})
+	testCtx := setupTestGitContext(t, reposPath)
+	config.Viper(testCtx).Set(config.GitUpdateSubmodules, false)
+
+	repoDir := filepath.Join(reposPath, "example.com", "test-project", "repo-1")
+
+	untracked := filepath.Join(repoDir, "untracked.txt")
+	if err := os.WriteFile(untracked, []byte("untracked\n"), 0644); err != nil {
+		t.Fatalf("Failed to create untracked file: %v", err)
+	}
+
+	cmd := addUpdateCmd()
+
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+	cmd.SetArgs([]string{"--no-stash", "repo-1"})
+
+	if err := cmd.ExecuteContext(testCtx); err != nil {
+		t.Fatalf("Command execution failed: %v\n%s", err, buf.String())
+	}
+
+	if _, err := os.Stat(untracked); !os.IsNotExist(err) {
+		t.Error("Expected untracked file to be cleaned")
+	}
+
+	if strings.Contains(buf.String(), "submodule") {
+		t.Errorf("Expected no submodule commands to run, got: %s", buf.String())
+	}
+}
+
+// TestCleanIgnoredFiles verifies that git.update.clean-ignored extends `git clean`
+// to ignored files, which the default -fd does not remove.
+func TestCleanIgnoredFiles(t *testing.T) {
+	for _, cleanIgnored := range []bool{false, true} {
+		name := "keeps ignored files"
+		if cleanIgnored {
+			name = "removes ignored files"
+		}
+
+		t.Run(name, func(t *testing.T) {
+			reposPath := testhelper.SetupRepos(t, []string{"repo-1"})
+			testCtx := setupTestGitContext(t, reposPath)
+			config.Viper(testCtx).Set(config.GitUpdateCleanIgnored, cleanIgnored)
+
+			repoDir := filepath.Join(reposPath, "example.com", "test-project", "repo-1")
+
+			if err := os.WriteFile(filepath.Join(repoDir, ".gitignore"), []byte("ignored.txt\n"), 0644); err != nil {
+				t.Fatalf("Failed to create gitignore: %v", err)
+			}
+			testhelper.ExecCommand(t, repoDir, "git", "add", ".gitignore")
+			testhelper.ExecCommand(t, repoDir, "git", "commit", "-m", "Add gitignore")
+
+			ignored := filepath.Join(repoDir, "ignored.txt")
+			if err := os.WriteFile(ignored, []byte("ignored\n"), 0644); err != nil {
+				t.Fatalf("Failed to create ignored file: %v", err)
+			}
+
+			cmd := addUpdateCmd()
+
+			var buf bytes.Buffer
+			cmd.SetOut(&buf)
+			cmd.SetErr(&buf)
+			cmd.SetArgs([]string{"--no-stash", "repo-1"})
+
+			if err := cmd.ExecuteContext(testCtx); err != nil {
+				t.Fatalf("Command execution failed: %v\n%s", err, buf.String())
+			}
+
+			if _, err := os.Stat(ignored); os.IsNotExist(err) != cleanIgnored {
+				t.Errorf("Expected ignored file removed=%v", cleanIgnored)
+			}
+		})
 	}
 }

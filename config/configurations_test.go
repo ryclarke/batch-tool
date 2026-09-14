@@ -2,12 +2,83 @@ package config_test
 
 import (
 	"context"
+	"strings"
 	"testing"
 
+	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
 	"github.com/ryclarke/batch-tool/config"
 )
+
+// TestMigrateLegacyKeys covers the git.stash-updates -> git.update.stash rename.
+// The legacy key must seed a default rather than an override, so that an explicit
+// flag still wins over a stale config file value.
+func TestMigrateLegacyKeys(t *testing.T) {
+	tests := []struct {
+		name     string
+		yaml     string
+		setFlag  bool
+		expected bool
+	}{
+		{
+			name:     "legacy key is honored",
+			yaml:     "git:\n  stash-updates: true\n",
+			expected: true,
+		},
+		{
+			name:     "current key is honored",
+			yaml:     "git:\n  update:\n    stash: true\n",
+			expected: true,
+		},
+		{
+			name:     "current key wins over legacy key",
+			yaml:     "git:\n  stash-updates: false\n  update:\n    stash: true\n",
+			expected: true,
+		},
+		{
+			name:     "explicit flag overrides legacy key",
+			yaml:     "git:\n  stash-updates: true\n",
+			setFlag:  true,
+			expected: false,
+		},
+		{
+			name:     "neither key set falls back to the default",
+			yaml:     "git: {}\n",
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			v := config.New()
+
+			v.SetConfigType("yaml")
+			if err := v.ReadConfig(strings.NewReader(tt.yaml)); err != nil {
+				t.Fatalf("Failed reading test config: %v", err)
+			}
+
+			config.MigrateLegacyKeys(v)
+
+			flags := pflag.NewFlagSet("test", pflag.ContinueOnError)
+			flags.Bool("stash", true, "")
+
+			if tt.setFlag {
+				if err := flags.Set("stash", "false"); err != nil {
+					t.Fatalf("Failed setting stash flag: %v", err)
+				}
+			}
+
+			if err := v.BindPFlag(config.GitUpdateStash, flags.Lookup("stash")); err != nil {
+				t.Fatalf("Failed binding stash flag: %v", err)
+			}
+
+			if got := v.GetBool(config.GitUpdateStash); got != tt.expected {
+				t.Errorf("Expected %s to be %v, got %v", config.GitUpdateStash, tt.expected, got)
+			}
+		})
+	}
+}
 
 func TestSetViperAndViper(t *testing.T) {
 	v := viper.New()

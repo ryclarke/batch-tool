@@ -13,18 +13,20 @@ import (
 )
 
 const (
-	forceFlag = "force"
+	forceFlag  = "force"
+	remoteFlag = "remote"
 )
 
 func addPushCmd() *cobra.Command {
 	// pushCmd represents the push command
 	pushCmd := &cobra.Command{
-		Use:   "push [-f] <repository>...",
+		Use:   "push [-f] [--remote <name>] <repository>...",
 		Short: "Push committed code changes to remote",
 		Long: `Push local commits to the remote repository.
 
 This command pushes the current branch to the remote repository with
-upstream tracking enabled.
+upstream tracking enabled. The remote defaults to "origin" and can be
+changed with --remote or the git.remote config key.
 
 Safety Features:
   - Prevents pushing the default/primary branch
@@ -41,12 +43,18 @@ especially on shared branches.`,
   batch-tool git push repo1 repo2
 
   # Force push after amending commits
-  batch-tool git push -f repo1 repo2`,
+  batch-tool git push -f repo1 repo2
+
+  # Push to a remote other than origin
+  batch-tool git push --remote upstream repo1`,
 		Args:              cobra.MinimumNArgs(1),
 		ValidArgsFunction: catalog.CompletionFunc(),
-		PreRun: func(cmd *cobra.Command, _ []string) {
+		PreRunE: func(cmd *cobra.Command, _ []string) error {
 			viper := config.Viper(cmd.Context())
 			viper.BindPFlag(config.GitPushForce, cmd.Flags().Lookup(forceFlag))
+			viper.BindPFlag(config.GitRemote, cmd.Flags().Lookup(remoteFlag))
+
+			return utils.ValidateRequiredConfig(cmd.Context(), config.GitRemote)
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return call.Do(cmd, args, call.Wrap(ValidateBranch(), Push))
@@ -54,6 +62,7 @@ especially on shared branches.`,
 	}
 
 	pushCmd.Flags().BoolP(forceFlag, "f", false, "overwrite remote with local changes")
+	pushCmd.Flags().String(remoteFlag, "origin", "name of the remote to push to")
 
 	return pushCmd
 }
@@ -66,7 +75,7 @@ func Push(ctx context.Context, ch output.Channel) error {
 		return err
 	}
 
-	args := []string{"push", "-u", "origin", branch}
+	args := []string{"push", "-u", viper.GetString(config.GitRemote), branch}
 	if viper.GetBool(config.GitPushForce) {
 		args = append(args, "-f")
 	}
