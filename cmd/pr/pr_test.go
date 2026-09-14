@@ -1,10 +1,12 @@
 package pr
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/spf13/cobra"
 
+	"github.com/ryclarke/batch-tool/auth"
 	"github.com/ryclarke/batch-tool/config"
 )
 
@@ -167,10 +169,23 @@ func TestPrCmdPersistentPreRunE(t *testing.T) {
 		return
 	}
 
-	// Test without auth token (should require auth token)
+	// Test with no resolvable credential (should fail the auth preflight)
+	t.Setenv("AUTH_TOKEN", "")
 	viper.Set(config.AuthToken, "")
+	auth.Reset()
+
 	err := cmd.PersistentPreRunE(cmd, []string{})
 	if err == nil {
-		t.Error("Expected error when auth token is not set")
+		t.Error("Expected error when no credential can be resolved")
+	} else if !errors.Is(err, auth.ErrNoCredential) {
+		t.Errorf("Expected ErrNoCredential, got %v", err)
+	}
+
+	// Test with a credential available through the configured environment variable
+	t.Setenv("AUTH_TOKEN", "fake-token")
+	auth.Reset()
+
+	if err := cmd.PersistentPreRunE(cmd, []string{}); err != nil {
+		t.Errorf("Expected no error when a credential is resolvable, got %v", err)
 	}
 }

@@ -25,6 +25,30 @@ git:
   branch:
     reset: true         # if true, reset branches that already exist instead of failing (can be overridden with --reset or --no-reset)
 
+# Credentials are resolved per project, so each organization can authenticate with a
+# different account. No setting here ever holds a credential itself - each one names an
+# environment variable, a command, or a gh CLI account to read the credential from.
+# Run `batch-tool auth status` to check what each project resolves to.
+auth:
+  provider: auto        # auto (default), env, gh, command, or none
+  env: AUTH_TOKEN       # provider: env - the NAME of the env var holding the token
+  # command: []         # provider: command - argv list, run directly without a shell
+  # account:            # provider: gh - gh account to use, defaults to the active one
+
+  # per-project overrides, each inheriting any field it doesn't set from above
+  owners:
+    ryclarke:
+      provider: gh      # read from `gh auth token`, requires the GitHub CLI
+      account: ryclarke # `gh auth status` lists the available account names
+    other-org:
+      provider: env
+      env: OTHER_ORG_TOKEN
+    another-team:
+      provider: command # read the token from another tool's stdout
+      command: ["op", "read", "op://Private/GitHub/token"]
+    public-org:
+      provider: none    # make unauthenticated requests
+
 repos:
   sort: true
   skip-archived: true   # if true, exclude archived repositories from selection (default: true)

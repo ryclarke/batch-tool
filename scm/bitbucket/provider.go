@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 
+	"github.com/ryclarke/batch-tool/auth"
 	"github.com/ryclarke/batch-tool/config"
 	"github.com/ryclarke/batch-tool/scm"
 )
@@ -95,8 +96,17 @@ func get[T any](b *Bitbucket, path string) (*T, error) {
 
 // convenience function to perform an HTTP request and unmarshal the response into the specified type.
 func do[T any](b *Bitbucket, req *http.Request) (*T, error) {
-	viper := config.Viper(b.ctx)
-	req.Header.Set("Authorization", "Bearer "+viper.GetString(config.AuthToken))
+	// Credentials are resolved per project so that each configured project can
+	// authenticate with a different account.
+	token, err := auth.Token(b.ctx, b.host, b.project)
+	if err != nil {
+		return nil, err
+	}
+
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
+
 	if req.Body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}

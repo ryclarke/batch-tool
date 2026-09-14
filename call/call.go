@@ -42,9 +42,16 @@ func Exec(command string, arguments ...string) Func {
 	}
 }
 
-// Error wraps runtime errors that occur during subprocess execution.
+// Error wraps runtime errors, distinguishing them from usage and argument errors
+// so that command handling reports them without printing usage.
 type Error struct {
 	error
+}
+
+// NewError wraps err as a runtime error. Commands outside this package use it to
+// report failures which are not the result of invalid usage.
+func NewError(err error) error {
+	return &Error{err}
 }
 
 // Error implements the error interface.

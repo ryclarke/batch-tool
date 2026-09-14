@@ -14,6 +14,10 @@ import (
 // ListRepositories lists all repositories in the specified project.
 // Supports both organization and user repositories.
 func (g *Github) ListRepositories() ([]*scm.Repository, error) {
+	if g.authErr != nil {
+		return nil, g.authErr
+	}
+
 	output := make([]*scm.Repository, 0)
 	opt := &github.RepositoryListByOrgOptions{
 		Sort:        "full_name",
