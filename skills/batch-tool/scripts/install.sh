@@ -77,8 +77,10 @@ latest_tag() {
 	if have curl; then
 		url=$(curl -fsSLI --proto '=https' -o /dev/null -w '%{url_effective}' "$RELEASES/latest") || return 1
 	elif have wget; then
-		url=$(wget --https-only -S --spider "$RELEASES/latest" 2>&1 |
-			sed -n 's/^ *[Ll]ocation: *//p' | tail -n 1 | tr -d '\r') || return 1
+		# Keep only the URL from each Location line: wget appends " [following]" to
+		# its own echo of the redirect target.
+		url=$(wget --https-only -S --spider "$RELEASES/latest" 2>&1 | tr -d '\r' |
+			sed -n 's/^ *[Ll]ocation: *\([^ ]*\).*/\1/p' | tail -n 1) || return 1
 	else
 		return 1
 	fi
