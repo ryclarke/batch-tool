@@ -37,6 +37,18 @@ This installs the binary into your Go bin directory, typically `$GOPATH/bin` or 
 
 For local builds, release packaging, and contributor setup, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
+### Agent Skill
+
+This repository ships an [Agent Skill](https://agentskills.io) that teaches AI coding agents to install, update, configure, and run Batch Tool. It works with any tool that supports the Agent Skills format, including Claude Code, Cursor, Codex, and Gemini CLI. Install it with the [`skills` CLI](https://github.com/vercel-labs/skills):
+
+```bash
+npx skills add ryclarke/batch-tool
+```
+
+Or copy [`skills/batch-tool/`](skills/batch-tool/) into your agent's skills directory.
+
+By default, the skill has the agent show you the resolved repository list and the exact command, and wait for your approval, before it runs anything destructive or visible to others: pushes, discards, pull request creation and merges, and every `exec`. The agent also hands credential setup back to you, and never asks for or stores tokens itself.
+
 ## Quick Start
 
 ### 1. Create a Config File

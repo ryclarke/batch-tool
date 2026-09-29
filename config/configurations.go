@@ -121,9 +121,18 @@ const (
 	MakeTargets = "make.args.targets"
 )
 
-// Init reads in config file and ENV variables if set.
+// Init creates the Viper instance with defaults and ENV variable support and saves
+// it into the context. The config file is read separately by Load, which must run
+// after command-line flags are parsed so that --config is honored.
 func Init(ctx context.Context) context.Context {
-	v := New()
+	return SetViper(ctx, New())
+}
+
+// Load reads the config file into the context's Viper instance. An explicit CfgFile
+// must be readable; otherwise the standard search paths are tried and a missing file
+// is not an error.
+func Load(ctx context.Context) error {
+	v := Viper(ctx)
 
 	if CfgFile != "" {
 		// Use config file from the flag.
@@ -156,11 +165,13 @@ func Init(ctx context.Context) context.Context {
 	// If a config file is found, read it in.
 	if err := v.ReadInConfig(); err == nil {
 		fmt.Fprintf(os.Stderr, "Using config file: %v\n\n", v.ConfigFileUsed())
+	} else if CfgFile != "" {
+		return fmt.Errorf("failed to read config file %q: %w", CfgFile, err)
 	}
 
 	warnRemovedKeys(v)
 
-	return SetViper(ctx, v)
+	return nil
 }
 
 // removedKeys maps configuration keys that are no longer read to a migration hint.

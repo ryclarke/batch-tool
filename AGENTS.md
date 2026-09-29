@@ -64,6 +64,8 @@ Route edits to closest owner. Do not patch symptom in higher layer.
 - `README.md` is end-user docs only.
 - `CONTRIBUTING.md` owns local build, release, test, lint, dev workflow guidance.
 - `CAVEMAN.md` is concise purpose + mental model for fast agent orientation.
+- `skills/batch-tool/` is Agent Skill for batch-tool users (not contributors). Owns agent usage guidance, confirmation policy, install script.
+- If change affects commands, flags, defaults, destructive behavior, release asset names: update `skills/batch-tool/` in same change.
 - If change affects install friction, command behavior, flags, config examples: update `README.md`.
 - If change affects contributor setup, tooling, validation, release packaging: update `CONTRIBUTING.md`.
 
