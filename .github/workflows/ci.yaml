@@ -54,3 +54,14 @@ jobs:
 
       - name: Run unit tests and generate coverage report
         run: make cover
+
+  skill:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Validate Agent Skill metadata
+        run: pipx run skills-ref==0.1.1 validate skills/batch-tool
+
+      - name: Lint skill install script
+        run: shellcheck -s sh skills/batch-tool/scripts/install.sh
