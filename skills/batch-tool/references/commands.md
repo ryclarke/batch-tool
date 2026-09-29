@@ -135,7 +135,7 @@ Alias: `sh`. Runs arbitrary code in each repository, with no sandbox. `exec -c "
 | Flag | Effect |
 | --- | --- |
 | `-c, --script "<cmd>"` | Runs through `sh -c` in the repository directory. |
-| `-f, --file <path>` | Runs an executable file directly. It must have the execute bit set. |
+| `-f, --file <path>` | Runs an executable file directly. It must have the execute bit set. The path is resolved from the current directory, and that one file runs in every repository. To run a script that lives inside each repository, use `-c './path/to/script.sh'` instead. |
 | `-a, --arg <arg>` | Repeatable. Requires `-f`. |
 | `-y, --force` | Skip the interactive y/N prompt, which only a person at a terminal can answer. Without `-y`, a non-interactive stdin makes the command fail. **Agents pass it once the command and scope are authorized** under [safety.md](safety.md). |
 

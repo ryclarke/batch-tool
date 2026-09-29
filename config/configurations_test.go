@@ -146,6 +146,36 @@ func TestLoadMissingCfgFile(t *testing.T) {
 	}
 }
 
+// TestLoadIgnoresWorkingDirectory verifies that a batch-tool.yaml in the current
+// directory is not picked up by the default search.
+func TestLoadIgnoresWorkingDirectory(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
+
+	cwd := t.TempDir()
+	if err := os.WriteFile(filepath.Join(cwd, "batch-tool.yaml"), []byte("git:\n  project: from-working-directory\n"), 0o600); err != nil {
+		t.Fatalf("Failed writing test config: %v", err)
+	}
+
+	t.Chdir(cwd)
+	setCfgFile(t, "")
+
+	ctx := config.Init(context.Background())
+	if err := config.Load(ctx); err != nil {
+		t.Fatalf("Load returned an error: %v", err)
+	}
+
+	v := config.Viper(ctx)
+	if got := v.ConfigFileUsed(); got != "" {
+		t.Errorf("Expected no config file to be used, got %q", got)
+	}
+
+	if got := v.GetString(config.GitProject); got == "from-working-directory" {
+		t.Errorf("Expected %s not to come from the working directory config", config.GitProject)
+	}
+}
+
 func setCfgFile(t *testing.T, path string) {
 	t.Helper()
 

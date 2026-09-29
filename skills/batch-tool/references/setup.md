@@ -20,12 +20,13 @@ Run `sh scripts/install.sh --check`, then `sh scripts/install.sh` once the user 
 
 batch-tool reads the first `batch-tool.yaml` it finds in:
 
-1. the current directory
-2. the OS user config directory (`~/.config` on Linux, `~/Library/Application Support` on macOS)
-3. `$XDG_CONFIG_HOME`, or `~/.config` when that is unset
-4. the directory containing the executable
+1. the OS user config directory (`~/.config` on Linux, `~/Library/Application Support` on macOS)
+2. `$XDG_CONFIG_HOME`, or `~/.config` when that is unset
+3. the directory containing the executable
 
-`--config <path>` overrides the search and fails with exit code 1 if the file cannot be read. When a file is loaded, batch-tool prints `Using config file: <path>` on stderr. `--help` and `--version` exit before any config is loaded, so they print nothing about it.
+The current directory is not searched. `--config <path>` loads any other file instead, and fails with exit code 1 if the file cannot be read.
+
+**A config file can run commands and redirect credentials.** `auth.command` runs an arbitrary program, and `git.host` controls which server receives the token. Pass `--config` only for a file the user wrote or explicitly chose. If the file comes from a cloned repository or anywhere else you did not create it, read it, point out any `auth.*`, `git.host`, `git.provider`, or `git.user` settings, and get the user's confirmation before using it. When a file is loaded, batch-tool prints `Using config file: <path>` on stderr. `--help` and `--version` exit before any config is loaded, so they print nothing about it.
 
 **Ask the user for these values; do not guess them:**
 

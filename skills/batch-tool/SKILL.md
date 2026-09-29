@@ -117,7 +117,7 @@ batch-tool git update '~platform'           # back to the default branch, pulled
 
 **Make targets:** `batch-tool make -t test --sync '~backend'`. Multiple `-t` flags run in a single `make` invocation. A target means that repository's recipe, which can differ from one repository to the next, so read the recipes before classifying a target.
 
-**Arbitrary commands:** `batch-tool exec -c "go test ./..." -y '~backend'`, or `-f ./script.sh -a arg1 -a arg2`. Classify the command or script as if you were running it yourself in each repository: `go test` is local, `rm -rf build/` is destructive, and a script you have not read is destructive until you have read it. The `-y` flag only skips a terminal prompt that an agent cannot answer. Pass it once the command and scope are authorized.
+**Arbitrary commands:** `batch-tool exec -c "go test ./..." -y '~backend'`, or `-f ./script.sh -a arg1 -a arg2`. `-f` runs that one local file in every repository. A script that lives inside each repository goes through `-c './script.sh'`, and is that repository's own code. Classify the command or script as if you were running it yourself in each repository: `go test` is local, `rm -rf build/` is destructive, and a script you have not read is destructive until you have read it. The `-y` flag only skips a terminal prompt that an agent cannot answer. Pass it once the command and scope are authorized.
 
 For every command and flag, see [references/commands.md](references/commands.md).
 

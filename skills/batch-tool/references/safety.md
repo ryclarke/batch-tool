@@ -116,7 +116,7 @@ Otherwise, run it, and report the resolved set and the results.
 
 Rules for payloads:
 
-- **Read before classifying.** For `-f`, read the script. For `make`, read the target's recipe **in each repository**: the same target name can do different things in different repositories. Read a representative sample, and search the others for the recipe's commands if the set is large.
+- **Read before classifying.** For `-f`, read the script: it is one local file, run in every repository. For `-c './script.sh'` and for `make`, read the script or the target's recipe **in each repository**: the same name can do different things in different repositories. Read a representative sample, and search the others for the recipe's commands if the set is large.
 - **If the payload is opaque, it is destructive.** That covers binaries, scripts fetched at run time, recipes that call other tools you cannot see into, and anything you do not understand. Treat it as destructive until the user confirms what it does.
 - **Pass the command exactly.** Run exactly the `-c` string, or the `-f` path and `-a` arguments, that was authorized. If you change it, re-authorize.
 - **`-y` is plumbing, not a risk signal.** The CLI's `Are you sure? [y/N]` prompt is meant for a person at a terminal, and an agent cannot answer it. Pass `-y` once the payload and scope are authorized under the rules above. Never pass it to get around them.

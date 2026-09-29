@@ -55,12 +55,11 @@ The skill teaches the agent to treat each Batch Tool command as the git, pull re
 
 Batch Tool looks for `batch-tool.yaml` in:
 
-- the current working directory
 - your user config directory
 - `$XDG_CONFIG_HOME` when set
 - the directory containing the executable
 
-You can also point to a specific file with `--config`.
+To use any other file, such as one kept alongside a project, pass it with `--config`.
 
 Start with this minimal example:
 

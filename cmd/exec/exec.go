@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -44,6 +45,10 @@ Command Modes:
     Execute a script file or compiled binary directly. The file must have execute
     permissions (chmod +x). Supports shell scripts, Python scripts, binaries, etc.
     Arguments can be passed to the file using one or more -a flags.
+
+    The path is resolved from the current directory, and that same file runs in
+    every repository. To run a script that lives inside each repository, use
+    -c instead, e.g. -c './scripts/check.sh'.
 
 Confirmation:
   By default, the command prompts for confirmation before execution, showing the
@@ -198,6 +203,14 @@ func getExecArgs(cmd *cobra.Command) (command string, filePath string, fileArgs 
 	filePath, err = cmd.Flags().GetString(fileFlag)
 	if err != nil {
 		return
+	}
+
+	// Each subprocess runs with its repository as the working directory, where a
+	// relative path would name a different file than the one validated and previewed.
+	if filePath != "" {
+		if filePath, err = filepath.Abs(filePath); err != nil {
+			return
+		}
 	}
 
 	fileArgs, err = cmd.Flags().GetStringSlice(argsFlag)

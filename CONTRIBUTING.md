@@ -65,7 +65,7 @@ make help      # list all available targets
 Validate locally:
 
 ```bash
-pipx run skills-ref==0.1.1 validate skills/batch-tool
+pipx run --spec skills-ref==0.1.1 agentskills validate skills/batch-tool
 shellcheck -s sh skills/batch-tool/scripts/install.sh
 sh skills/batch-tool/scripts/install.sh --check
 npx skills add ./ --list   # confirms the skill is discoverable

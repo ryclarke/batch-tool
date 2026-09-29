@@ -140,8 +140,8 @@ func Load(ctx context.Context) error {
 	} else {
 		v.SetConfigName("batch-tool")
 
-		// Search in the working directory
-		v.AddConfigPath(".")
+		// The working directory is deliberately not searched: it is often a cloned
+		// repository, and a config found there could set auth.command or git.host.
 
 		// Search in the user's config directory
 		if usrConfig, err := os.UserConfigDir(); err == nil {
