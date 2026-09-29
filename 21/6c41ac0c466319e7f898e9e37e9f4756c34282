@@ -1,0 +1,21 @@
+skills/batch-tool/SKILL.md
+  s_21e801bf864f14::t_104c22fbf984ed 152
+skills/batch-tool/scripts/install.sh
+  s_21e801bf864f14::t_51f338b94203fa 80-83
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "216c41ac0c466319e7f898e9e37e9f4756c34282",
+  "prompts": {},
+  "sessions": {
+    "s_21e801bf864f14": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "f4c2e10c-dd7d-4705-982b-e935f42323b9",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Ryan Clarke <ryclarke-github@rkc.aleeas.com>"
+    }
+  }
+}
