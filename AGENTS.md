@@ -68,6 +68,9 @@ Route edits to closest owner. Do not patch symptom in higher layer.
 - If change affects commands, flags, defaults, destructive behavior, release asset names: update `skills/batch-tool/` in same change.
 - If change affects install friction, command behavior, flags, config examples: update `README.md`.
 - If change affects contributor setup, tooling, validation, release packaging: update `CONTRIBUTING.md`.
+- Docs assert current behavior only. No history lesson: no "removed", "no longer", "used to", "now does", migration notes, or docs for dead options. No defending design choices either (why a key is grouped or named some way).
+- Option or config key removed: delete its docs, describe replacement as normal usage. Migration hint for old usage lives in CLI runtime (error or warning), not docs.
+- Applies to `README.md`, `CONTRIBUTING.md`, `skills/batch-tool/`, visible command help text.
 
 ## Change Routing Rules
 

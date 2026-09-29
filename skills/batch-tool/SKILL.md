@@ -4,7 +4,7 @@ description: Installs, updates, configures, and operates batch-tool, a CLI that 
 compatibility: Requires git with SSH access to the SCM host and network access to GitHub or Bitbucket. The bundled install script needs a POSIX shell, curl or wget, tar with xz support, and sha256sum or shasum. Go and the gh CLI are optional.
 metadata:
   author: ryclarke
-  version: "1.1.0"
+  version: "1.2.0"
 ---
 
 # batch-tool
@@ -73,7 +73,7 @@ The operation classes are:
 - **read-only**: `git status`, `git diff`, `labels`, `catalog`, `pr get`.
 - **local**: `git branch`, `git commit`, `git stash`, `git update` in stash mode.
 - **shared** (visible to others but reversible): `git push`, `git commit --push`, `pr new`, `pr edit`.
-- **destructive**: `git push -f`, `--amend --push`, `--discard`, `pr merge`, and resetting an existing branch that has unique commits.
+- **destructive**: `git push -f`, `--amend --push`, `git update --discard`, `pr merge`, and resetting an existing branch that has unique commits.
 
 `exec` and `make` take the class of whatever they run.
 

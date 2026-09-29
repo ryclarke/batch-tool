@@ -270,6 +270,8 @@ batch-tool git commit -s tracked -m "Tweak config" '~platform'
 
 `git update` stashes local changes and restores them after updating, so it will not throw away work by default. Pass `--discard` to reset the worktree instead, or set `git.update.discard` to make that the default. `--stash` forces the stash behavior back on when the config opts into discarding. Use `--pull-strategy` to control how diverged history is reconciled (`default`, `ff-only`, `rebase`, or `merge`).
 
+`git branch` updates the default branch the same way, then restores your local changes onto the new branch. To branch from a clean worktree, run `git update --discard` first.
+
 `git stash push` captures untracked and ignored files by default. Use `--scope untracked` to leave ignored files such as build artifacts and `.env` in place, or `--scope tracked` to stash tracked files only.
 
 ### Pull Request Operations
@@ -320,7 +322,7 @@ Repositories are cloned beneath `git.directory` using the provider host, project
 
 ### Git Command Defaults
 
-Each `git` subcommand reads its persistent defaults from a matching config group, so you can set the behavior you want once instead of repeating flags. Every key below defaults to the behavior Batch Tool had before it became configurable.
+Each `git` subcommand reads its persistent defaults from a matching config group, so you can set the behavior you want once instead of repeating flags. The example below shows every key with its default value.
 
 ```yaml
 git:
@@ -337,15 +339,11 @@ git:
     submodules: true # re-initialize submodules after discarding changes
 
   stash:
-    scope: all # "all", "untracked", or "tracked"
+    scope: all # "all", "untracked", or "tracked"; also used by 'git update' and 'git branch'
 
   branch:
     reset: true # reset branches that already exist instead of failing
 ```
-
-`git.stash.scope` is grouped under `stash` rather than `update` because it applies to every stash Batch Tool takes, including the ones created by `git update` and `git branch`.
-
-`git.stash-updates` has been removed, and `git update` now stashes by default rather than only when asked. If the old key is still present in your config file, `batch-tool` prints a warning and ignores it. Delete `git.stash-updates: true`, since it is now the default behavior; replace `git.stash-updates: false` with `git.update.discard: true` to keep discarding changes. The `--no-stash` flag is likewise gone in favor of `--discard`.
 
 ### Aliases and Unwanted Labels
 

@@ -46,18 +46,19 @@ Runs `git status` in each repository.
 ### `git diff [--cached] <repos>` (read-only)
 Shows unstaged changes. `--cached` shows staged changes instead.
 
-### `git branch -b <name> <repos>` (local; destructive when it resets an existing branch or runs with `--discard`)
+### `git branch -b <name> <repos>` (local; destructive when it resets an existing branch)
 Alias: `checkout`. For each repository, the command:
 1. Stashes uncommitted changes (scope from `git.stash.scope`).
 2. Checks out the default branch and pulls it.
 3. Runs `git checkout -B <name>`, which **resets an existing branch with that name**. With `--no-reset` or `git.branch.reset: false`, it runs `git checkout -b` and fails if the branch exists.
-4. Restores the stash.
+4. Restores the stash onto the new branch.
 
 | Flag | Effect |
 | --- | --- |
 | `-b, --branch` | Branch name. Required. |
-| `--discard` | Skip the stash. The help text says uncommitted changes are discarded; currently they carry into the checkout, or the checkout fails. Either way they are unprotected. |
 | `--reset` / `--no-reset` | Override `git.branch.reset`. |
+
+To branch from a clean worktree, run `git update --discard <repos>` first; that step is the destructive one.
 
 ### `git commit {-m <msg> \| --amend [-m <msg>]} <repos>` (local; shared with push; destructive with `--amend` and push)
 Refuses to run on the default branch.

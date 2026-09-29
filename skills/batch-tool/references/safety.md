@@ -27,7 +27,7 @@ Operation classes:
 | `labels`, `catalog`, `auth status` | local lookups; `catalog -f` reads repository metadata from the SCM API | read-only |
 | `pr get` | `gh pr view` for the current branch | read-only |
 | `git branch -b X` | `git stash push`, `git checkout <default>`, `git pull`, `git checkout -B X`, `git stash pop` | local; **destructive if branch `X` already exists with commits found nowhere else**, since `-B` resets it. Pass `--no-reset` to use `-b`, which fails instead. |
-| `git branch -b X --discard` | the same without the stash, so uncommitted changes are left unprotected | treat as destructive to uncommitted work (see the note below the table) |
+| `git update --discard` then `git branch -b X` | a clean start: the discard path below, then the branch steps above | destructive (from the discard step) |
 | `git commit -m M` | `git add -A` (or `-a` with `-s tracked`, nothing with `-s none`), then `git commit -m M`; refuses the default branch | local |
 | `git commit --amend` | `git commit --amend --reset-author` | local; rewrites the last commit |
 | `git commit ... --push` | the commit, then `git push -u <remote> <branch>` | shared |
@@ -44,8 +44,6 @@ Operation classes:
 | `make -t T` | `make T` with **that repository's** recipe | the class of the recipe (see "exec and make") |
 | `exec -c C` | `sh -c C` in the repository directory | the class of `C` |
 | `exec -f F -a A...` | `F A...` in the repository directory | the class of the script `F` |
-
-`git branch --discard`: the help text says it discards uncommitted changes. The current implementation only skips the stash, so changes carry into the checkout, or the checkout fails. Either way they are no longer protected, so classify it as the help text describes.
 
 The guards batch-tool adds (refusing to commit to or push the default branch, stashing by default, popping only its own stashes) only ever lower the risk compared with the raw commands. Never rely on them to justify skipping a step.
 

@@ -13,9 +13,9 @@ import (
 	"github.com/ryclarke/batch-tool/utils"
 )
 
-// Flag names shared by the subcommands that have to decide what to do with
-// uncommitted changes before they move the worktree. Both `branch` and `update`
-// stash and restore by default, so --discard is the opt-in destructive form.
+// Flag names for handling uncommitted changes before the worktree moves. `update`
+// stashes and restores by default, so --discard is its opt-in destructive form;
+// `branch` always stashes and only keeps --discard to report its removal.
 const (
 	discardFlag = "discard"
 	stashFlag   = "stash"
