@@ -22,6 +22,11 @@ var includeFlags = []string{"script", "file", "arg", "branch", "reviewer"}
 // TUIHandler is an OutputHandler that uses a TUI to provide a modern, interactive interface.
 // It displays repository progress with styled output, real-time updates, and a cleaner visual presentation.
 func TUIHandler(cmd *cobra.Command, channels []Channel) {
+	if !isTerminal(cmd.OutOrStdout()) {
+		NativeHandler(cmd, channels)
+		return
+	}
+
 	// Exit early if no repositories are provided
 	if len(channels) == 0 {
 		fmt.Fprintln(cmd.ErrOrStderr(), noReposText)

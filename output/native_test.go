@@ -4,7 +4,10 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"strconv"
+	"strings"
 	"testing"
+	"time"
 
 	mapset "github.com/deckarep/golang-set/v2"
 
@@ -49,6 +52,156 @@ func TestNativeHandler(t *testing.T) {
 
 	// Verify errors were printed to stderr
 	testhelper.AssertContains(t, errOutput, []string{"ERROR:", "test error for repo1", "test error for repo2"})
+}
+
+// TestNativeHandler_LaterRepoFinishesFirst verifies that output stays in repository
+// order without deadlocking when a later repository must finish before an earlier
+// one can make progress, as happens when it holds the only concurrency slot.
+func TestNativeHandler_LaterRepoFinishesFirst(t *testing.T) {
+	ctx := loadFixture(t)
+	config.Viper(ctx).Set(config.ChannelBuffer, 0)
+
+	first := output.NewChannel(ctx, "first", nil, nil)
+	second := output.NewChannel(ctx, "second", nil, nil)
+
+	secondDone := make(chan struct{})
+	go func() {
+		for i := range 5 {
+			second.WriteString("second line " + strconv.Itoa(i))
+		}
+		second.Close()
+		close(secondDone)
+	}()
+	go func() {
+		<-secondDone
+		first.WriteString("first line")
+		first.Close()
+	}()
+
+	var buf, errBuf bytes.Buffer
+	cmd := fakeCmd(t, ctx, &buf)
+	cmd.SetErr(&errBuf)
+
+	finished := make(chan struct{})
+	go func() {
+		output.NativeHandler(cmd, []output.Channel{first, second})
+		close(finished)
+	}()
+
+	select {
+	case <-finished:
+	case <-time.After(5 * time.Second):
+		t.Fatal("NativeHandler deadlocked waiting on the first repository")
+	}
+
+	out := buf.String()
+	firstAt, secondAt := strings.Index(out, "------ first ------"), strings.Index(out, "------ second ------")
+	if firstAt < 0 || secondAt < 0 || firstAt > secondAt {
+		t.Fatalf("Expected first then second section, got:\n%s", out)
+	}
+
+	testhelper.AssertContains(t, out, []string{"first line", "second line 0", "second line 4"})
+	testhelper.AssertContains(t, errBuf.String(), []string{"2 repositories | Elapsed:"})
+}
+
+// TestNativeHandler_PlainOutputAndSummary verifies escape sequences are stripped when
+// stdout is not a terminal, and that errors and the summary name the failing repository.
+func TestNativeHandler_PlainOutputAndSummary(t *testing.T) {
+	ctx := loadFixture(t)
+	testhelper.SetupDirs(t, ctx, []string{"repo1", "repo2"})
+	config.Viper(ctx).Set(config.SortRepos, true)
+
+	callFunc := func(_ context.Context, ch output.Channel) error {
+		ch.WriteString("\x1b[32mmain\x1b[m ok")
+		if ch.Name() == "repo2" {
+			return errors.New("boom")
+		}
+		return nil
+	}
+
+	var buf, errBuf bytes.Buffer
+	cmd := fakeCmd(t, ctx, &buf)
+	cmd.SetErr(&errBuf)
+
+	if err := call.Do(cmd, []string{"repo1", "repo2"}, callFunc, output.NativeHandler); err == nil {
+		t.Fatal("Expected Do to report the failure")
+	}
+
+	if strings.Contains(buf.String(), "\x1b[") {
+		t.Errorf("Expected escape sequences to be stripped, got %q", buf.String())
+	}
+
+	testhelper.AssertContains(t, buf.String(), []string{"main ok"})
+	testhelper.AssertContains(t, errBuf.String(), []string{
+		"ERROR: repo2: boom",
+		"2 repositories (1 failed) | Elapsed:",
+		"Failed: repo2",
+	})
+}
+
+// TestNativeHandler_NoRepositories verifies an empty selection is reported.
+func TestNativeHandler_NoRepositories(t *testing.T) {
+	ctx := loadFixture(t)
+
+	var buf, errBuf bytes.Buffer
+	cmd := fakeCmd(t, ctx, &buf)
+	cmd.SetErr(&errBuf)
+
+	output.NativeHandler(cmd, nil)
+
+	testhelper.AssertContains(t, errBuf.String(), []string{"No repositories matched"})
+}
+
+// TestNativeLabels_VerboseLabelDetails verifies verbose output resolves filtered labels
+// to their repositories, includes unwanted labels added as exclusions, and does not
+// treat plain repository names as labels.
+func TestNativeLabels_VerboseLabelDetails(t *testing.T) {
+	ctx := loadFixture(t)
+	viper := config.Viper(ctx)
+	viper.Set(config.SkipUnwanted, true)
+	viper.Set(config.UnwantedLabels, []string{"deprecated"})
+	viper.Set(config.SortRepos, true)
+
+	catalog.Labels = map[string]mapset.Set[string]{
+		"backend":    mapset.NewSet("api", "worker", "legacy"),
+		"deprecated": mapset.NewSet("legacy"),
+	}
+	catalog.Catalog = map[string]scm.Repository{
+		"api":    {Name: "api", Labels: []string{"backend"}},
+		"worker": {Name: "worker", Labels: []string{"backend"}},
+		"legacy": {Name: "legacy", Labels: []string{"backend", "deprecated"}},
+	}
+
+	var buf bytes.Buffer
+	output.NativeLabels(fakeCmd(t, ctx, &buf), true, "~backend", "+worker")
+
+	out := buf.String()
+	testhelper.AssertContains(t, out, []string{
+		"Included labels:\n  ~ backend ~ (2 / 3)\napi, legacy (unwanted), worker",
+		"Excluded labels:\n  ~ deprecated ~ (1) (unwanted)\nlegacy",
+	})
+	testhelper.AssertNotContains(t, out, []string{"(empty label)", "Forced labels:"})
+}
+
+// TestNativeLabels_ListHidesUnwanted verifies that unwanted labels are hidden from the
+// label list unless verbose, and are marked when shown.
+func TestNativeLabels_ListHidesUnwanted(t *testing.T) {
+	ctx := loadFixture(t)
+	config.Viper(ctx).Set(config.UnwantedLabels, []string{"deprecated"})
+
+	catalog.Labels = map[string]mapset.Set[string]{
+		"backend":    mapset.NewSet("api", "legacy"),
+		"deprecated": mapset.NewSet("legacy"),
+	}
+
+	var buf bytes.Buffer
+	output.NativeLabels(fakeCmd(t, ctx, &buf), false)
+	testhelper.AssertContains(t, buf.String(), []string{"~ backend ~ (1 / 2)"})
+	testhelper.AssertNotContains(t, buf.String(), []string{"~ deprecated ~"})
+
+	buf.Reset()
+	output.NativeLabels(fakeCmd(t, ctx, &buf), true)
+	testhelper.AssertContains(t, buf.String(), []string{"~ deprecated ~ (1) (unwanted)"})
 }
 
 func TestNativeLabels_PrintAllLabels(t *testing.T) {

@@ -21,6 +21,11 @@ import (
 // When no filters are provided, it displays all available labels with their repositories.
 // When filters are provided, it displays a concise set-theory representation with matched repos.
 func TUILabels(cmd *cobra.Command, verbose bool, filters ...string) {
+	if !isTerminal(cmd.OutOrStdout()) {
+		NativeLabels(cmd, verbose, filters...)
+		return
+	}
+
 	ctx := cmd.Context()
 	var m tea.Model
 
@@ -90,6 +95,21 @@ type labelWithRepos struct {
 
 func newLabelsListModel(ctx context.Context, verbose bool) labelsListModel {
 	viper := config.Viper(ctx)
+
+	return labelsListModel{
+		ctx:     ctx,
+		labels:  listLabels(ctx, verbose),
+		verbose: verbose,
+
+		printOutput: viper.GetBool(config.PrintResults),
+		waitOnExit:  viper.GetBool(config.WaitOnExit),
+	}
+}
+
+// listLabels returns every label except the superset label, sorted by name. Unwanted
+// labels are omitted unless verbose is set.
+func listLabels(ctx context.Context, verbose bool) []labelWithRepos {
+	viper := config.Viper(ctx)
 	labels := make([]labelWithRepos, 0)
 
 	labelNames := make([]string, 0, len(catalog.Labels))
@@ -104,7 +124,6 @@ func newLabelsListModel(ctx context.Context, verbose bool) labelsListModel {
 	for _, label := range labelNames {
 		isUnwanted := isLabelUnwanted(ctx, label)
 
-		// Skip unwanted labels unless verbose mode is enabled
 		if !verbose && isUnwanted {
 			continue
 		}
@@ -120,14 +139,41 @@ func newLabelsListModel(ctx context.Context, verbose bool) labelsListModel {
 		}
 	}
 
-	return labelsListModel{
-		ctx:     ctx,
-		labels:  labels,
-		verbose: verbose,
+	return labels
+}
 
-		printOutput: viper.GetBool(config.PrintResults),
-		waitOnExit:  viper.GetBool(config.WaitOnExit),
+// labelCountText returns the repository count for a label. Wanted labels whose
+// repositories are partly unwanted show "(wanted / total)"; all others show "(total)".
+func labelCountText(label labelWithRepos, unwantedRepos mapset.Set[string]) string {
+	total := len(label.repos)
+
+	wanted := 0
+	for _, repo := range label.repos {
+		if !unwantedRepos.Contains(repo) {
+			wanted++
+		}
 	}
+
+	if label.isUnwanted || wanted == total {
+		return fmt.Sprintf("(%d)", total)
+	}
+
+	return fmt.Sprintf("(%d / %d)", wanted, total)
+}
+
+// labelEntries keeps only the entries of a parsed filter that name labels rather than
+// repositories. Unwanted labels are added to exclusions without the label token.
+func labelEntries(ctx context.Context, entries []labelWithRepos) []labelWithRepos {
+	token := config.Viper(ctx).GetString(config.TokenLabel)
+
+	labels := make([]labelWithRepos, 0, len(entries))
+	for _, entry := range entries {
+		if strings.Contains(entry.name, token) || isLabelUnwanted(ctx, entry.name) {
+			labels = append(labels, entry)
+		}
+	}
+
+	return labels
 }
 
 // Init implements tea.Model. The labels list model has no asynchronous work to start.
@@ -220,22 +266,7 @@ func (m labelsListModel) buildLabelContent(b *strings.Builder, styles labelStyle
 		b.WriteString(styles.count.Render(emptyLabelText))
 		b.WriteString("\n")
 	} else {
-		// Calculate wanted vs total repos
-		totalRepos := len(label.repos)
-		wantedRepos := 0
-		for _, repo := range label.repos {
-			if !unwantedRepos.Contains(repo) {
-				wantedRepos++
-			}
-		}
-
-		// For unwanted labels, always show just total count
-		// For wanted labels, show "X / Y" format only if some repos are unwanted, otherwise just "Y"
-		if label.isUnwanted || wantedRepos == totalRepos {
-			b.WriteString(styles.count.Render(fmt.Sprintf("(%d)", totalRepos)))
-		} else {
-			b.WriteString(styles.count.Render(fmt.Sprintf("(%d / %d)", wantedRepos, totalRepos)))
-		}
+		b.WriteString(styles.count.Render(labelCountText(label, unwantedRepos)))
 		b.WriteString("\n")
 
 		// Show the list of repositories matched by this label
@@ -347,14 +378,17 @@ func buildLabelWithRepos(ctx context.Context, labelNames []string) []labelWithRe
 	labels := make([]labelWithRepos, 0, len(labelNames))
 
 	for _, label := range labelNames {
-		if set, ok := catalog.Labels[utils.CleanFilter(ctx, label)]; ok && set.Cardinality() > 0 {
+		clean := utils.CleanFilter(ctx, label)
+		isUnwanted := isLabelUnwanted(ctx, clean)
+
+		if set, ok := catalog.Labels[clean]; ok && set.Cardinality() > 0 {
 			repos := set.ToSlice()
 			if viper.GetBool(config.SortRepos) {
 				sort.Strings(repos)
 			}
-			labels = append(labels, labelWithRepos{name: label, repos: repos})
+			labels = append(labels, labelWithRepos{name: label, repos: repos, isUnwanted: isUnwanted})
 		} else {
-			labels = append(labels, labelWithRepos{name: label, empty: true})
+			labels = append(labels, labelWithRepos{name: label, empty: true, isUnwanted: isUnwanted})
 		}
 	}
 
@@ -492,16 +526,16 @@ func (m labelsFilterModel) buildContent(ctx context.Context) string {
 
 	// Verbose details
 	if m.verbose {
-		if len(m.labels.forced) > 0 {
-			m.buildVerboseContent(ctx, m.labels.forced, &b, styles, styles.forced, styles.wrap(styles.repo), "Forced")
+		if forced := labelEntries(ctx, m.labels.forced); len(forced) > 0 {
+			m.buildVerboseContent(ctx, forced, &b, styles, styles.forced, styles.wrap(styles.repo), "Forced")
 		}
 
-		if len(m.labels.included) > 0 {
-			m.buildVerboseContent(ctx, m.labels.included, &b, styles, styles.normal, styles.wrap(styles.repo), "Included")
+		if included := labelEntries(ctx, m.labels.included); len(included) > 0 {
+			m.buildVerboseContent(ctx, included, &b, styles, styles.normal, styles.wrap(styles.repo), "Included")
 		}
 
-		if len(m.labels.excluded) > 0 {
-			m.buildVerboseContent(ctx, m.labels.excluded, &b, styles, styles.excluded, styles.wrap(styles.unwanted), "Excluded")
+		if excluded := labelEntries(ctx, m.labels.excluded); len(excluded) > 0 {
+			m.buildVerboseContent(ctx, excluded, &b, styles, styles.excluded, styles.wrap(styles.unwanted), "Excluded")
 		}
 	}
 
@@ -516,11 +550,6 @@ func (m labelsFilterModel) buildVerboseContent(ctx context.Context, set []labelW
 	b.WriteString("\n")
 
 	for _, label := range set {
-		// only print verbose details for labels, not individual repositories
-		if !strings.Contains(label.name, config.Viper(ctx).GetString(config.TokenLabel)) {
-			continue
-		}
-
 		b.WriteString(labelStyle.Render(fmt.Sprintf(labelNameFormat+"\n", utils.CleanFilter(ctx, label.name))))
 		if label.empty {
 			b.WriteString(repoStyle.Render(styles.count.Render(emptyLabelText)))

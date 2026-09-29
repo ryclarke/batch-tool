@@ -53,6 +53,24 @@ make help      # list all available targets
 - Prefer same-package tests (`package foo`) and reuse helpers from `utils/testing`.
 - Add or update docs when behavior, flags, or configuration expectations change.
 
+## Agent Skill
+
+[`skills/batch-tool/`](skills/batch-tool/) is an [Agent Skills](https://agentskills.io/specification) package that is distributed straight from this repository. Keep it in sync with the CLI:
+
+- If you add, remove, or rename a command or flag, or change its default, update `skills/batch-tool/references/commands.md` in the same pull request.
+- If you change how destructive a command is (for example a new discard or force path, or a new config key that escalates behavior), update the risk tiers in `references/safety.md`.
+- If you change release archive names or the checksum format in `.goreleaser.yaml`, update `scripts/install.sh`.
+- Set `metadata.version` in `SKILL.md` to the next batch-tool release that will ship the skill's changes. Change it at most once per release, not on every commit during a feature.
+
+Validate locally:
+
+```bash
+pipx run --spec skills-ref==0.1.1 agentskills validate skills/batch-tool
+shellcheck -s sh skills/batch-tool/scripts/install.sh
+sh skills/batch-tool/scripts/install.sh --check
+npx skills add ./ --list   # confirms the skill is discoverable
+```
+
 ## AI-Assisted Contributions
 
 AI-assisted work is allowed, but only with direct maintainer oversight.

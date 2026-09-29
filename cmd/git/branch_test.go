@@ -2,7 +2,10 @@ package git
 
 import (
 	"bytes"
+	"errors"
+	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/ryclarke/batch-tool/config"
@@ -16,7 +19,7 @@ func TestAddBranchCmd(t *testing.T) {
 		t.Fatal("addBranchCmd() returned nil")
 	}
 
-	expectedUse := "branch -b <branch-name> [--discard] [--no-reset] <repository>..."
+	expectedUse := "branch -b <branch-name> [--no-reset] <repository>..."
 	if cmd.Use != expectedUse {
 		t.Errorf("Expected Use to be %q, got %s", expectedUse, cmd.Use)
 	}
@@ -181,6 +184,81 @@ func TestBranchCommandWithSpecialCharacters(t *testing.T) {
 	}
 }
 
+// TestBranchCarriesUncommittedChanges verifies that uncommitted work is stashed
+// across the update and restored onto the new branch.
+func TestBranchCarriesUncommittedChanges(t *testing.T) {
+	reposPath := testhelper.SetupRepos(t, []string{"repo-1"})
+	testCtx := setupTestGitContext(t, reposPath)
+
+	const branchName = "feature/carry-changes"
+
+	repoDir := filepath.Join(reposPath, "example.com", "test-project", "repo-1")
+	testFile := filepath.Join(repoDir, "work-in-progress.txt")
+	if err := os.WriteFile(testFile, []byte("keep me"), 0o644); err != nil {
+		t.Fatalf("Failed to write test file: %v", err)
+	}
+
+	cmd := addBranchCmd()
+
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+	cmd.SetArgs([]string{"--branch", branchName, "repo-1"})
+
+	if err := cmd.ExecuteContext(testCtx); err != nil {
+		t.Fatalf("Command execution failed: %v\n%s", err, buf.String())
+	}
+
+	if got := gitOutput(t, repoDir, "rev-parse", "--abbrev-ref", "HEAD"); got != branchName {
+		t.Errorf("Expected to be on %q, got %q", branchName, got)
+	}
+
+	if _, err := os.Stat(testFile); err != nil {
+		t.Errorf("Expected uncommitted file to be restored onto the new branch: %v", err)
+	}
+}
+
+// TestBranchDiscardRemoved verifies that the removed --discard flag fails with a
+// pointer to its replacement before any repository is touched.
+func TestBranchDiscardRemoved(t *testing.T) {
+	reposPath := testhelper.SetupRepos(t, []string{"repo-1"})
+	testCtx := setupTestGitContext(t, reposPath)
+
+	repoDir := filepath.Join(reposPath, "example.com", "test-project", "repo-1")
+	testFile := filepath.Join(repoDir, "untouched.txt")
+	if err := os.WriteFile(testFile, []byte("still here"), 0o644); err != nil {
+		t.Fatalf("Failed to write test file: %v", err)
+	}
+
+	cmd := addBranchCmd()
+
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+	cmd.SetArgs([]string{"--branch", "feature/discard", "--discard", "repo-1"})
+
+	err := cmd.ExecuteContext(testCtx)
+	if !errors.Is(err, errBranchDiscardRemoved) {
+		t.Fatalf("Expected errBranchDiscardRemoved, got: %v", err)
+	}
+
+	if !strings.Contains(err.Error(), "git update --discard") {
+		t.Errorf("Expected error to name the replacement command, got: %v", err)
+	}
+
+	if got := gitOutput(t, repoDir, "rev-parse", "--abbrev-ref", "HEAD"); got != "main" {
+		t.Errorf("Expected repository to stay on main, got %q", got)
+	}
+
+	if _, statErr := os.Stat(testFile); statErr != nil {
+		t.Errorf("Expected uncommitted file to be left alone: %v", statErr)
+	}
+
+	if !cmd.Flags().Lookup("discard").Hidden {
+		t.Error("Expected --discard to be hidden from help output")
+	}
+}
+
 // TestBranchResetExistingBranch verifies that --no-reset switches `git checkout -B`
 // to `-b`, which refuses to clobber a branch that already exists.
 func TestBranchResetExistingBranch(t *testing.T) {
@@ -209,7 +287,7 @@ func TestBranchResetExistingBranch(t *testing.T) {
 			var buf bytes.Buffer
 			cmd.SetOut(&buf)
 			cmd.SetErr(&buf)
-			cmd.SetArgs(append(append([]string{}, tt.args...), "--branch", branchName, "--discard", "repo-1"))
+			cmd.SetArgs(append(append([]string{}, tt.args...), "--branch", branchName, "repo-1"))
 
 			err := cmd.ExecuteContext(testCtx)
 

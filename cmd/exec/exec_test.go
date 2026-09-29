@@ -11,6 +11,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ryclarke/batch-tool/config"
+	"github.com/ryclarke/batch-tool/utils"
 	testhelper "github.com/ryclarke/batch-tool/utils/testing"
 )
 
@@ -766,6 +768,52 @@ func TestShellCmdWithBinaryExecutable(t *testing.T) {
 	// Should show the binary path with 'file:' prefix in confirmation
 	if !strings.Contains(output, "file: ") || !strings.Contains(output, binaryPath) {
 		t.Errorf("Expected output to show binary path with file: prefix, got: %s", output)
+	}
+}
+
+// TestShellCmdRelativeFileRunsFromCurrentDirectory verifies that a relative -f path
+// runs the file that was validated and previewed, not a same-named file inside each
+// repository.
+func TestShellCmdRelativeFileRunsFromCurrentDirectory(t *testing.T) {
+	ctx := loadFixture(t)
+	config.Viper(ctx).Set(config.GitDirectory, t.TempDir())
+	testhelper.SetupDirs(t, ctx, []string{"repo1"})
+
+	repoDir := utils.RepoPath(ctx, "repo1")
+	if err := os.WriteFile(filepath.Join(repoDir, "shared.sh"), []byte("#!/bin/sh\necho repo > marker\n"), 0o755); err != nil {
+		t.Fatalf("Failed to create repository script: %v", err)
+	}
+
+	scriptDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(scriptDir, "shared.sh"), []byte("#!/bin/sh\necho reviewed > marker\n"), 0o755); err != nil {
+		t.Fatalf("Failed to create reviewed script: %v", err)
+	}
+
+	t.Chdir(scriptDir)
+
+	cmd := Cmd()
+
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+	cmd.SetIn(mockStdin("y\n"))
+	cmd.SetArgs([]string{"-f", "./shared.sh", "repo1"})
+
+	if err := cmd.ExecuteContext(ctx); err != nil {
+		t.Fatalf("Unexpected error: %v\n%s", err, buf.String())
+	}
+
+	if want := filepath.Join(scriptDir, "shared.sh"); !strings.Contains(buf.String(), want) {
+		t.Errorf("Expected preview to show the absolute path %q, got: %s", want, buf.String())
+	}
+
+	got, err := os.ReadFile(filepath.Join(repoDir, "marker"))
+	if err != nil {
+		t.Fatalf("Expected the script to write a marker in the repository: %v", err)
+	}
+
+	if strings.TrimSpace(string(got)) != "reviewed" {
+		t.Errorf("Expected the reviewed script to run, but the repository's copy ran instead")
 	}
 }
 

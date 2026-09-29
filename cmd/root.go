@@ -161,6 +161,13 @@ Shell Note:
 func Execute() {
 	ctx := config.Init(context.Background())
 	cobra.OnInitialize(func() {
+		// Initializers run after flag parsing, so the config file must be loaded
+		// here rather than above for --config to take effect.
+		if err := config.Load(ctx); err != nil {
+			fmt.Println(err)
+			os.Exit(1)
+		}
+
 		catalog.Init(ctx, false)
 	})
 

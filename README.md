@@ -37,18 +37,29 @@ This installs the binary into your Go bin directory, typically `$GOPATH/bin` or 
 
 For local builds, release packaging, and contributor setup, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
+### Agent Skill
+
+This repository ships an [Agent Skill](https://agentskills.io) that teaches AI coding agents to install, update, configure, and run Batch Tool. It works with any tool that supports the Agent Skills format, including Claude Code, Cursor, Codex, and Gemini CLI. Install it with the [`skills` CLI](https://github.com/vercel-labs/skills):
+
+```bash
+npx skills add ryclarke/batch-tool
+```
+
+Or copy [`skills/batch-tool/`](skills/batch-tool/) into your agent's skills directory.
+
+The skill teaches the agent to treat each Batch Tool command as the git, pull request, `make`, or shell operation it runs, repeated across the selected repositories. An agent you already let open pull requests or push feature branches recognizes `pr new` and `git push` as the same operations. `exec` and `make` are judged by the command or recipe they actually run. The repository set is authorized separately: the agent shows you the resolved list, and asks first if it chose the selector itself. Destructive operations such as discards, force pushes, and merges always wait for your approval when they span several repositories. The agent also hands credential setup back to you, and never asks for or stores tokens itself.
+
 ## Quick Start
 
 ### 1. Create a Config File
 
 Batch Tool looks for `batch-tool.yaml` in:
 
-- the current working directory
 - your user config directory
 - `$XDG_CONFIG_HOME` when set
 - the directory containing the executable
 
-You can also point to a specific file with `--config`.
+To use any other file, such as one kept alongside a project, pass it with `--config`.
 
 Start with this minimal example:
 
@@ -258,6 +269,8 @@ batch-tool git commit -s tracked -m "Tweak config" '~platform'
 
 `git update` stashes local changes and restores them after updating, so it will not throw away work by default. Pass `--discard` to reset the worktree instead, or set `git.update.discard` to make that the default. `--stash` forces the stash behavior back on when the config opts into discarding. Use `--pull-strategy` to control how diverged history is reconciled (`default`, `ff-only`, `rebase`, or `merge`).
 
+`git branch` updates the default branch the same way, then restores your local changes onto the new branch. To branch from a clean worktree, run `git update --discard` first.
+
 `git stash push` captures untracked and ignored files by default. Use `--scope untracked` to leave ignored files such as build artifacts and `.env` in place, or `--scope tracked` to stash tracked files only.
 
 ### Pull Request Operations
@@ -285,9 +298,9 @@ batch-tool exec -f ./scripts/deploy.sh -a staging '~app'
 Batch Tool supports two output styles:
 
 - `tui` (default): interactive progress display with scrolling and per-repository output
-- `native`: plain line-by-line stdout — each repository's output is printed as it arrives, with no TUI chrome. Reliable in scripts, CI pipelines, and non-interactive terminals.
+- `native`: plain streamed output with no TUI chrome. Each repository gets a `------ name ------` header on stdout, and its output streams under it as it arrives, in repository order. The command line, any `ERROR: <repo>: <message>` lines, and a closing summary go to stderr. The summary looks like `3 repositories (1 failed) | Elapsed: 4s`, followed by `Failed: <repos>`. Color codes are stripped unless stdout is a terminal. Reliable in scripts, CI pipelines, agents, and any terminal.
 
-Use `--style native` when you want straightforward terminal output without the interactive display.
+When stdout is not a terminal, such as a pipe, a redirect, or CI, Batch Tool uses `native` automatically. Use `--style native` to get the same output in an interactive terminal.
 
 The TUI can be cancelled at any time with `q`, `Esc`, or `Ctrl+C`. Cancellation propagates to in-flight subprocesses, not just the screen.
 
@@ -308,7 +321,7 @@ Repositories are cloned beneath `git.directory` using the provider host, project
 
 ### Git Command Defaults
 
-Each `git` subcommand reads its persistent defaults from a matching config group, so you can set the behavior you want once instead of repeating flags. Every key below defaults to the behavior Batch Tool had before it became configurable.
+Each `git` subcommand reads its persistent defaults from a matching config group, so you can set the behavior you want once instead of repeating flags. The example below shows every key with its default value.
 
 ```yaml
 git:
@@ -325,15 +338,11 @@ git:
     submodules: true # re-initialize submodules after discarding changes
 
   stash:
-    scope: all # "all", "untracked", or "tracked"
+    scope: all # "all", "untracked", or "tracked"; also used by 'git update' and 'git branch'
 
   branch:
     reset: true # reset branches that already exist instead of failing
 ```
-
-`git.stash.scope` is grouped under `stash` rather than `update` because it applies to every stash Batch Tool takes, including the ones created by `git update` and `git branch`.
-
-`git.stash-updates` has been removed, and `git update` now stashes by default rather than only when asked. If the old key is still present in your config file, `batch-tool` prints a warning and ignores it. Delete `git.stash-updates: true`, since it is now the default behavior; replace `git.stash-updates: false` with `git.update.discard: true` to keep discarding changes. The `--no-stash` flag is likewise gone in favor of `--discard`.
 
 ### Aliases and Unwanted Labels
 
@@ -348,7 +357,7 @@ Use `repos.reviewers` or `repos.team_reviewers` to preconfigure the reviewers yo
 - Authentication errors: run `batch-tool auth status` to see which credential each project resolves to
 - Repository not found: confirm the repository name, default project, and cached catalog data
 - Unexpected matches: run `batch-tool labels <selectors...>` to inspect how your filters resolve
-- Interactive hangs in automation: use `--style native` or `--no-wait`
+- Interactive hangs in automation: use `--style native`, or `--print` to keep the TUI and print its output when it exits
 - Long-running commands: reduce concurrency with `--sync` or `--max-concurrency` limits
 
 For command-specific help, run:

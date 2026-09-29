@@ -2,6 +2,8 @@ package config_test
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -104,6 +106,83 @@ func TestGroupedGitDefaults(t *testing.T) {
 			t.Errorf("Expected %s to default to %v, got %v", key, expected, got)
 		}
 	}
+}
+
+// TestLoadHonorsCfgFile verifies that a config file named by CfgFile after Init is
+// read into the context's Viper instance, which is how --config is applied.
+func TestLoadHonorsCfgFile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "custom.yaml")
+	if err := os.WriteFile(path, []byte("git:\n  project: from-custom-file\n"), 0o600); err != nil {
+		t.Fatalf("Failed writing test config: %v", err)
+	}
+
+	ctx := config.Init(context.Background())
+
+	setCfgFile(t, path)
+
+	if err := config.Load(ctx); err != nil {
+		t.Fatalf("Load returned an error: %v", err)
+	}
+
+	v := config.Viper(ctx)
+	if got := v.GetString(config.GitProject); got != "from-custom-file" {
+		t.Errorf("Expected %s from the custom config file, got %q", config.GitProject, got)
+	}
+
+	if got := v.ConfigFileUsed(); got != path {
+		t.Errorf("Expected config file %q to be used, got %q", path, got)
+	}
+}
+
+// TestLoadMissingCfgFile verifies that an explicit config path which cannot be read
+// is reported rather than silently falling back to defaults.
+func TestLoadMissingCfgFile(t *testing.T) {
+	ctx := config.Init(context.Background())
+
+	setCfgFile(t, filepath.Join(t.TempDir(), "missing.yaml"))
+
+	if err := config.Load(ctx); err == nil {
+		t.Fatal("Expected an error for a missing explicit config file")
+	}
+}
+
+// TestLoadIgnoresWorkingDirectory verifies that a batch-tool.yaml in the current
+// directory is not picked up by the default search.
+func TestLoadIgnoresWorkingDirectory(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
+
+	cwd := t.TempDir()
+	if err := os.WriteFile(filepath.Join(cwd, "batch-tool.yaml"), []byte("git:\n  project: from-working-directory\n"), 0o600); err != nil {
+		t.Fatalf("Failed writing test config: %v", err)
+	}
+
+	t.Chdir(cwd)
+	setCfgFile(t, "")
+
+	ctx := config.Init(context.Background())
+	if err := config.Load(ctx); err != nil {
+		t.Fatalf("Load returned an error: %v", err)
+	}
+
+	v := config.Viper(ctx)
+	if got := v.ConfigFileUsed(); got != "" {
+		t.Errorf("Expected no config file to be used, got %q", got)
+	}
+
+	if got := v.GetString(config.GitProject); got == "from-working-directory" {
+		t.Errorf("Expected %s not to come from the working directory config", config.GitProject)
+	}
+}
+
+func setCfgFile(t *testing.T, path string) {
+	t.Helper()
+
+	previous := config.CfgFile
+	config.CfgFile = path
+
+	t.Cleanup(func() { config.CfgFile = previous })
 }
 
 func TestSetViperAndViper(t *testing.T) {
