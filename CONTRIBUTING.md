@@ -60,7 +60,7 @@ make help      # list all available targets
 - If you add, remove, or rename a command or flag, or change its default, update `skills/batch-tool/references/commands.md` in the same pull request.
 - If you change how destructive a command is (for example a new discard or force path, or a new config key that escalates behavior), update the risk tiers in `references/safety.md`.
 - If you change release archive names or the checksum format in `.goreleaser.yaml`, update `scripts/install.sh`.
-- Bump `metadata.version` in `SKILL.md` whenever the skill's content changes.
+- Set `metadata.version` in `SKILL.md` to the next batch-tool release that will ship the skill's changes. Change it at most once per release, not on every commit during a feature.
 
 Validate locally:
 
