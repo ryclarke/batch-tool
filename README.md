@@ -47,7 +47,7 @@ npx skills add ryclarke/batch-tool
 
 Or copy [`skills/batch-tool/`](skills/batch-tool/) into your agent's skills directory.
 
-By default, the skill has the agent show you the resolved repository list and the exact command, and wait for your approval, before it runs anything destructive or visible to others: pushes, discards, pull request creation and merges, and every `exec`. The agent also hands credential setup back to you, and never asks for or stores tokens itself.
+The skill teaches the agent to treat each Batch Tool command as the git, pull request, `make`, or shell operation it runs, repeated across the selected repositories. An agent you already let open pull requests or push feature branches recognizes `pr new` and `git push` as the same operations. `exec` and `make` are judged by the command or recipe they actually run. The repository set is authorized separately: the agent shows you the resolved list, and asks first if it chose the selector itself. Destructive operations such as discards, force pushes, and merges always wait for your approval when they span several repositories. The agent also hands credential setup back to you, and never asks for or stores tokens itself.
 
 ## Quick Start
 

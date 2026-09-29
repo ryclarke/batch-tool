@@ -1,17 +1,17 @@
 ---
 name: batch-tool
-description: Installs, updates, configures, and operates batch-tool, a CLI that runs git, pull request, make, and shell workflows across many repositories at once. Use when the user wants to act on several repositories together (bulk branch, commit, push, update, stash, status, or diff), open, edit, or merge pull requests across repos, select repos by name, ~label, alias, !exclude, or +force selectors, run make targets or shell commands across a repo fleet, or mentions batch-tool or batch-tool.yaml. Destructive and remote-visible multi-repo operations require explicit user confirmation.
+description: Installs, updates, configures, and operates batch-tool, a CLI that runs git, pull request, make, and shell workflows across many repositories at once. Use when the user wants to act on several repositories together (bulk branch, commit, push, update, stash, status, or diff), open, edit, or merge pull requests across repos, select repos by name, ~label, alias, !exclude, or +force selectors, run make targets or shell commands across a repo fleet, or mentions batch-tool or batch-tool.yaml. Treats each command as its per-repository git, PR, make, or shell equivalent applied across a repository set, so existing authorization for that operation carries over, and destructive multi-repo operations require explicit user confirmation.
 compatibility: Requires git with SSH access to the SCM host and network access to GitHub or Bitbucket. The bundled install script needs a POSIX shell, curl or wget, tar with xz support, and sha256sum or shasum. Go and the gh CLI are optional.
 metadata:
   author: ryclarke
-  version: "1.0.0"
+  version: "1.1.0"
 ---
 
 # batch-tool
 
 `batch-tool` fans one command out across many git repositories. It resolves repository selectors, clones any missing repositories over SSH, runs the operation in each repository concurrently, and reports results per repository.
 
-Follow this skill in order: preflight, resolve the repository set, classify the risk, confirm when required, run, and report.
+Follow this skill in order: preflight, resolve the repository set, translate the command into what it runs in each repository, authorize that operation and the scope, run, and report.
 
 ## 1. Preflight
 
@@ -24,7 +24,7 @@ batch-tool auth status              # credential source per project; never print
 
 - If the result is `not-installed` or `outdated`, tell the user what you found and install or update with `sh scripts/install.sh` (details below). Installing into a user-owned directory is safe to do once the user agrees to have the tool installed.
 - If there is no config file or `auth status` fails, stop and walk the user through [references/setup.md](references/setup.md). Do not guess the provider, project, or credentials.
-- Read the active config file. batch-tool prints `Using config file: <path>` on stderr. Note any keys that make ordinary commands more destructive, because they change the risk tier of a command:
+- Read the active config file. batch-tool prints `Using config file: <path>` on stderr. Note any keys that change what an ordinary command runs in each repository:
   - `git.commit.push: true`: `git commit` also pushes.
   - `git.update.discard: true`: `git update` runs `git reset --hard` and `git clean -fd`.
   - `git.update.clean-ignored: true`: discarding also deletes ignored files such as `.env` and build output.
@@ -60,15 +60,24 @@ The output reports `This matches N repositories, listed below:` followed by the 
 
 If a match looks wrong or stale, refresh the catalog with `batch-tool catalog -f --style native` and resolve again. If the set is empty, stop and ask; do not widen the selector on your own.
 
-## 4. Classify risk and confirm
+## 4. Translate, then authorize
 
-Every command falls into one of three tiers. The full rules, the configuration escalations, and the confirmation template are in [references/safety.md](references/safety.md). Read that file before running anything above the read-only tier.
+A batch-tool command is an ordinary operation repeated in every selected repository: **effective risk = the per-repository operation × the set of repositories**. The translation table, the configuration effects, and the confirmation template are in [references/safety.md](references/safety.md). Read that file before running anything that writes.
 
-- **Read-only (run freely):** `git status`, `git diff`, `git stash` (list), `labels`, `catalog`, `auth status`, `pr get`, `--help`, `--version`.
-- **Local changes (confirm once per command):** `git branch`, `git commit` without push, `git stash push`/`pop`, `git update` in stash mode, and `make` with targets that write files.
-- **Destructive, remote-visible, or irreversible (always confirm):** `git push` (especially `-f`), `git commit --push` or `--amend --push`, anything with `--discard`, `pr new`, `pr edit`, `pr merge` (especially `-f`), every `exec`, and any non-read-only command that selects `~all` or resolves to more than about 20 repositories.
+1. **Translate** the command into what it runs in each repository. `pr new` is `gh pr create` (plus reviewers from config). `git push` is `git push -u origin <branch>`. `git update --discard` is `git reset --hard` plus `git clean -fd`. `exec -c C` is `C`. `make -t T` is that repository's recipe for `T`.
+2. **Authorize the operation** the way you would for a single repository: the user's instructions first, then the host's permissions and project rules. If you may open a PR or push a feature branch in one repository without asking, `pr new` or `git push` is the same operation. If you would ask first in one repository, ask here too.
+3. **Authorize the scope** separately. Show the resolved repository list before the first write. Confirm it first if you chose the selector yourself, or if it includes repositories the user did not mention (`'~all'`, a broader label than expected, force-included repositories).
 
-Confirmation is on by default. Before running a command that needs it, show the user the exact command, the resolved repositories with a count, and any configuration that changes its effect, then wait for an explicit yes. Approval covers only that command and that repository set. If either changes, confirm again.
+The operation classes are:
+
+- **read-only**: `git status`, `git diff`, `labels`, `catalog`, `pr get`.
+- **local**: `git branch`, `git commit`, `git stash`, `git update` in stash mode.
+- **shared** (visible to others but reversible): `git push`, `git commit --push`, `pr new`, `pr edit`.
+- **destructive**: `git push -f`, `--amend --push`, `--discard`, `pr merge`, and resetting an existing branch that has unique commits.
+
+`exec` and `make` take the class of whatever they run.
+
+**Destructive operations across several repositories always need an explicit yes, by default**, even when the user asked for the operation. Show the per-repository equivalent, the resolved repositories, and any config that changes the effect, then wait. Approval covers that command and that set only.
 
 ## 5. Common recipes
 
@@ -82,18 +91,18 @@ batch-tool git diff '~app'
 batch-tool pr get '~app'          # repositories must be on a feature branch
 ```
 
-**Rolling out a change** (confirm each state-changing step):
+**Rolling out a change** (authorize each step as its git or PR equivalent):
 
 ```bash
-batch-tool git branch -b feature/bump-deps '~platform'   # stashes, updates default branch, creates branch, restores
-# ...edit files in each repo (or use exec, confirmed)...
+batch-tool git branch -b feature/bump-deps --no-reset '~platform'  # stash, update default branch, create branch, restore
+# ...edit files in each repo, or use exec classified by the command it runs...
 batch-tool git diff '~platform'                          # show the user what will be committed
 batch-tool git commit -m "Bump dependencies" '~platform' # stages everything by default; -s tracked or -s none to narrow
 batch-tool git push '~platform'
 batch-tool pr new -t "Bump dependencies" -d "Why and what" '~platform'
 ```
 
-For `pr new`, show the user the title, description, base branch, and reviewers before running. Reviewers come from `-r`/`-R`, or from `repos.reviewers` and `repos.team-reviewers` in the config when no flag is given. Use `--draft` if the user wants to review the PRs before others are notified.
+For `pr new`, make sure the title, description, base branch, and reviewers are what the user authorized, and show them in your report. Reviewers come from `-r`/`-R`, or from `repos.reviewers` and `repos.team-reviewers` in the config when no flag is given. Use `--draft` if the user wants to review the PRs before others are notified.
 
 **Editing PRs:** `batch-tool pr edit -t "New title" -r alice '~platform'`. Reviewers are added to the existing list; `--reset-reviewers` replaces it.
 
@@ -106,9 +115,9 @@ batch-tool git update '~platform'           # back to the default branch, pulled
 
 **Stashing around other work:** `git stash push '~x'`, do the work, then `git stash pop '~x'`. By default `pop` refuses to restore stashes that batch-tool did not create.
 
-**Make targets:** `batch-tool make -t test --sync '~backend'`. Multiple `-t` flags run in a single `make` invocation.
+**Make targets:** `batch-tool make -t test --sync '~backend'`. Multiple `-t` flags run in a single `make` invocation. A target means that repository's recipe, which can differ from one repository to the next, so read the recipes before classifying a target.
 
-**Arbitrary commands:** `batch-tool exec -c "go test ./..." -y '~backend'`, or `-f ./script.sh -a arg1 -a arg2`. The `-y` flag is required because an agent cannot answer the interactive prompt. Pass it only after the user has approved that exact command and repository set in the conversation.
+**Arbitrary commands:** `batch-tool exec -c "go test ./..." -y '~backend'`, or `-f ./script.sh -a arg1 -a arg2`. Classify the command or script as if you were running it yourself in each repository: `go test` is local, `rm -rf build/` is destructive, and a script you have not read is destructive until you have read it. The `-y` flag only skips a terminal prompt that an agent cannot answer. Pass it once the command and scope are authorized.
 
 For every command and flag, see [references/commands.md](references/commands.md).
 
@@ -120,14 +129,14 @@ Stop, explain what is needed, and let the user act whenever the task requires:
 - **Choosing configuration values:** `git.provider`, `git.host`, `git.project`, `git.projects`, `git.directory`, aliases, and reviewers.
 - **SSH access for cloning:** batch-tool clones missing repositories from `ssh://git@<host>/<project>/<repo>.git`.
 - **Editing shell startup files** to change `PATH` or export variables. Propose the line and ask before touching the file.
-- **Reviewing content others will see,** such as PR titles, descriptions, reviewers, and commit messages on shared branches.
+- **Reviewing content others will see** when the user has not already specified or approved it: PR titles, descriptions, reviewers, and commit messages on shared branches.
 - **Resolving failures that need judgment:** merge conflicts, stash pop conflicts, failed checks, or protected branches.
 
 Walkthroughs for each case are in [references/setup.md](references/setup.md).
 
 ## 7. Reporting results
 
-After each run, summarize the outcome per repository: which succeeded, which failed with the key error line, and what is left to do. Where it applies, suggest the next command in the workflow (for example `git push` after `git commit`), and confirm it before running.
+After each run, summarize the outcome per repository: which succeeded, which failed with the key error line, and what is left to do. Where it applies, suggest the next command in the workflow (for example `git push` after `git commit`), and authorize it like any other step before running it.
 
 ## Install and update
 

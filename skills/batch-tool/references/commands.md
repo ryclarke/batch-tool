@@ -4,7 +4,7 @@ Checked against batch-tool 1.0.0. If the installed version behaves differently, 
 
 Each command below that takes `<repository>...` accepts selectors: `repo`, `project/repo`, `'~label'`, `'~all'`, `'!exclude'`, `'+force'`, or `.`. Every repository that is missing locally is cloned into `<git.directory>/<git.host>/<project>/<repo>` before the operation runs.
 
-The **Tier** column refers to the risk tiers in [safety.md](safety.md): read-only, local, or destructive.
+Each heading gives the operation class of the per-repository equivalent: read-only, local, shared, or destructive. [safety.md](safety.md) defines the classes and maps every command to the git, PR, or shell operation it runs.
 
 ## Contents
 
@@ -46,7 +46,7 @@ Runs `git status` in each repository.
 ### `git diff [--cached] <repos>` (read-only)
 Shows unstaged changes. `--cached` shows staged changes instead.
 
-### `git branch -b <name> <repos>` (local; destructive with `--discard`)
+### `git branch -b <name> <repos>` (local; destructive when it resets an existing branch or runs with `--discard`)
 Alias: `checkout`. For each repository, the command:
 1. Stashes uncommitted changes (scope from `git.stash.scope`).
 2. Checks out the default branch and pulls it.
@@ -56,10 +56,10 @@ Alias: `checkout`. For each repository, the command:
 | Flag | Effect |
 | --- | --- |
 | `-b, --branch` | Branch name. Required. |
-| `--discard` | Skip stashing, so uncommitted changes are lost. |
+| `--discard` | Skip the stash. The help text says uncommitted changes are discarded; currently they carry into the checkout, or the checkout fails. Either way they are unprotected. |
 | `--reset` / `--no-reset` | Override `git.branch.reset`. |
 
-### `git commit {-m <msg> \| --amend [-m <msg>]} <repos>` (local; destructive when it pushes)
+### `git commit {-m <msg> \| --amend [-m <msg>]} <repos>` (local; shared with push; destructive with `--amend` and push)
 Refuses to run on the default branch.
 
 | Flag | Effect |
@@ -69,7 +69,7 @@ Refuses to run on the default branch.
 | `--amend` | Runs `git commit --amend --reset-author`, with `--no-edit` when no `-m` is given. |
 | `--push` / `--no-push` | Push after committing. Config key: `git.commit.push`. **`--amend` combined with push implies a force push.** |
 
-### `git push [-f] [--remote <name>] <repos>` (destructive)
+### `git push [-f] [--remote <name>] <repos>` (shared; destructive with `-f`)
 Runs `git push -u <remote> <current-branch>`. Refuses to push the default branch.
 
 | Flag | Effect |
@@ -84,7 +84,7 @@ Checks out the default branch and pulls it.
 
 | Flag | Effect |
 | --- | --- |
-| `--discard` / `--stash` | Choose the mode. `--stash` overrides a config that turns discard on. |
+| `--discard` / `--stash` | Choose the mode. Discard mode is destructive. `--stash` overrides a config that turns discard on. |
 | `--pull-strategy default\|ff-only\|rebase\|merge` | Maps to plain `git pull`, `--ff-only`, `--rebase`, or `--no-rebase`. Config key: `git.update.pull-strategy`. |
 
 ### `git stash <repos>` (read-only)
@@ -94,7 +94,7 @@ Runs `git stash list`.
 Stashes with the message `batch-tool <RFC3339 timestamp>`. Scopes for `--scope`: `all` (default) is `-a` and includes ignored files; `untracked` is `-u`; `tracked` stashes tracked files only. Config key: `git.stash.scope`. A clean worktree is reported as a success.
 
 ### `git stash pop [--allow-any] <repos>` (local)
-Pops the most recent stash only if batch-tool created it. `--allow-any` lifts that restriction; confirm it with the user because it can restore someone else's stash.
+Pops the most recent stash only if batch-tool created it. `--allow-any` lifts that restriction, so the top stash is popped whoever created it. Use it only when the user wants their own manual stashes restored.
 
 ## Pull requests (`batch-tool pr <sub>`)
 
@@ -103,7 +103,7 @@ Every `pr` subcommand first checks that a credential resolves for the default pr
 ### `pr get <repos>` (read-only)
 Alias: `list`. Shows the PR number, title, reviewers, branches, and description for the current branch.
 
-### `pr new <repos>` (destructive: visible to others)
+### `pr new <repos>` (shared: equivalent to `gh pr create`)
 
 | Flag | Effect |
 | --- | --- |
@@ -113,10 +113,10 @@ Alias: `list`. Shows the PR number, title, reviewers, branches, and description 
 | `-b, --base-branch` | Defaults to the repository's default branch. |
 | `--draft` / `--no-draft` | Open the PR as a draft. |
 
-### `pr edit <repos>` (destructive: visible to others)
+### `pr edit <repos>` (shared: equivalent to `gh pr edit`)
 Updates the PR for the current branch. Takes the same `-t`, `-d`, `-r`, `-R`, and `--draft` flags as `pr new`. Reviewers are **appended** unless `--reset-reviewers` is set, in which case they replace the existing list.
 
-### `pr merge <repos>` (destructive: irreversible)
+### `pr merge <repos>` (destructive: equivalent to `gh pr merge`, which is irreversible)
 
 | Flag | Effect |
 | --- | --- |
@@ -125,18 +125,18 @@ Updates the PR for the current branch. Takes the same `-t`, `-d`, `-r`, `-R`, an
 
 After merging, run `batch-tool git update <repos>` to return to the default branch.
 
-## `make [-t <target>]... <repos>` (tier depends on the target)
-Runs `make <targets...>` in each repository. Targets come from `-t, --target`, which is repeatable; with no `-t`, it runs the default target. Fails if a repository has no Makefile. Treat targets such as `test`, `lint`, or `build` as local. Treat targets such as `deploy`, `release`, `publish`, or `clean` of shared resources, and any target you have not read, as destructive. Use `--sync` for heavy builds.
+## `make [-t <target>]... <repos>` (the class of each repository's recipe)
+Runs `make <targets...>` in each repository. Targets come from `-t, --target`, which is repeatable; with no `-t`, it runs the default target. Fails if a repository has no Makefile. Classify what the recipe does, not the target's name: the same target can run different commands in different repositories. A recipe you have not read counts as destructive. Use `--sync` for heavy builds.
 
-## `exec` (always destructive)
-Alias: `sh`. Runs arbitrary code in each repository, with no sandbox.
+## `exec` (the class of the command or script it runs)
+Alias: `sh`. Runs arbitrary code in each repository, with no sandbox. `exec -c "go test ./..."` is exactly as risky as running `go test ./...` in each repository yourself.
 
 | Flag | Effect |
 | --- | --- |
 | `-c, --script "<cmd>"` | Runs through `sh -c` in the repository directory. |
 | `-f, --file <path>` | Runs an executable file directly. It must have the execute bit set. |
 | `-a, --arg <arg>` | Repeatable. Requires `-f`. |
-| `-y, --force` | Skip the interactive y/N prompt. **Agents must pass this, and only after the user approves the exact command and repository set.** Without `-y`, a non-interactive stdin makes the command fail. |
+| `-y, --force` | Skip the interactive y/N prompt, which only a person at a terminal can answer. Without `-y`, a non-interactive stdin makes the command fail. **Agents pass it once the command and scope are authorized** under [safety.md](safety.md). |
 
 Exactly one of `-c` or `-f` is required.
 

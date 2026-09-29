@@ -131,4 +131,4 @@ batch-tool git status --style native <one-small-repo>
 | `WARNING: "git.stash-updates" is no longer supported` | Old config key | Remove `git.stash-updates: true`; replace `false` with `git.update.discard: true`, but only if the user wants discard behavior. |
 | The command hangs | TUI waiting in an interactive terminal | Use `--style native`, or add `--no-wait`. |
 | GitHub secondary rate limit errors | Too many writes at once | `--sync` or a lower `--max-concurrency`. batch-tool already backs off automatically. |
-| `exec` fails immediately | No `-y` with a non-interactive stdin, or the file is not executable | Get approval, then add `-y`; `chmod +x` the script with the user's approval. |
+| `exec` fails immediately | No `-y` with a non-interactive stdin, or the file is not executable | Once the command is authorized ([safety.md](safety.md)), add `-y`. `chmod +x` the script only with the user's approval. |
