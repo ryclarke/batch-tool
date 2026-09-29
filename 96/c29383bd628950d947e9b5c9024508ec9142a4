@@ -1,0 +1,21 @@
+skills/batch-tool/SKILL.md
+  s_21e801bf864f14::t_bc68f2bd7d57cb 7
+CONTRIBUTING.md
+  s_21e801bf864f14::t_26da48bc3a9263 63
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "96c29383bd628950d947e9b5c9024508ec9142a4",
+  "prompts": {},
+  "sessions": {
+    "s_21e801bf864f14": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "f4c2e10c-dd7d-4705-982b-e935f42323b9",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Ryan Clarke <ryclarke-github@rkc.aleeas.com>"
+    }
+  }
+}
