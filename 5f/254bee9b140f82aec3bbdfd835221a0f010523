@@ -1,0 +1,42 @@
+config/configurations_test.go
+  s_21e801bf864f14::t_e08d570c96e6e0 149-178
+cmd/exec/exec_test.go
+  s_21e801bf864f14::t_c0355f302d6fcf 774-819
+  s_21e801bf864f14::t_813619ac6bba9a 14-15
+.github/workflows/ci.yaml
+  s_21e801bf864f14::t_4461cfd1ecb1f3 64
+skills/batch-tool/references/setup.md
+  s_21e801bf864f14::t_29d1219f9c3d00 23-25,27-29
+cmd/exec/exec.go
+  s_21e801bf864f14::t_3685be675bc256 8
+  s_21e801bf864f14::t_46363e8c45ceec 49-52
+  s_21e801bf864f14::t_9bbc4a660aa982 208-215
+config/configurations.go
+  s_21e801bf864f14::t_6ba4e4fd627be9 143-144
+CONTRIBUTING.md
+  s_21e801bf864f14::t_b677fbbc071baf 68
+skills/batch-tool/references/commands.md
+  s_21e801bf864f14::t_915b1f71e1aac2 138
+README.md
+  s_21e801bf864f14::t_f8d9105609ddf0 62
+skills/batch-tool/SKILL.md
+  s_21e801bf864f14::t_ddb06ab51ab730 120
+skills/batch-tool/references/safety.md
+  s_21e801bf864f14::t_443e3c67ab5ce0 119
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "5f254bee9b140f82aec3bbdfd835221a0f010523",
+  "prompts": {},
+  "sessions": {
+    "s_21e801bf864f14": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "f4c2e10c-dd7d-4705-982b-e935f42323b9",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Ryan Clarke <ryclarke-github@rkc.aleeas.com>"
+    }
+  }
+}
