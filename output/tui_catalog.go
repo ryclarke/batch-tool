@@ -18,6 +18,11 @@ import (
 
 // TUICatalog displays the repository catalog using a TUI for an interactive experience.
 func TUICatalog(cmd *cobra.Command) {
+	if !isTerminal(cmd.OutOrStdout()) {
+		NativeCatalog(cmd)
+		return
+	}
+
 	ctx := cmd.Context()
 	m := newCatalogModel(ctx)
 

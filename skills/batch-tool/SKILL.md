@@ -32,7 +32,8 @@ batch-tool auth status              # credential source per project; never print
 
 ## 2. Running commands as an agent
 
-- **Always pass `--style native`** (`-o native`). The default TUI is interactive and meant for people. Non-TTY stdout already disables the wait-on-exit prompt, and `--no-wait` makes that explicit.
+- **Always pass `--style native`** (`-o native`). batch-tool already picks native output when stdout is not a terminal, but some agent harnesses run commands in a pseudo-terminal. There, the default TUI takes over the screen and waits for a keypress.
+- **Read native output by stream.** Stdout has a `------ <repo> ------` header per repository, followed by that repository's output, in repository order. Stderr has the command line, `ERROR: <repo>: <message>` lines, and a final summary: `N repositories (M failed) | Elapsed: …`, then `Failed: <repos>`. Capture both streams.
 - **Quote every selector** that contains `~`, `!`, or `+`, for example `'~backend' '!legacy-api'`.
 - **Exit codes:** `0` means success. `1` means a setup, flag, or argument error; read the message and fix the invocation. `2` means one or more repositories failed at runtime. When you get `2`, report which repositories failed and why, and do not rerun the whole set blindly.
 - **Concurrency:** it defaults to the CPU count. Use `--sync` for builds or anything with rate limits or shared resources, or `--max-concurrency N`. The two flags cannot be combined.

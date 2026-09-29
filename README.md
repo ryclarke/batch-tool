@@ -298,9 +298,9 @@ batch-tool exec -f ./scripts/deploy.sh -a staging '~app'
 Batch Tool supports two output styles:
 
 - `tui` (default): interactive progress display with scrolling and per-repository output
-- `native`: plain line-by-line stdout — each repository's output is printed as it arrives, with no TUI chrome. Reliable in scripts, CI pipelines, and non-interactive terminals.
+- `native`: plain streamed output with no TUI chrome. Each repository gets a `------ name ------` header on stdout, and its output streams under it as it arrives, in repository order. The command line, any `ERROR: <repo>: <message>` lines, and a closing summary go to stderr. The summary looks like `3 repositories (1 failed) | Elapsed: 4s`, followed by `Failed: <repos>`. Color codes are stripped unless stdout is a terminal. Reliable in scripts, CI pipelines, agents, and any terminal.
 
-Use `--style native` when you want straightforward terminal output without the interactive display.
+When stdout is not a terminal, such as a pipe, a redirect, or CI, Batch Tool uses `native` automatically. Use `--style native` to get the same output in an interactive terminal.
 
 The TUI can be cancelled at any time with `q`, `Esc`, or `Ctrl+C`. Cancellation propagates to in-flight subprocesses, not just the screen.
 
@@ -357,7 +357,7 @@ Use `repos.reviewers` or `repos.team_reviewers` to preconfigure the reviewers yo
 - Authentication errors: run `batch-tool auth status` to see which credential each project resolves to
 - Repository not found: confirm the repository name, default project, and cached catalog data
 - Unexpected matches: run `batch-tool labels <selectors...>` to inspect how your filters resolve
-- Interactive hangs in automation: use `--style native` or `--no-wait`
+- Interactive hangs in automation: use `--style native`, or `--print` to keep the TUI and print its output when it exits
 - Long-running commands: reduce concurrency with `--sync` or `--max-concurrency` limits
 
 For command-specific help, run:

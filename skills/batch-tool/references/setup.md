@@ -129,6 +129,6 @@ batch-tool git status --style native <one-small-repo>
 | `skipping operation - main is the base branch` | Commit, push, or PR attempted on the default branch | Create a feature branch first with `git branch -b`. |
 | `latest stash is not a batch-tool stash` | Someone else's stash is on top | Ask the user; use `--allow-any` only with their approval. |
 | A pull fails because histories diverged | Local commits on the default branch | Ask the user; offer `--pull-strategy rebase`, `ff-only`, or `merge`. |
-| The command hangs | TUI waiting in an interactive terminal | Use `--style native`, or add `--no-wait`. |
+| The command hangs | TUI waiting for a keypress in a terminal or pseudo-terminal | Use `--style native`. `--no-wait` alone exits without printing any repository output; `--print` exits and prints it. |
 | GitHub secondary rate limit errors | Too many writes at once | `--sync` or a lower `--max-concurrency`. batch-tool already backs off automatically. |
 | `exec` fails immediately | No `-y` with a non-interactive stdin, or the file is not executable | Once the command is authorized ([safety.md](safety.md)), add `-y`. `chmod +x` the script only with the user's approval. |
