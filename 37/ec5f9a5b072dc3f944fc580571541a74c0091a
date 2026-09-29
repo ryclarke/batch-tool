@@ -1,0 +1,51 @@
+AGENTS.md
+  s_21e801bf864f14::t_efc1341631895b 71
+  s_21e801bf864f14::t_b3349b11f9b3d4 72-73
+skills/batch-tool/references/commands.md
+  s_21e801bf864f14::t_c30edcbe4cb229 61
+  s_21e801bf864f14::t_45b997d5f5554e 54
+  s_21e801bf864f14::t_f15d87bcadb009 49
+  s_21e801bf864f14::t_ec57b0c5b9edbc 62
+skills/batch-tool/SKILL.md
+  s_21e801bf864f14::t_9c338551be69f0 76
+  s_21e801bf864f14::t_c09af9d65b395b 7
+cmd/git/git.go
+  s_21e801bf864f14::t_f51e319065a5de 16-18
+cmd/git/branch.go
+  s_21e801bf864f14::t_42a3904c7898cf 57-60
+  s_21e801bf864f14::t_eee50714a14bd9 72,79-82,86
+  s_21e801bf864f14::t_1a857036e2fb02 37,40,42-44,49-53
+  s_21e801bf864f14::t_e74ea34c0f2b4c 26
+  s_21e801bf864f14::t_881dcf7d12338e 5
+  s_21e801bf864f14::t_c3dbed2cb08f5a 87
+README.md
+  s_21e801bf864f14::t_3216b3093e34cc 273-274
+  s_21e801bf864f14::t_a3a9bd1fb0291a 325
+  s_21e801bf864f14::t_6b71b8a75a9a65 342
+skills/batch-tool/references/safety.md
+  s_21e801bf864f14::t_e34e25a937880a 30
+cmd/git/branch_test.go
+  s_21e801bf864f14::t_a14fcaf4b0bd47 22
+  s_21e801bf864f14::t_221b13aaa07bb1 212
+  s_21e801bf864f14::t_394faeef4f468c 257
+  s_21e801bf864f14::t_eef6046cafeaa8 5-6,8
+  s_21e801bf864f14::t_d5259f5c54017f 249
+  s_21e801bf864f14::t_b02b1b3bd57a56 290
+  s_21e801bf864f14::t_454edec8962432 187-211,213-248,250-256,258-261
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "37ec5f9a5b072dc3f944fc580571541a74c0091a",
+  "prompts": {},
+  "sessions": {
+    "s_21e801bf864f14": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "f4c2e10c-dd7d-4705-982b-e935f42323b9",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Ryan Clarke <ryclarke-github@rkc.aleeas.com>"
+    }
+  }
+}
