@@ -7,10 +7,30 @@ import (
 	"testing"
 )
 
+// isolateGitConfig keeps git subprocesses off the developer's global and system
+// configuration. A trace2 event target such as git-ai writes into .git after the
+// git process exits, which races with TempDir cleanup and fails it with
+// "directory not empty".
+func isolateGitConfig(t *testing.T) {
+	t.Helper()
+
+	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
+	t.Setenv("GIT_CONFIG_GLOBAL", os.DevNull)
+	t.Setenv("GIT_CONFIG_SYSTEM", os.DevNull)
+
+	// Keep the unconfigured init default explicit so git init stays quiet and
+	// starts repositories on main.
+	t.Setenv("GIT_CONFIG_COUNT", "1")
+	t.Setenv("GIT_CONFIG_KEY_0", "init.defaultBranch")
+	t.Setenv("GIT_CONFIG_VALUE_0", "main")
+}
+
 // ExecCommand creates and runs an exec.Command with the given working directory.
 // Common utility for all test packages needing to run git or shell commands.
 func ExecCommand(t *testing.T, dir string, name string, args ...string) {
 	t.Helper()
+
+	isolateGitConfig(t)
 
 	cmd := exec.CommandContext(t.Context(), name, args...)
 	cmd.Dir = dir
@@ -55,7 +75,6 @@ func SetupRepos(t *testing.T, repos []string, branches ...bool) string {
 			{"git", "init"},
 			{"git", "config", "user.email", "test@example.com"},
 			{"git", "config", "user.name", "Test User"},
-			{"git", "checkout", "-b", "main"},
 			{"git", "commit", "--allow-empty", "-m", "Initial commit"},
 			{"git", "remote", "add", "origin", originPath},
 			{"git", "push", "-u", "origin", "main"},
@@ -100,19 +119,6 @@ func SetupRepos(t *testing.T, repos []string, branches ...bool) string {
 		for _, cmdArgs := range [][]string{
 			{"git", "config", "user.email", "test@example.com"},
 			{"git", "config", "user.name", "Test User"},
-		} {
-			ExecCommand(t, repoDir, cmdArgs[0], cmdArgs[1:]...)
-		}
-
-		// Create and commit test file so the worktree is clean
-		testFile := filepath.Join(repoDir, "test.txt")
-		if err := os.WriteFile(testFile, []byte("test content\n"), 0644); err != nil {
-			t.Fatalf("Failed to create test file: %v", err)
-		}
-
-		for _, cmdArgs := range [][]string{
-			{"git", "add", "test.txt"},
-			{"git", "commit", "-m", "Add test file"},
 		} {
 			ExecCommand(t, repoDir, cmdArgs[0], cmdArgs[1:]...)
 		}
