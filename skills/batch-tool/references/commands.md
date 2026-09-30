@@ -1,6 +1,6 @@
 # batch-tool command reference
 
-Checked against batch-tool 1.0.0. If the installed version behaves differently, `batch-tool <command> --help` is authoritative.
+The installed binary is authoritative. If this reference differs, use `batch-tool <command> --help`.
 
 Each command below that takes `<repository>...` accepts selectors: `repo`, `project/repo`, `'~label'`, `'~all'`, `'!exclude'`, `'+force'`, or `.`. Every repository that is missing locally is cloned into `<git.directory>/<git.host>/<project>/<repo>` before the operation runs.
 
