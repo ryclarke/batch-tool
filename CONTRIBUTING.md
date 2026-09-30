@@ -59,8 +59,8 @@ make help      # list all available targets
 
 - If you add, remove, or rename a command or flag, or change its default, update `skills/batch-tool/references/commands.md` in the same pull request.
 - If you change how destructive a command is (for example a new discard or force path, or a new config key that escalates behavior), update the risk tiers in `references/safety.md`.
-- If you change release archive names or the checksum format in `.goreleaser.yaml`, update `scripts/install.sh`.
-- Set `metadata.version` in `SKILL.md` to the next batch-tool release that will ship the skill's changes. Change it at most once per release, not on every commit during a feature.
+- If you change release archive names or the checksum format in `.goreleaser.yaml`, update `skills/batch-tool/scripts/install.sh`.
+- Do not change `metadata.version` in feature or skill pull requests. The release workflow owns that field and keeps it equal to the latest SemVer release tag.
 
 Validate locally:
 
@@ -70,6 +70,18 @@ shellcheck -s sh skills/batch-tool/scripts/install.sh
 sh skills/batch-tool/scripts/install.sh --check
 npx skills add ./ --list   # confirms the skill is discoverable
 ```
+
+## Release Process
+
+Releases are prepared and published by the `Release` GitHub Actions workflow. A maintainer starts it with an exact SemVer version without a leading `v`, for example `1.2.0` or `1.2.0-rc.1`. The version covers every change since the previous release, so the maintainer decides whether it is a major, minor, patch, or prerelease increment. The workflow uses npm's `semver` CLI for version validation and ordering, and `yq` for the skill metadata update.
+
+The workflow validates the requested version and the current `main` branch before asking for approval through the protected `release` Environment. After approval, it:
+
+1. Updates `skills/batch-tool/SKILL.md`.
+2. Commits the version change to `main`.
+3. Creates the matching annotated `v<version>` tag.
+4. Pushes the commit and tag atomically.
+5. Runs GoReleaser to publish the GitHub release.
 
 ## AI-Assisted Contributions
 

@@ -16,6 +16,17 @@ Use this file when batch-tool is not installed, has no config file, cannot resol
 
 Run `sh scripts/install.sh --check`, then `sh scripts/install.sh` once the user agrees. If the script reports that the install directory is not on `PATH`, show the user the line it prints (for example `export PATH="$HOME/.local/bin:$PATH"`) and ask before adding it to `~/.bashrc`, `~/.zshrc`, or `~/.profile`. Never edit shell startup files without approval.
 
+```bash
+sh scripts/install.sh                 # latest release into $BATCH_TOOL_INSTALL_DIR or ~/.local/bin
+sh scripts/install.sh --version vX.Y.Z
+sh scripts/install.sh --dir "$HOME/bin"
+sh scripts/install.sh --check         # report only; changes nothing
+```
+
+The script downloads the release archive for the current OS and architecture, verifies its SHA-256 checksum against the release checksum file, and installs the binary. If a prebuilt archive is not usable and Go is available, it falls back to `go install github.com/ryclarke/batch-tool@<tag>`. It never uses `sudo` or edits shell startup files.
+
+On Windows without WSL, download `batch-tool_windows_amd64.zip` and `batch-tool_<version>_checksums.txt` from the [latest release](https://github.com/ryclarke/batch-tool/releases/latest), where `<version>` is the tag without its leading `v`. Verify that `(Get-FileHash batch-tool_windows_amd64.zip -Algorithm SHA256).Hash` matches the archive's line in the checksum file, ignoring case, and do not install it if the values differ. Put `batch-tool.exe` on `PATH`. If Go is installed, `go install github.com/ryclarke/batch-tool@latest` also works.
+
 ## 2. Config file
 
 batch-tool reads the first `batch-tool.yaml` it finds in:

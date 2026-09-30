@@ -1,6 +1,6 @@
 ---
 name: batch-tool
-description: Installs, updates, configures, and operates batch-tool, a CLI that runs git, pull request, make, and shell workflows across many repositories at once. Use when the user wants to act on several repositories together (bulk branch, commit, push, update, stash, status, or diff), open, edit, or merge pull requests across repos, select repos by name, ~label, alias, !exclude, or +force selectors, run make targets or shell commands across a repo fleet, or mentions batch-tool or batch-tool.yaml. Treats each command as its per-repository git, PR, make, or shell equivalent applied across a repository set, so existing authorization for that operation carries over, and destructive multi-repo operations require explicit user confirmation.
+description: Installs, updates, configures, and operates batch-tool for running Git, pull-request, Make, and shell workflows across multiple repositories. Use when the user mentions batch-tool or batch-tool.yaml, uses repository selectors, or requests bulk repository operations such as branching, status, commits, pushes, updates, pull requests, Make targets, or shell commands.
 compatibility: Requires git with SSH access to the SCM host and network access to GitHub or Bitbucket. The bundled install script needs a POSIX shell, curl or wget, tar with xz support, and sha256sum or shasum. Go and the gh CLI are optional.
 metadata:
   author: ryclarke
@@ -63,22 +63,13 @@ If a match looks wrong or stale, refresh the catalog with `batch-tool catalog -f
 
 ## 4. Translate, then authorize
 
-A batch-tool command is an ordinary operation repeated in every selected repository: **effective risk = the per-repository operation × the set of repositories**. The translation table, the configuration effects, and the confirmation template are in [references/safety.md](references/safety.md). Read that file before running anything that writes.
+A batch-tool command is an ordinary operation repeated in every selected repository: **effective risk = the per-repository operation × the set of repositories**. Read [references/safety.md](references/safety.md) before running anything that writes; it defines the operation classes, configuration effects, and confirmation protocol.
 
 1. **Translate** the command into what it runs in each repository. `pr new` is `gh pr create` (plus reviewers from config). `git push` is `git push -u origin <branch>`. `git update --discard` is `git reset --hard` plus `git clean -fd`. `exec -c C` is `C`. `make -t T` is that repository's recipe for `T`.
 2. **Authorize the operation** the way you would for a single repository: the user's instructions first, then the host's permissions and project rules. If you may open a PR or push a feature branch in one repository without asking, `pr new` or `git push` is the same operation. If you would ask first in one repository, ask here too.
 3. **Authorize the scope** separately. Show the resolved repository list before the first write. Confirm it first if you chose the selector yourself, or if it includes repositories the user did not mention (`'~all'`, a broader label than expected, force-included repositories).
 
-The operation classes are:
-
-- **read-only**: `git status`, `git diff`, `labels`, `catalog`, `pr get`.
-- **local**: `git branch`, `git commit`, `git stash`, `git update` in stash mode.
-- **shared** (visible to others but reversible): `git push`, `git commit --push`, `pr new`, `pr edit`.
-- **destructive**: `git push -f`, `--amend --push`, `git update --discard`, `pr merge`, and resetting an existing branch that has unique commits.
-
-`exec` and `make` take the class of whatever they run.
-
-**Destructive operations across several repositories always need an explicit yes, by default**, even when the user asked for the operation. Show the per-repository equivalent, the resolved repositories, and any config that changes the effect, then wait. Approval covers that command and that set only.
+`exec` and `make` take the class of whatever they run. Destructive operations across several repositories always need an explicit yes by default, even when the user requested the operation. Approval covers only that command and resolved set.
 
 ## 5. Common recipes
 
@@ -105,20 +96,9 @@ batch-tool pr new -t "Bump dependencies" -d "Why and what" '~platform'
 
 For `pr new`, make sure the title, description, base branch, and reviewers are what the user authorized, and show them in your report. Reviewers come from `-r`/`-R`, or from `repos.reviewers` and `repos.team-reviewers` in the config when no flag is given. Use `--draft` if the user wants to review the PRs before others are notified.
 
-**Editing PRs:** `batch-tool pr edit -t "New title" -r alice '~platform'`. Reviewers are added to the existing list; `--reset-reviewers` replaces it.
-
-**Merging and cleaning up:**
-
-```bash
-batch-tool pr merge -m squash '~platform'   # add --check to verify mergeability first (GitHub only)
-batch-tool git update '~platform'           # back to the default branch, pulled, with local changes stashed and restored
-```
-
-**Stashing around other work:** `git stash push '~x'`, do the work, then `git stash pop '~x'`. By default `pop` refuses to restore stashes that batch-tool did not create.
-
-**Make targets:** `batch-tool make -t test --sync '~backend'`. Multiple `-t` flags run in a single `make` invocation. A target means that repository's recipe, which can differ from one repository to the next, so read the recipes before classifying a target.
-
 **Arbitrary commands:** `batch-tool exec -c "go test ./..." -y '~backend'`, or `-f ./script.sh -a arg1 -a arg2`. `-f` runs that one local file in every repository. A script that lives inside each repository goes through `-c './script.sh'`, and is that repository's own code. Classify the command or script as if you were running it yourself in each repository: `go test` is local, `rm -rf build/` is destructive, and a script you have not read is destructive until you have read it. The `-y` flag only skips a terminal prompt that an agent cannot answer. Pass it once the command and scope are authorized.
+
+For complex, multi-step, or quoting-sensitive operations that should run consistently across repositories, prefer a reviewed local executable with `exec -f` over a long inline `exec -c` command. Show or read the exact script and arguments before authorization. Use `-c` for simple commands or scripts owned by each repository.
 
 For every command and flag, see [references/commands.md](references/commands.md).
 
@@ -138,16 +118,3 @@ Walkthroughs for each case are in [references/setup.md](references/setup.md).
 ## 7. Reporting results
 
 After each run, summarize the outcome per repository: which succeeded, which failed with the key error line, and what is left to do. Where it applies, suggest the next command in the workflow (for example `git push` after `git commit`), and authorize it like any other step before running it.
-
-## Install and update
-
-```bash
-sh scripts/install.sh                 # latest release into $BATCH_TOOL_INSTALL_DIR or ~/.local/bin
-sh scripts/install.sh --version v1.0.0
-sh scripts/install.sh --dir "$HOME/bin"
-sh scripts/install.sh --check         # report only; changes nothing
-```
-
-The script downloads the release archive for the current OS and architecture, verifies its SHA-256 checksum against the release checksum file, and installs the binary. If a prebuilt archive is not usable and Go is available, it falls back to `go install github.com/ryclarke/batch-tool@<tag>`. It never uses `sudo` and never edits shell startup files. If the install directory is not on `PATH`, it prints the line the user should add.
-
-On Windows (without WSL), download `batch-tool_windows_amd64.zip` and `batch-tool_<version>_checksums.txt` from the [latest release](https://github.com/ryclarke/batch-tool/releases/latest), where `<version>` is the tag without the leading `v` (for example `1.0.0`). Check that `(Get-FileHash batch-tool_windows_amd64.zip -Algorithm SHA256).Hash` matches the zip's line in the checksum file, ignoring case, and do not install it if it does not match. Then put `batch-tool.exe` on `PATH`. If Go is installed, `go install github.com/ryclarke/batch-tool@latest` also works.

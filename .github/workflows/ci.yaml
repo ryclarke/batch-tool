@@ -3,6 +3,8 @@ permissions:
   contents: read
 
 on:
+  workflow_call:
+
   push:
     branches: [ "main" ]
 
@@ -59,9 +61,40 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
 
       - name: Validate Agent Skill metadata
         run: pipx run --spec skills-ref==0.1.1 agentskills validate skills/batch-tool
 
       - name: Lint skill install script
         run: shellcheck -s sh skills/batch-tool/scripts/install.sh
+
+      - name: Read skill version
+        id: skill-version
+        uses: mikefarah/yq@v4.53.6
+        with:
+          cmd: yq -r --front-matter=extract '.metadata.version' skills/batch-tool/SKILL.md
+
+      - name: Enforce released skill version
+        env:
+          SKILL_VERSION: ${{ steps.skill-version.outputs.result }}
+        run: |
+          set -euo pipefail
+          die() {
+            echo "::error::$*" >&2
+            exit 1
+          }
+
+          normalized="$(npx --yes semver@7.8.5 "$SKILL_VERSION")" ||
+            die "metadata.version is not strict SemVer: $SKILL_VERSION"
+          [[ "$normalized" == "$SKILL_VERSION" ]] ||
+            die "metadata.version is not strict SemVer: $SKILL_VERSION"
+
+          mapfile -t versions < <(git tag --merged HEAD --list 'v*' | sed 's/^v//')
+          (( ${#versions[@]} > 0 )) ||
+            die "No reachable release tag was found"
+          latest="$(npx --yes semver@7.8.5 "${versions[@]}" | tail -n 1)" ||
+            die "No reachable SemVer release tag was found"
+          [[ -n "$latest" && "$SKILL_VERSION" == "$latest" ]] ||
+            die "metadata.version is $SKILL_VERSION, expected latest release $latest"
