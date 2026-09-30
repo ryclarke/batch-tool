@@ -1,0 +1,28 @@
+utils/testing/exec.go
+  s_24038b6a51bdaa::t_9c82e5bbbeb560 10-21,23-24,26-27,33
+  s_24038b6a51bdaa::t_8d0615bc66eb26 22,25
+  s_24038b6a51bdaa::t_14f10f4d5fbd6e 34
+utils/testing/testing.go
+  s_24038b6a51bdaa::t_7b85eaf811695c 26-28
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "5ad9430bf063eaea2f951a9b7d7115079f67cdb8",
+  "prompts": {},
+  "humans": {
+    "h_e43dd9dcccd305": {
+      "author": "Ryan Clarke <ryclarke-github@rkc.aleeas.com>"
+    }
+  },
+  "sessions": {
+    "s_24038b6a51bdaa": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "1f007430-5ecc-4e6f-868c-4e1e0a36a92f",
+        "model": "auto-smart"
+      },
+      "human_author": "Ryan Clarke <ryclarke-github@rkc.aleeas.com>"
+    }
+  }
+}
