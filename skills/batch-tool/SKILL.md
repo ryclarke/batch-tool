@@ -4,7 +4,7 @@ description: Installs, updates, configures, and operates batch-tool for running 
 compatibility: Requires git with SSH access to the SCM host and network access to GitHub or Bitbucket. The bundled install script needs a POSIX shell, curl or wget, tar with xz support, and sha256sum or shasum. Go and the gh CLI are optional.
 metadata:
   author: ryclarke
-  version: "1.1.1"
+  version: "1.1.0"
 ---
 
 # batch-tool

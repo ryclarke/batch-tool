@@ -1,27 +1,186 @@
 name: Release
-permissions:
-  contents: write
 
 on:
-  push:
-    tags:
-      - 'v*.*.*' # match all semver tags, e.g. v1.2.3 or v1.2.3-beta.1
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Exact SemVer without v (for example, 1.2.0 or 1.2.0-rc.1)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
 
 jobs:
-  release:
+  ci:
+    needs: setup
+    uses: ./.github/workflows/ci.yaml
+
+  setup:
     runs-on: ubuntu-latest
+    outputs:
+      revision: ${{ steps.revision.outputs.sha }}
+      state: ${{ steps.version.outputs.state }}
     steps:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
+
+      - name: Require a release from main
+        env:
+          DISPATCH_REF: ${{ github.ref }}
+        run: |
+          if [[ "$DISPATCH_REF" != "refs/heads/main" ]]; then
+            echo "Release runs must be dispatched from main, not $DISPATCH_REF" >&2
+            exit 1
+          fi
+          test "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)"
+
+      - name: Record validated revision
+        id: revision
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Read released skill version
+        id: skill-version
+        uses: mikefarah/yq@v4.53.6
+        with:
+          cmd: yq -r --front-matter=extract '.metadata.version' skills/batch-tool/SKILL.md
+
+      - name: Validate requested version
+        id: version
+        env:
+          CURRENT_VERSION: ${{ steps.skill-version.outputs.result }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          die() {
+            echo "::error::$*" >&2
+            exit 1
+          }
+
+          normalized="$(npx --yes semver@7.8.5 "$VERSION")" ||
+            die "$VERSION is not strict SemVer"
+          [[ "$normalized" == "$VERSION" ]] ||
+            die "$VERSION is not strict SemVer"
+
+          mapfile -t versions < <(git tag --merged HEAD --list 'v*' | sed 's/^v//')
+          (( ${#versions[@]} > 0 )) ||
+            die "No reachable release tag was found"
+          latest="$(npx --yes semver@7.8.5 "${versions[@]}" | tail -n 1)" ||
+            die "No reachable SemVer release tag was found"
+          [[ -n "$latest" ]] ||
+            die "No reachable SemVer release tag was found"
+
+          existing="$(git rev-parse --verify "refs/tags/v$VERSION^{commit}" 2>/dev/null || true)"
+          if [[ "$CURRENT_VERSION" == "$VERSION" && "$latest" == "$VERSION" &&
+                "$existing" == "$(git rev-parse HEAD)" ]]; then
+            echo "state=retry" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          [[ "$CURRENT_VERSION" == "$latest" ]] ||
+            die "metadata.version is $CURRENT_VERSION, expected $latest"
+          [[ -z "$existing" ]] ||
+            die "v$VERSION already exists at $existing"
+          next="$(npx --yes semver@7.8.5 "$VERSION" \
+            --range ">$latest" --include-prerelease)" ||
+            die "$VERSION must be greater than latest release $latest"
+          [[ "$next" == "$VERSION" ]] ||
+            die "$VERSION must be greater than latest release $latest"
+          echo "state=fresh" >> "$GITHUB_OUTPUT"
+
+  release:
+    needs: [ci, setup]
+    runs-on: ubuntu-latest
+    environment: release
+    steps:
+      - name: Create release app token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ vars.APP_CLIENT_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          permission-contents: write
+
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ref: main
+          token: ${{ steps.app-token.outputs.token }}
       - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
 
+      - name: Confirm approved revision
+        env:
+          EXPECTED_REVISION: ${{ needs.setup.outputs.revision }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_REVISION"
+          test "$(git rev-parse origin/main)" = "$EXPECTED_REVISION"
+
+      - name: Update skill version
+        if: needs.setup.outputs.state == 'fresh'
+        uses: mikefarah/yq@v4.53.6
+        env:
+          VERSION: ${{ inputs.version }}
+        with:
+          cmd: yq -i --front-matter=process '.metadata.version = strenv(VERSION)' skills/batch-tool/SKILL.md
+
+      - name: Create release commit and tag
+        env:
+          APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          # https://github.com/actions/create-github-app-token#configure-git-cli-for-an-apps-bot-user
+          app_user_id="$(gh api "/users/${APP_SLUG}[bot]" --jq .id)"
+          git config user.name "${APP_SLUG}[bot]"
+          git config user.email "$app_user_id+${APP_SLUG}[bot]@users.noreply.github.com"
+
+          if ! git diff --quiet -- skills/batch-tool/SKILL.md; then
+            git add skills/batch-tool/SKILL.md
+            git commit -m "Prepare v$VERSION"
+          fi
+          if ! git rev-parse --verify "refs/tags/v$VERSION" >/dev/null 2>&1; then
+            git tag -a "v$VERSION" -m "Release v$VERSION"
+          fi
+
+          if [[ "$(git rev-parse "refs/tags/v$VERSION^{commit}")" != \
+                "$(git rev-parse HEAD)" ]]; then
+            echo "v$VERSION does not identify the release commit" >&2
+            exit 1
+          fi
+          git push --atomic origin HEAD:main "refs/tags/v$VERSION"
+
+      - name: Check existing publication
+        id: publication
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          published=false
+          if gh release view "v$VERSION" >/dev/null 2>&1; then
+            complete="$(gh release view "v$VERSION" --json assets \
+              --jq '[.assets[].name | select(endswith("_checksums.txt"))] | length > 0')"
+            if [[ "$complete" == "true" ]]; then
+              published=true
+            else
+              gh release delete "v$VERSION" --yes
+            fi
+          fi
+          echo "published=$published" >> "$GITHUB_OUTPUT"
+
       - name: Perform release
+        if: steps.publication.outputs.published != 'true'
         uses: goreleaser/goreleaser-action@v7
         with:
           version: '~> v2'
           args: release --clean
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
