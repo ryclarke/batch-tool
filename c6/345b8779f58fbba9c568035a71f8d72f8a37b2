@@ -1,0 +1,19 @@
+skills/batch-tool/SKILL.md
+  s_b3ac8b25323217::t_8bddb20f63e2f1 7
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "c6345b8779f58fbba9c568035a71f8d72f8a37b2",
+  "prompts": {},
+  "sessions": {
+    "s_b3ac8b25323217": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "0670b64b-b155-414b-8b0d-29a8d08e64f7",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Ryan Clarke <ryclarke-github@rkc.aleeas.com>"
+    }
+  }
+}
