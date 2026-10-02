@@ -1,0 +1,14 @@
+go.mod
+  h_e43dd9dcccd305 13
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "b352eb6b395ac84cf3bfb7b3a8d049dd65a805e0",
+  "prompts": {},
+  "humans": {
+    "h_e43dd9dcccd305": {
+      "author": "Ryan Clarke <ryclarke-github@rkc.aleeas.com>"
+    }
+  }
+}
