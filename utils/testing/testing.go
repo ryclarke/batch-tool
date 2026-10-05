@@ -23,6 +23,9 @@ func LoadFixture(t *testing.T, configPath string) context.Context {
 	// the fresh viper instance to keep tests independent of resolution order.
 	auth.Reset()
 
+	// Commands started later in the test inherit this process environment.
+	isolateGitConfig(t)
+
 	// Provide a deterministic credential so tests neither depend on nor inherit
 	// whatever is set in the ambient environment. t.Setenv restores the previous
 	// value when the test completes.
